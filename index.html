@@ -4375,7 +4375,7 @@ async function handleAuthSubmit(){
   renderAuthGate();
   try{
     if(authMode === 'signup'){
-      const { data, error } = await supabaseClient.auth.signUp({ email, password });
+      const { data, error } = await supabaseClient.auth.signUp({ email, password, options: { emailRedirectTo: window.location.href } });
       if(error){ authError = error.message; authBusy = false; renderAuthGate(); return; }
       if(data.session){
         currentUser = data.user;
