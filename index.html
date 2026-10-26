@@ -1290,14 +1290,21 @@ function saveData(){
 }
 
 function goHomeOrWizard(){
-  if(TEAMS_STORE.teams.length === 0){
+  // An unfinished team (started the wizard, never completed it) shouldn't force
+  // straight back into that wizard either - land on the same choice screen as having
+  // no team at all, so there's a way out via Import if that's what's actually needed,
+  // rather than being stuck re-entering a half-done setup every time.
+  if(TEAMS_STORE.teams.length === 0 || !DATA.teamSetupCompleted){
     renderNoTeamScreen();
-  } else if(!DATA.teamSetupCompleted){
-    teamSetupWizard = { step:1, teamName:'', teamNickname:'', themeColor:'red', teamBadge:null, ageGroup:null, managerName:'', players:[], showValidation:false };
-    go('team','teamSetupWizard',{});
   } else {
     go('home', null, {});
   }
+}
+function enterTeamSetupWizard(){
+  // Prefills from whatever's already on DATA, so resuming an unfinished team doesn't
+  // throw away a name or badge already entered before.
+  teamSetupWizard = { step:1, teamName:DATA.teamName||'', teamNickname:DATA.teamNickname||'', themeColor:DATA.themeColor||'red', teamBadge:DATA.teamBadge||null, ageGroup:DATA.ageGroup||null, managerName:'', players:[], showValidation:false };
+  go('team','teamSetupWizard',{});
 }
 function go(tab, screen, params){
   gridPitchEnlargedQuarter = null;
@@ -4853,22 +4860,26 @@ function passwordFieldHtml(id, placeholder, autocomplete){
 }
 function renderNoTeamScreen(){
   const app = document.getElementById('app');
+  // Having a team record that exists but never finished setup is treated the same as
+  // having none at all here - "Continue" picks the unfinished one back up instead of
+  // starting yet another from scratch.
+  const hasIncompleteTeam = TEAMS_STORE.teams.length > 0 && !DATA.teamSetupCompleted;
   app.innerHTML = `
-  <div style="min-height:100%; display:flex; flex-direction:column; justify-content:center; padding:36px 22px; background:linear-gradient(160deg, var(--pitch) 0%, color-mix(in srgb, var(--pitch) 75%, #000) 100%);">
+  <div style="min-height:100%; display:flex; flex-direction:column; justify-content:center; padding:36px 22px; position:relative; background:linear-gradient(160deg, var(--pitch) 0%, color-mix(in srgb, var(--pitch) 75%, #000) 100%);">
+    <button type="button" data-no-team-log-out style="position:absolute; top:16px; right:16px; background:none; border:none; color:rgba(255,255,255,0.75); font-size:13px; text-decoration:underline; cursor:pointer; display:flex; align-items:center; gap:5px;">
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" style="flex-shrink:0;"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 17l5-5-5-5M21 12H9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Log out
+    </button>
     <div style="text-align:center; margin-bottom:26px;">
       <div style="width:64px; height:64px; margin:0 auto 14px; border-radius:50%; background:rgba(255,255,255,0.14); border:1.5px solid rgba(255,255,255,0.3); display:flex; align-items:center; justify-content:center; font-size:30px;">⚽</div>
-      <div style="font-family:'Oswald',sans-serif; font-weight:700; font-size:28px; color:#fff; letter-spacing:.02em;">No team yet</div>
-      <div style="color:rgba(255,255,255,0.78); font-size:14px; margin-top:6px; max-width:300px; margin-left:auto; margin-right:auto;">You're logged in${currentUser && currentUser.email ? ` as ${esc(currentUser.email)}` : ''}, but you're not part of a team right now.</div>
+      <div style="font-family:'Oswald',sans-serif; font-weight:700; font-size:28px; color:#fff; letter-spacing:.02em;">${hasIncompleteTeam ? 'Setup unfinished' : 'No team yet'}</div>
+      <div style="color:rgba(255,255,255,0.78); font-size:14px; margin-top:6px; max-width:300px; margin-left:auto; margin-right:auto;">${hasIncompleteTeam ? "You started setting up a team but didn't finish — pick up where you left off, or import a team instead." : `You're logged in${currentUser && currentUser.email ? ` as ${esc(currentUser.email)}` : ''}, but you're not part of a team right now.`}</div>
     </div>
-    <button type="button" class="btn amber" data-no-team-create style="max-width:340px; width:100%; margin:0 auto;">+ Create a team</button>
-    <button type="button" class="btn ghost" data-no-team-import style="max-width:340px; width:100%; margin:10px auto 0; background:none; border-color:rgba(255,255,255,0.4); color:#fff;">Import a team</button>
-    <button type="button" data-no-team-log-out style="background:none; border:none; color:rgba(255,255,255,0.65); font-size:13px; text-decoration:underline; cursor:pointer; margin:18px auto 0; display:flex; align-items:center; justify-content:center; gap:6px;">
-      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" style="flex-shrink:0;"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 17l5-5-5-5M21 12H9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      Log out instead
-    </button>
+    <button type="button" class="btn amber" data-no-team-create style="max-width:340px; width:100%; margin:0 auto;">${hasIncompleteTeam ? 'Continue team setup' : '+ Create a team'}</button>
+    <button type="button" class="btn" data-no-team-import style="max-width:340px; width:100%; margin:10px auto 0; background:rgba(255,255,255,0.16); border:1.5px solid rgba(255,255,255,0.4); color:#fff;">Import a team</button>
   </div>`;
   const createBtn = document.querySelector('[data-no-team-create]');
-  if(createBtn) createBtn.addEventListener('click', addNewTeam);
+  if(createBtn) createBtn.addEventListener('click', hasIncompleteTeam ? enterTeamSetupWizard : addNewTeam);
   const importBtn = document.querySelector('[data-no-team-import]');
   if(importBtn) importBtn.addEventListener('click', startImportAsNewTeam);
   const logOutBtn = document.querySelector('[data-no-team-log-out]');
@@ -5607,7 +5618,7 @@ async function exportData(){
   a.remove();
   setTimeout(()=> URL.revokeObjectURL(url), 1000);
 }
-function processImportJsonText(jsonText){
+function processImportJsonText(jsonText, forNewTeam){
   let parsed;
   try{ parsed = JSON.parse(jsonText); }
   catch(e){ alert('That does not look like a valid SquadHub backup — the text could not be read as JSON.'); return; }
@@ -5616,24 +5627,23 @@ function processImportJsonText(jsonText){
     alert('That does not look like a valid SquadHub backup.');
     return;
   }
-  openImportConfirm(incoming);
+  openImportConfirm(incoming, forNewTeam);
 }
-function importDataFromFile(file){
+function importDataFromFile(file, forNewTeam){
   const reader = new FileReader();
-  reader.onload = ()=> processImportJsonText(reader.result);
+  reader.onload = ()=> processImportJsonText(reader.result, forNewTeam);
   reader.onerror = ()=> alert('Could not read that file.');
   reader.readAsText(file);
 }
 function startImportAsNewTeam(){
-  // A backup carries its own full team identity (name, badge, everything) - import
-  // just needs an active team slot to land in, so create an empty shell and switch
-  // into it first, same as "+ Create a team" does, then offer the two existing
-  // import routes on top of whatever that lands on (the wizard, since the shell's
-  // own setup isn't complete).
-  addNewTeam();
-  openImportTeamModal();
+  // Deliberately does NOT create a team up front - a half-finished import (closed the
+  // picker, backed out of the confirm step) must leave nothing behind, so the person
+  // lands back on a clean "No team yet" screen next time rather than an orphaned empty
+  // shell that routes them into the setup wizard. The team is only actually created at
+  // the point an import is confirmed (see openImportConfirm).
+  openImportTeamModal(true);
 }
-function openImportTeamModal(){
+function openImportTeamModal(forNewTeam){
   const body = `
     <h3>Import your team</h3>
     <button class="icon-x" data-close-modal>&times;</button>
@@ -5654,13 +5664,13 @@ function openImportTeamModal(){
   const fileInput = document.getElementById('no-team-import-file-input');
   if(fileBtn && fileInput) fileBtn.addEventListener('click', ()=> fileInput.click());
   if(fileInput) fileInput.addEventListener('change', ()=>{
-    if(fileInput.files && fileInput.files[0]) importDataFromFile(fileInput.files[0]);
+    if(fileInput.files && fileInput.files[0]) importDataFromFile(fileInput.files[0], forNewTeam);
     fileInput.value = '';
   });
   const pasteBtn = document.getElementById('no-team-paste-import-btn');
-  if(pasteBtn) pasteBtn.addEventListener('click', openPasteImportModal);
+  if(pasteBtn) pasteBtn.addEventListener('click', ()=> openPasteImportModal(forNewTeam));
 }
-function openPasteImportModal(){
+function openPasteImportModal(forNewTeam){
   const body = `
     <h3>Paste backup data</h3>
     <button class="icon-x" data-close-modal>&times;</button>
@@ -5674,14 +5684,14 @@ function openPasteImportModal(){
   if(confirmBtn) confirmBtn.onclick = ()=>{
     const text = document.getElementById('paste-import-text').value.trim();
     if(!text){ alert('Please paste the backup data first.'); return; }
-    processImportJsonText(text);
+    processImportJsonText(text, forNewTeam);
   };
 }
-function openImportConfirm(incoming){
+function openImportConfirm(incoming, forNewTeam){
   const body = `
     <h3>Import this backup?</h3>
     <button class="icon-x" data-close-modal>&times;</button>
-    <div class="card" style="margin-bottom:16px;"><div class="small" style="color:var(--ink-soft);">This replaces all current data in the app with the contents of this backup. This cannot be undone.</div></div>
+    <div class="card" style="margin-bottom:16px;"><div class="small" style="color:var(--ink-soft);">${forNewTeam ? 'This creates a new team from the contents of this backup.' : "This replaces all current data in the app with the contents of this backup. This cannot be undone."}</div></div>
     <button class="btn amber" id="confirm-import-btn" style="width:100%; margin-bottom:10px;">Import &amp; replace data</button>
     <button class="btn ghost" data-close-modal>Cancel</button>
   `;
@@ -5696,8 +5706,21 @@ function openImportConfirm(incoming){
       normalizeFixtureLineup(f);
       if(!f.coachIds) f.coachIds = [];
     });
-    DATA = incoming;
-    if(!DATA.themeColor || !THEME_COLORS[DATA.themeColor]) DATA.themeColor = 'red';
+    if(!incoming.themeColor || !THEME_COLORS[incoming.themeColor]) incoming.themeColor = 'red';
+    if(forNewTeam){
+      // Only now, with a confirmed valid backup in hand, does a team actually get
+      // created - same shape addNewTeam() builds, just with the imported data instead
+      // of empty defaults.
+      syncActiveTeamData();
+      const teamId = newTeamId();
+      const newTeam = { id: teamId, name: incoming.teamNickname || incoming.teamName || 'My team', badge: incoming.teamBadge || null, data: incoming };
+      TEAMS_STORE.teams.push(newTeam);
+      TEAMS_STORE.activeTeamId = teamId;
+      DATA = incoming;
+      if(currentUser) pushTeamToCloud(newTeam);
+    } else {
+      DATA = incoming;
+    }
     applyTheme();
     saveData();
     closeModal();
