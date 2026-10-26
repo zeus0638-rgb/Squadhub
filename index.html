@@ -4861,6 +4861,7 @@ function renderNoTeamScreen(){
       <div style="color:rgba(255,255,255,0.78); font-size:14px; margin-top:6px; max-width:300px; margin-left:auto; margin-right:auto;">You're logged in${currentUser && currentUser.email ? ` as ${esc(currentUser.email)}` : ''}, but you're not part of a team right now.</div>
     </div>
     <button type="button" class="btn amber" data-no-team-create style="max-width:340px; width:100%; margin:0 auto;">+ Create a team</button>
+    <button type="button" class="btn ghost" data-no-team-import style="max-width:340px; width:100%; margin:10px auto 0; background:none; border-color:rgba(255,255,255,0.4); color:#fff;">Import a team</button>
     <button type="button" data-no-team-log-out style="background:none; border:none; color:rgba(255,255,255,0.65); font-size:13px; text-decoration:underline; cursor:pointer; margin:18px auto 0; display:flex; align-items:center; justify-content:center; gap:6px;">
       <svg viewBox="0 0 24 24" width="13" height="13" fill="none" style="flex-shrink:0;"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 17l5-5-5-5M21 12H9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
       Log out instead
@@ -4868,6 +4869,8 @@ function renderNoTeamScreen(){
   </div>`;
   const createBtn = document.querySelector('[data-no-team-create]');
   if(createBtn) createBtn.addEventListener('click', addNewTeam);
+  const importBtn = document.querySelector('[data-no-team-import]');
+  if(importBtn) importBtn.addEventListener('click', startImportAsNewTeam);
   const logOutBtn = document.querySelector('[data-no-team-log-out]');
   if(logOutBtn) logOutBtn.addEventListener('click', logOut);
 }
@@ -5620,6 +5623,42 @@ function importDataFromFile(file){
   reader.onload = ()=> processImportJsonText(reader.result);
   reader.onerror = ()=> alert('Could not read that file.');
   reader.readAsText(file);
+}
+function startImportAsNewTeam(){
+  // A backup carries its own full team identity (name, badge, everything) - import
+  // just needs an active team slot to land in, so create an empty shell and switch
+  // into it first, same as "+ Create a team" does, then offer the two existing
+  // import routes on top of whatever that lands on (the wizard, since the shell's
+  // own setup isn't complete).
+  addNewTeam();
+  openImportTeamModal();
+}
+function openImportTeamModal(){
+  const body = `
+    <h3>Import your team</h3>
+    <button class="icon-x" data-close-modal>&times;</button>
+    <div class="small" style="color:var(--ink-soft); margin-bottom:14px;">Restore from a backup file exported from SquadHub before, on this device or another one.</div>
+    <button type="button" class="btn amber" id="no-team-import-file-btn" style="margin-bottom:10px; display:flex; align-items:center; justify-content:center; gap:7px;">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M12 21V9m0 0l-4 4m4-4l4 4M5 7V5a2 2 0 012-2h10a2 2 0 012 2v2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Import data
+    </button>
+    <input type="file" id="no-team-import-file-input" accept="application/json,.json" style="display:none;">
+    <button type="button" class="btn ghost" id="no-team-paste-import-btn" style="margin-bottom:0; display:flex; align-items:center; justify-content:center; gap:7px;">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><rect x="4" y="4" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M19 9v10a2 2 0 01-2 2H7" stroke="currentColor" stroke-width="1.8"/></svg>
+      Paste backup to import
+    </button>
+  `;
+  openModal(body, {floating:true});
+  attachModalHandlers();
+  const fileBtn = document.getElementById('no-team-import-file-btn');
+  const fileInput = document.getElementById('no-team-import-file-input');
+  if(fileBtn && fileInput) fileBtn.addEventListener('click', ()=> fileInput.click());
+  if(fileInput) fileInput.addEventListener('change', ()=>{
+    if(fileInput.files && fileInput.files[0]) importDataFromFile(fileInput.files[0]);
+    fileInput.value = '';
+  });
+  const pasteBtn = document.getElementById('no-team-paste-import-btn');
+  if(pasteBtn) pasteBtn.addEventListener('click', openPasteImportModal);
 }
 function openPasteImportModal(){
   const body = `
