@@ -1557,9 +1557,19 @@ function qualStatus(expiryDateStr, dateObtained){
   if(expiry <= sixMonthsOut) return 'expiring';
   return 'valid';
 }
+function seasonFilteredCoaches(){
+  // The same season filter the Coaches list itself uses - shared here so the stats
+  // tiles, "Missing"/"Expired" detail popups and the qualified/unqualified split
+  // always agree with what's actually visible in the list below them. A coach who
+  // isn't registered for the season currently selected won't silently count toward
+  // these numbers while being invisible in the list - a mismatch that reads as a bug
+  // ("why does this say 3 missing when everyone shown is fully qualified?").
+  const resolved = resolveSeasonFilter(coachesSeasonFilter);
+  return resolved ? DATA.coaches.filter(c=>(c.registeredSeasons||[]).includes(resolved)) : DATA.coaches;
+}
 function expiredQualDetails(){
   const list = [];
-  DATA.coaches.forEach(c=>{
+  seasonFilteredCoaches().forEach(c=>{
     (c.quals||[]).forEach(link=>{
       if(qualStatus(link.expiryDate, link.dateObtained)==='expired'){
         const q = DATA.qualifications.find(x=>x.id===link.qualificationId);
@@ -1571,7 +1581,7 @@ function expiredQualDetails(){
 }
 function missingQualDetails(){
   const list = [];
-  DATA.coaches.forEach(c=>{
+  seasonFilteredCoaches().forEach(c=>{
     (c.quals||[]).forEach(link=>{
       if(qualStatus(link.expiryDate, link.dateObtained)==='missing'){
         const q = DATA.qualifications.find(x=>x.id===link.qualificationId);
@@ -1583,7 +1593,7 @@ function missingQualDetails(){
 }
 function qualsOverviewStats(){
   let expired = 0, expiring = 0, valid = 0, missing = 0;
-  DATA.coaches.forEach(c=>{
+  seasonFilteredCoaches().forEach(c=>{
     (c.quals||[]).forEach(link=>{
       const s = qualStatus(link.expiryDate, link.dateObtained);
       if(s==='expired') expired++;
@@ -1630,7 +1640,7 @@ function matchesSinceAwardedList(awardTypeId, fixtureList){
 function qualifiedCoachesList(){
   const mandatoryIds = DATA.qualifications.filter(q=>q.mandatory).map(q=>q.id);
   if(mandatoryIds.length===0) return null; // no mandatory quals configured
-  return DATA.coaches.filter(c=>
+  return seasonFilteredCoaches().filter(c=>
     mandatoryIds.every(qid=>{
       const link = (c.quals||[]).find(l=>l.qualificationId===qid);
       const status = link ? qualStatus(link.expiryDate, link.dateObtained) : 'missing';
@@ -4891,7 +4901,26 @@ function openCoachQualsModal(coachId){
   const editBtn = document.querySelector('[data-modal-edit-coach]');
   if(editBtn) editBtn.addEventListener('click', ()=>{
     closeModal();
+    // go() resets coachEditorTab itself when switching screens, so setting it has to
+    // happen after that call (then one more render to reflect it), not before.
     go(VIEW.tab,'coachEditor',{id:coachId});
+    coachEditorTab = 'quals';
+    render();
+  });
+  // The qualification row buttons (renderCoachQualsSection) are normally wired by the
+  // page-level attachHandlers() after a full render - but this is a modal, which
+  // doesn't go through that, so they need wiring here directly or they'd just sit dead.
+  document.querySelectorAll('[data-record-coach-qual]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const [cid, linkId] = el.dataset.recordCoachQual.split('|');
+      openRecordCoachQualModal(cid, linkId);
+    });
+  });
+  document.querySelectorAll('[data-remove-coach-qual]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const [cid, linkId] = el.dataset.removeCoachQual.split('|');
+      openRemoveCoachQualConfirm(cid, linkId);
+    });
   });
 }
 function renderCoachQualsSection(c, showAddButton){
@@ -6080,7 +6109,7 @@ function openRecordCoachQualModal(coachId, linkId){
     <div class="small" style="color:var(--ink-soft); margin-bottom:16px;">Expires: <strong id="rq-expiry-preview" style="color:var(--ink);">–</strong></div>
     <button class="btn amber" data-save-record-qual="${coachId}|${linkId}">Save</button>
   `;
-  openModal(body);
+  openModal(body, {floating:true});
   attachModalHandlers();
   function updatePreview(){
     const dateVal = document.getElementById('rq-date').value;
@@ -6109,7 +6138,7 @@ function openCoachQualModal(coachId){
   const available = DATA.qualifications.filter(q=>!heldIds.includes(q.id));
   if(available.length===0){
     openModal(`<h3>Add qualification</h3><button class="icon-x" data-close-modal>&times;</button>
-      <div class="small" style="color:var(--ink-soft);">${DATA.qualifications.length===0 ? `Define a qualification in the library first, then come back here to link it to ${esc(c.name||'this coach')}.` : `${esc(c.name||'This coach')} is already linked to every defined qualification. Use "Record" on any not-yet-recorded ones above, or add a new qualification to the library.`}</div>`);
+      <div class="small" style="color:var(--ink-soft);">${DATA.qualifications.length===0 ? `Define a qualification in the library first, then come back here to link it to ${esc(c.name||'this coach')}.` : `${esc(c.name||'This coach')} is already linked to every defined qualification. Use "Record" on any not-yet-recorded ones above, or add a new qualification to the library.`}</div>`, {floating:true});
     attachModalHandlers();
     return;
   }
@@ -6124,7 +6153,7 @@ function openCoachQualModal(coachId){
     <div class="small" style="color:var(--ink-soft); margin-bottom:16px;">Expires: <strong id="cq-expiry-preview" style="color:var(--ink);">–</strong></div>
     <button class="btn amber" data-save-coach-qual="${coachId}">Save qualification</button>
   `;
-  openModal(body);
+  openModal(body, {floating:true});
   attachModalHandlers();
   function updatePreview(){
     const qid = document.getElementById('cq-qual').value;
@@ -7904,7 +7933,7 @@ function openRemoveCoachQualConfirm(coachId, linkId){
       <button class="btn danger" data-confirm-remove-coach-qual="${coachId}|${linkId}" style="flex:1; margin-bottom:0;">Remove</button>
     </div>
   `;
-  openModal(body);
+  openModal(body, {floating:true});
   attachModalHandlers();
   const confirmBtn = document.querySelector('[data-confirm-remove-coach-qual]');
   if(confirmBtn) confirmBtn.onclick = ()=>{
