@@ -84,11 +84,8 @@
     letter-spacing:.02em;
   }
   .topbar-watermark-wrap{
-    position:absolute; left:0; top:0; bottom:0; aspect-ratio:1/1;
+    position:absolute; inset:0;
     overflow:hidden; pointer-events:none; z-index:0;
-    border-radius:50%;
-    -webkit-mask-image:radial-gradient(circle, rgba(0,0,0,1) 55%, rgba(0,0,0,0) 100%);
-    mask-image:radial-gradient(circle, rgba(0,0,0,1) 55%, rgba(0,0,0,0) 100%);
   }
   .topbar-watermark{
     width:100%; height:100%; display:block;
@@ -1267,6 +1264,120 @@ async function loadTeamsFromCloud(){
   await storageSet(STORE_KEY, JSON.stringify(TEAMS_STORE));
   applyTheme();
   if(isFirstEverLogin) renderWelcomeScreen(); else goHomeOrWizard();
+}
+function generateInviteCode(){
+  // No 0/O/1/I - easy to misread when someone's reading it aloud to a teammate.
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for(let i=0; i<6; i++) code += chars[Math.floor(Math.random()*chars.length)];
+  return code;
+}
+function openInviteCoachModal(){
+  const body = `
+    <h3>Invite a coach</h3>
+    <button class="icon-x" data-close-modal>&times;</button>
+    <div class="small" style="color:var(--ink-soft); margin-bottom:16px;">Generate a one-time code to share with another coach. Once they create an account and enter it, they'll see this same team — same players, fixtures and results, kept in sync with yours.</div>
+    <button class="btn amber" data-generate-invite-code style="margin-bottom:0;">Generate code</button>
+  `;
+  openModal(body, {floating:true});
+  attachModalHandlers();
+  const genBtn = document.querySelector('[data-generate-invite-code]');
+  if(genBtn) genBtn.addEventListener('click', ()=>{
+    genBtn.textContent = 'Generating...';
+    createTeamInvite();
+  });
+}
+async function createTeamInvite(){
+  if(!supabaseClient || !currentUser) return;
+  const active = TEAMS_STORE.teams.find(t=>t.id===TEAMS_STORE.activeTeamId);
+  if(!active || !active.cloudSynced){
+    alert("This team needs to finish syncing to the cloud before you can invite someone - try again in a moment.");
+    return;
+  }
+  const code = generateInviteCode();
+  const expiresAt = new Date(Date.now() + 7*24*60*60*1000).toISOString();
+  const { error } = await supabaseClient.from('team_invites').insert({
+    team_id: active.id, code, created_by: currentUser.id, expires_at: expiresAt
+  });
+  if(error){
+    console.error('invite creation failed', error);
+    alert("Couldn't create an invite right now. Please check your connection and try again.");
+    return;
+  }
+  openInviteCodeModal(code);
+}
+function openInviteCodeModal(code){
+  const body = `
+    <h3>Invite a coach</h3>
+    <button class="icon-x" data-close-modal>&times;</button>
+    <div class="small" style="color:var(--ink-soft); margin-bottom:14px;">Share this code with them. Once they create an account and enter it, they'll see this same team - same players, fixtures and results, kept in sync with yours.</div>
+    <div style="font-family:'Oswald',sans-serif; font-weight:700; font-size:32px; letter-spacing:.08em; text-align:center; color:var(--pitch); background:var(--surface-2); border-radius:12px; padding:18px; margin-bottom:10px;">${esc(code)}</div>
+    <div class="small" style="color:var(--ink-soft); text-align:center; margin-bottom:16px;">Valid for 7 days, and works once.</div>
+    <button class="btn amber" data-copy-invite-code="${esc(code)}" style="margin-bottom:0;">Copy code</button>
+  `;
+  openModal(body, {floating:true});
+  attachModalHandlers();
+  const copyBtn = document.querySelector('[data-copy-invite-code]');
+  if(copyBtn) copyBtn.addEventListener('click', async ()=>{
+    try{
+      await navigator.clipboard.writeText(copyBtn.dataset.copyInviteCode);
+      copyBtn.textContent = 'Copied!';
+      setTimeout(()=>{ copyBtn.textContent = 'Copy code'; }, 1800);
+    }catch(e){
+      alert('Could not copy to clipboard on this device.');
+    }
+  });
+}
+function openRedeemInviteModal(){
+  const body = `
+    <h3>Join a team</h3>
+    <button class="icon-x" data-close-modal>&times;</button>
+    <div class="small" style="color:var(--ink-soft); margin-bottom:14px;">Enter the invite code a coach shared with you.</div>
+    <input type="text" id="redeem-invite-code" placeholder="e.g. 7K9PQX" style="text-transform:uppercase; text-align:center; font-family:'Oswald',sans-serif; font-weight:700; font-size:22px; letter-spacing:.08em;" maxlength="6" autocomplete="off" autocapitalize="characters">
+    <button class="btn amber" data-confirm-redeem-invite style="margin-top:4px;">Join team</button>
+  `;
+  openModal(body, {floating:true});
+  attachModalHandlers();
+  const input = document.getElementById('redeem-invite-code');
+  const confirmBtn = document.querySelector('[data-confirm-redeem-invite]');
+  if(confirmBtn) confirmBtn.onclick = async ()=>{
+    const code = input.value.trim().toUpperCase();
+    if(!code){ alert('Please enter the invite code.'); return; }
+    confirmBtn.textContent = 'Joining...';
+    const ok = await redeemTeamInvite(code);
+    if(!ok) confirmBtn.textContent = 'Join team';
+  };
+}
+async function redeemTeamInvite(code){
+  if(!supabaseClient || !currentUser) return false;
+  const { data: invite, error } = await supabaseClient.from('team_invites')
+    .select('id, team_id, expires_at, used_by')
+    .eq('code', code)
+    .maybeSingle();
+  if(error || !invite){
+    alert("That code doesn't look right. Double-check it with the coach who sent it.");
+    return false;
+  }
+  if(invite.used_by){
+    alert('This invite has already been used. Ask for a fresh one.');
+    return false;
+  }
+  if(new Date(invite.expires_at) < new Date()){
+    alert('This invite has expired. Ask for a fresh one.');
+    return false;
+  }
+  const { error: joinErr } = await supabaseClient.from('team_members').insert({
+    team_id: invite.team_id, user_id: currentUser.id, permission_level: 'coach'
+  });
+  if(joinErr){
+    console.error('join failed', joinErr);
+    alert("Couldn't join that team right now. Please check your connection and try again.");
+    return false;
+  }
+  await supabaseClient.from('team_invites').update({ used_by: currentUser.id, used_at: new Date().toISOString() }).eq('id', invite.id);
+  closeModal();
+  await loadTeamsFromCloud();
+  return true;
 }
 function syncActiveTeamData(){
   if(currentUser) TEAMS_STORE.ownerUserId = currentUser.id;
@@ -4751,9 +4862,12 @@ function renderCoachesTab(){
     </div>`;
   }
   return `
-  <div class="topbar">
+  <div class="topbar" style="position:relative;">
     ${teamLogoWatermarkHtml()}
-    <div style="display:flex; align-items:center; justify-content:center; gap:5px; cursor:pointer; margin-bottom:8px;" data-open-team-switcher>${DATA.teamBadge ? `<img src="${DATA.teamBadge}" style="width:16px;height:16px;border-radius:50%;object-fit:cover;">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <div style="display:flex; align-items:center; justify-content:center; gap:5px; cursor:pointer; margin:0 auto 8px; width:fit-content;" data-open-team-switcher>${DATA.teamBadge ? `<img src="${DATA.teamBadge}" style="width:16px;height:16px;border-radius:50%;object-fit:cover;">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    ${(supabaseClient && currentUser) ? `<button type="button" data-invite-coach title="Invite a coach" style="position:absolute; top:14px; right:14px; background:rgba(255,255,255,0.15); border:none; border-radius:50%; width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:#fff; cursor:pointer;">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9" cy="7" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M19 8v6M22 11h-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>` : ''}
     <h1>Coaches</h1>
     <div class="sub">${DATA.coaches.length} coach${DATA.coaches.length===1?'':'es'} · qualifications &amp; certifications</div>
   </div>
@@ -4877,11 +4991,14 @@ function renderNoTeamScreen(){
     </div>
     <button type="button" class="btn amber" data-no-team-create style="max-width:340px; width:100%; margin:0 auto;">${hasIncompleteTeam ? 'Continue team setup' : '+ Create a team'}</button>
     <button type="button" class="btn" data-no-team-import style="max-width:340px; width:100%; margin:10px auto 0; background:rgba(255,255,255,0.16); border:1.5px solid rgba(255,255,255,0.4); color:#fff;">Import a team</button>
+    ${(supabaseClient && currentUser) ? `<button type="button" data-no-team-join style="background:none; border:none; color:rgba(255,255,255,0.78); font-size:13.5px; text-decoration:underline; cursor:pointer; margin:16px auto 0; display:block;">Have an invite code from a coach? Join their team</button>` : ''}
   </div>`;
   const createBtn = document.querySelector('[data-no-team-create]');
   if(createBtn) createBtn.addEventListener('click', hasIncompleteTeam ? enterTeamSetupWizard : addNewTeam);
   const importBtn = document.querySelector('[data-no-team-import]');
   if(importBtn) importBtn.addEventListener('click', startImportAsNewTeam);
+  const joinBtn = document.querySelector('[data-no-team-join]');
+  if(joinBtn) joinBtn.addEventListener('click', openRedeemInviteModal);
   const logOutBtn = document.querySelector('[data-no-team-log-out]');
   if(logOutBtn) logOutBtn.addEventListener('click', logOut);
 }
@@ -5557,6 +5674,7 @@ function renderTeamTab(){
         Paste backup to import
       </button>
     </div>
+
     <div class="small" style="color:var(--ink-soft); text-align:center; margin-top:6px;">SquadHub · version ${APP_VERSION}</div>`;
   }
   return `
@@ -10333,6 +10451,8 @@ function attachHandlers(){
       importInput.value = '';
     });
   }
+  const inviteCoachBtn = document.querySelector('[data-invite-coach]');
+  if(inviteCoachBtn) inviteCoachBtn.addEventListener('click', openInviteCoachModal);
   const copyExportBtn = document.querySelector('[data-copy-export]');
   if(copyExportBtn) copyExportBtn.addEventListener('click', async ()=>{
     const payload = { app:'SquadHub', version:APP_VERSION, exportedAt:new Date().toISOString(), data:DATA };
