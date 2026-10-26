@@ -2561,6 +2561,32 @@ function openTeamStatMatchesModal(statId, label, fixtureList){
     el.addEventListener('click', ()=>{ closeModal(); go(VIEW.tab,'resultDetail',{id:el.dataset.openStatMatch}); });
   });
 }
+function openFormResultModal(fixtureId){
+  // Same look as the "Wins"/"Draws"/etc stat popup, just scoped to the one match this
+  // form-guide circle represents, with the same tap-through to the full result record.
+  const f = DATA.fixtures.find(x=>x.id===fixtureId);
+  if(!f) return;
+  const result = fixtureResultLabel(f);
+  const label = {win:'Win', draw:'Draw', loss:'Loss'}[result] || 'Result';
+  const body = `
+    <h3>${label}</h3>
+    <button class="icon-x" data-close-modal>&times;</button>
+    <div class="tap" data-open-stat-match="${f.id}" style="padding:9px 0; cursor:pointer;">
+      <div class="row">
+        <div>
+          <div style="font-size:13.5px;">vs ${esc(f.opponent||'TBC')}${venueBadge(f)}</div>
+          <div class="small" style="color:var(--ink-soft); margin-top:2px;">${shortDate(f.dateTime)}</div>
+        </div>
+        <div class="num" style="font-size:15px; font-weight:600; white-space:nowrap;">${f.finalScore.us} – ${f.finalScore.them}</div>
+      </div>
+    </div>
+  `;
+  openModal(body, {floating:true});
+  attachModalHandlers();
+  document.querySelectorAll('[data-open-stat-match]').forEach(el=>{
+    el.addEventListener('click', ()=>{ closeModal(); go(VIEW.tab,'resultDetail',{id:el.dataset.openStatMatch}); });
+  });
+}
 function teamSeasonStats(fixtureList){
   const finished = (fixtureList || DATA.fixtures).filter(f=>f.status==='finished');
   let w=0,d=0,l=0,gf=0,ga=0,goals=0,assists=0,pensS=0,pensM=0;
@@ -3149,7 +3175,7 @@ function renderHomeTab(){
       ${form.length===0 ? `<div class="small" style="color:var(--ink-soft);">No matches played yet</div>` : `
       <div style="display:flex; gap:8px; justify-content:center;">
         ${form.map(x=>`
-          <div class="tap" data-open-result="${x.fixture.id}" style="cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:4px;">
+          <div class="tap" data-open-form-result="${x.fixture.id}" style="cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:4px;">
             <div style="width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:13px; color:#fff; background:${x.result==='win'?'var(--win)':x.result==='draw'?'var(--draw)':'var(--loss)'};">${x.result[0].toUpperCase()}</div>
             <div class="small" style="color:var(--ink-soft); font-size:10px;">${shortDate(x.fixture.dateTime)}</div>
           </div>`).join('')}
@@ -4901,11 +4927,7 @@ function openCoachQualsModal(coachId){
   const editBtn = document.querySelector('[data-modal-edit-coach]');
   if(editBtn) editBtn.addEventListener('click', ()=>{
     closeModal();
-    // go() resets coachEditorTab itself when switching screens, so setting it has to
-    // happen after that call (then one more render to reflect it), not before.
     go(VIEW.tab,'coachEditor',{id:coachId});
-    coachEditorTab = 'quals';
-    render();
   });
   // The qualification row buttons (renderCoachQualsSection) are normally wired by the
   // page-level attachHandlers() after a full render - but this is a modal, which
@@ -4913,13 +4935,13 @@ function openCoachQualsModal(coachId){
   document.querySelectorAll('[data-record-coach-qual]').forEach(el=>{
     el.addEventListener('click', ()=>{
       const [cid, linkId] = el.dataset.recordCoachQual.split('|');
-      openRecordCoachQualModal(cid, linkId);
+      openRecordCoachQualModal(cid, linkId, true);
     });
   });
   document.querySelectorAll('[data-remove-coach-qual]').forEach(el=>{
     el.addEventListener('click', ()=>{
       const [cid, linkId] = el.dataset.removeCoachQual.split('|');
-      openRemoveCoachQualConfirm(cid, linkId);
+      openRemoveCoachQualConfirm(cid, linkId, true);
     });
   });
 }
@@ -6094,7 +6116,7 @@ function closeModal(){
   document.querySelectorAll('#modal-root').forEach(m=> m.remove());
 }
 
-function openRecordCoachQualModal(coachId, linkId){
+function openRecordCoachQualModal(coachId, linkId, returnToQualsList){
   const c = DATA.coaches.find(x=>x.id===coachId);
   if(!c) return;
   const link = (c.quals||[]).find(l=>l.id===linkId);
@@ -6107,10 +6129,17 @@ function openRecordCoachQualModal(coachId, linkId){
     <label>Date obtained</label>
     <input type="date" id="rq-date" value="${link.dateObtained || todayStr}">
     <div class="small" style="color:var(--ink-soft); margin-bottom:16px;">Expires: <strong id="rq-expiry-preview" style="color:var(--ink);">–</strong></div>
-    <button class="btn amber" data-save-record-qual="${coachId}|${linkId}">Save</button>
+    <button class="btn primary" data-save-record-qual="${coachId}|${linkId}">Save</button>
   `;
   openModal(body, {floating:true});
   attachModalHandlers();
+  // Reached from the coach's quals-list popup, so closing with X should go back to
+  // that list rather than drop all the way out to the page underneath it.
+  if(returnToQualsList){
+    document.querySelectorAll('[data-close-modal]').forEach(el=>{
+      el.addEventListener('click', ()=> openCoachQualsModal(coachId));
+    });
+  }
   function updatePreview(){
     const dateVal = document.getElementById('rq-date').value;
     const preview = document.getElementById('rq-expiry-preview');
@@ -7918,7 +7947,7 @@ function openFullLineupGridModal(fixtureId, selectedIds, fixedGkId, eligiblePosi
     render();
   };
 }
-function openRemoveCoachQualConfirm(coachId, linkId){
+function openRemoveCoachQualConfirm(coachId, linkId, returnToQualsList){
   const c = DATA.coaches.find(x=>x.id===coachId);
   if(!c || !c.quals) return;
   const link = c.quals.find(x=>x.id===linkId);
@@ -7935,6 +7964,11 @@ function openRemoveCoachQualConfirm(coachId, linkId){
   `;
   openModal(body, {floating:true});
   attachModalHandlers();
+  if(returnToQualsList){
+    document.querySelectorAll('[data-close-modal]').forEach(el=>{
+      el.addEventListener('click', ()=> openCoachQualsModal(coachId));
+    });
+  }
   const confirmBtn = document.querySelector('[data-confirm-remove-coach-qual]');
   if(confirmBtn) confirmBtn.onclick = ()=>{
     c.quals = c.quals.filter(x=>x.id!==linkId);
@@ -9083,6 +9117,9 @@ function attachHandlers(){
   });
   document.querySelectorAll('[data-open-result]').forEach(el=>{
     el.addEventListener('click', ()=> go(VIEW.tab,'resultDetail',{id:el.dataset.openResult}));
+  });
+  document.querySelectorAll('[data-open-form-result]').forEach(el=>{
+    el.addEventListener('click', ()=> openFormResultModal(el.dataset.openFormResult));
   });
   document.querySelectorAll('[data-view-result]').forEach(el=>{
     el.addEventListener('click', ()=> go(VIEW.tab,'resultDetail',{id:el.dataset.viewResult}));
