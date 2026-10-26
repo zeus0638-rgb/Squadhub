@@ -1197,14 +1197,20 @@ function addNewTeam(){
 async function pushTeamToCloud(team){
   if(!supabaseClient || !currentUser || !team) return;
   if(!team.cloudSynced){
-    const { error: insertErr } = await supabaseClient.from('teams').insert({
+    // Upsert rather than insert - if a previous sync attempt partially succeeded (e.g.
+    // got interrupted by an outage after creating the team row but before the
+    // membership row), a plain insert would fail on the duplicate id and leave this
+    // team stuck un-synced forever. Upserting by id recovers from that instead.
+    const { error: insertErr } = await supabaseClient.from('teams').upsert({
       id: team.id, name: team.name || 'My team', data: team.data
     });
     if(insertErr){ console.error('cloud team create failed', insertErr); return; }
     const { error: memberErr } = await supabaseClient.from('team_members').insert({
       team_id: team.id, user_id: currentUser.id, permission_level: 'admin'
     });
-    if(memberErr){ console.error('cloud membership create failed', memberErr); return; }
+    // A duplicate-key error here just means this exact membership row already exists
+    // from an earlier attempt - that's success, not failure.
+    if(memberErr && memberErr.code !== '23505'){ console.error('cloud membership create failed', memberErr); return; }
     team.cloudSynced = true;
   } else {
     const { error } = await supabaseClient.from('teams')
@@ -1272,36 +1278,32 @@ function generateInviteCode(){
   for(let i=0; i<6; i++) code += chars[Math.floor(Math.random()*chars.length)];
   return code;
 }
-function openInviteCoachModal(){
-  const body = `
-    <h3>Invite a coach</h3>
-    <button class="icon-x" data-close-modal>&times;</button>
-    <div class="small" style="color:var(--ink-soft); margin-bottom:16px;">Generate a one-time code to share with another coach. Once they create an account and enter it, they'll see this same team — same players, fixtures and results, kept in sync with yours.</div>
-    <button class="btn amber" data-generate-invite-code style="margin-bottom:0;">Generate code</button>
-  `;
-  openModal(body, {floating:true});
-  attachModalHandlers();
-  const genBtn = document.querySelector('[data-generate-invite-code]');
-  if(genBtn) genBtn.addEventListener('click', ()=>{
-    genBtn.textContent = 'Generating...';
-    createTeamInvite();
-  });
-}
-async function createTeamInvite(){
+async function createTeamInvite(coachId, level, triggerBtn){
   if(!supabaseClient || !currentUser) return;
   const active = TEAMS_STORE.teams.find(t=>t.id===TEAMS_STORE.activeTeamId);
-  if(!active || !active.cloudSynced){
-    alert("This team needs to finish syncing to the cloud before you can invite someone - try again in a moment.");
-    return;
+  if(!active) return;
+  if(!active.cloudSynced){
+    // The local flag can go stale if an earlier sync attempt failed silently (a dropped
+    // connection, a Supabase outage) even though the team works fine locally - worth
+    // trying again right now rather than immediately telling the person to wait.
+    await pushTeamToCloud(active);
+    if(!active.cloudSynced){
+      alert("This team couldn't be synced to the cloud just now. Please check your connection and try again in a moment.");
+      return;
+    }
   }
   const code = generateInviteCode();
   const expiresAt = new Date(Date.now() + 7*24*60*60*1000).toISOString();
+  // The access level chosen on the coach's record travels with the invite itself, so
+  // whoever redeems it is granted exactly that level the moment they join - not a
+  // generic "coach" role disconnected from what was actually offered to them.
   const { error } = await supabaseClient.from('team_invites').insert({
-    team_id: active.id, code, created_by: currentUser.id, expires_at: expiresAt
+    team_id: active.id, code, created_by: currentUser.id, expires_at: expiresAt, coach_id: coachId || null, permission_level: level || 'level2'
   });
   if(error){
     console.error('invite creation failed', error);
     alert("Couldn't create an invite right now. Please check your connection and try again.");
+    if(triggerBtn) triggerBtn.textContent = 'Invite to app';
     return;
   }
   openInviteCodeModal(code);
@@ -1351,7 +1353,7 @@ function openRedeemInviteModal(){
 async function redeemTeamInvite(code){
   if(!supabaseClient || !currentUser) return false;
   const { data: invite, error } = await supabaseClient.from('team_invites')
-    .select('id, team_id, expires_at, used_by')
+    .select('id, team_id, expires_at, used_by, coach_id, permission_level')
     .eq('code', code)
     .maybeSingle();
   if(error || !invite){
@@ -1367,7 +1369,7 @@ async function redeemTeamInvite(code){
     return false;
   }
   const { error: joinErr } = await supabaseClient.from('team_members').insert({
-    team_id: invite.team_id, user_id: currentUser.id, permission_level: 'coach'
+    team_id: invite.team_id, user_id: currentUser.id, permission_level: invite.permission_level || 'level2'
   });
   if(joinErr){
     console.error('join failed', joinErr);
@@ -1377,6 +1379,19 @@ async function redeemTeamInvite(code){
   await supabaseClient.from('team_invites').update({ used_by: currentUser.id, used_at: new Date().toISOString() }).eq('id', invite.id);
   closeModal();
   await loadTeamsFromCloud();
+  // This invite was generated from a specific coach's own record - now that this
+  // account has joined, link the two so that coach's profile shows they actually have
+  // app access, instead of just a name with no connection to who's really logged in.
+  if(invite.coach_id){
+    const matchedCoach = (DATA.coaches||[]).find(c=>c.id===invite.coach_id);
+    if(matchedCoach && !matchedCoach.authUserId){
+      matchedCoach.authUserId = currentUser.id;
+      // Keep the profile's own level in sync with what was actually granted, in case
+      // it was changed again after the invite was sent but before it got redeemed.
+      matchedCoach.permissionLevel = invite.permission_level || matchedCoach.permissionLevel;
+      saveData();
+    }
+  }
   return true;
 }
 function syncActiveTeamData(){
@@ -1387,7 +1402,45 @@ function syncActiveTeamData(){
   active.name = DATA.teamNickname || DATA.teamName || 'My team';
   active.badge = DATA.teamBadge || null;
 }
+function applyViewOnlyLock(root){
+  // Basic/View Only access: every form control is disabled, and every button is
+  // disabled UNLESS it's recognised as a navigation or view/filter control rather than
+  // something that changes data - either it sits inside a .toggle-group (the pattern
+  // used throughout this app for switching between tabs/filters) or its own attribute
+  // name ends in -tab or -filter (the same naming convention those controls already
+  // use everywhere). This is a visual/UX layer on top of the real backstop in
+  // saveData() - even a button missed here can't actually persist a change.
+  if(!root) return;
+  if(myEffectivePermission()!=='level2') return;
+  root.querySelectorAll('input, textarea, select').forEach(el=>{ el.disabled = true; });
+  root.querySelectorAll('button').forEach(btn=>{
+    if(btn.disabled) return;
+    const isNavOrFilter = btn.closest('.toggle-group') || btn.hasAttribute('data-close-modal') || btn.hasAttribute('data-nav-tab') ||
+      Array.from(btn.attributes).some(a=> a.name.endsWith('-tab') || a.name.endsWith('-filter'));
+    if(!isNavOrFilter){
+      btn.disabled = true;
+      btn.style.opacity = '0.4';
+      btn.style.cursor = 'not-allowed';
+    }
+  });
+}
+function myEffectivePermission(){
+  // 'admin' (High), 'level3' (Medium - Team Admin), 'level2' (Basic - View Only).
+  // Defaults to full access ('admin') whenever there's no cloud-tracked level to check
+  // against - local/offline use, or the team's own creator - rather than ever silently
+  // locking someone out of an app that predates this feature entirely.
+  const active = TEAMS_STORE.teams.find(t=>t.id===TEAMS_STORE.activeTeamId);
+  return (active && active.myPermission) || 'admin';
+}
 function saveData(){
+  if(myEffectivePermission()==='level2'){
+    // Basic/View Only access - this is the real backstop: regardless of which button,
+    // field or screen someone used to get here, a view-only login's changes never
+    // actually persist, locally or to the cloud. Every mutating path in this app ends
+    // up calling saveData(), so blocking it here is what makes the restriction real
+    // rather than just a hidden button that a missed edge case could bypass.
+    return;
+  }
   clearTimeout(saveTimeout);
   saveTimeout = setTimeout(async ()=>{
     syncActiveTeamData();
@@ -1418,6 +1471,11 @@ function enterTeamSetupWizard(){
   go('team','teamSetupWizard',{});
 }
 function go(tab, screen, params){
+  // Settings is admin-only (High access) - redirect anyone else before they ever reach
+  // it, regardless of which button or link they used to try to get there.
+  if(tab === 'team' && myEffectivePermission() !== 'admin'){
+    tab = 'home'; screen = null; params = {};
+  }
   gridPitchEnlargedQuarter = null;
   if(screen === 'resultDetail') resultDetailTab = 'timeline';
   if(screen === 'live' && !(VIEW.screen==='live' && params && VIEW.params && params.id===VIEW.params.id)){
@@ -1484,8 +1542,13 @@ function addYearsToDateStr(dateStr, years){
   d.setFullYear(d.getFullYear() + (parseInt(years)||0));
   return d.toISOString().slice(0,10);
 }
-function qualStatus(expiryDateStr){
-  if(!expiryDateStr) return 'missing';
+function qualStatus(expiryDateStr, dateObtained){
+  // "Missing" means never recorded as obtained at all. A qualification that HAS been
+  // obtained but has no expiry tracked (because the type doesn't expire, or the date
+  // just hasn't been entered) is valid indefinitely, not missing - a coach who holds it
+  // shouldn't show as unqualified just because no expiry date exists to check.
+  if(!dateObtained) return 'missing';
+  if(!expiryDateStr) return 'valid';
   const now = new Date();
   const expiry = new Date(expiryDateStr);
   const sixMonthsOut = new Date(now);
@@ -1498,7 +1561,7 @@ function expiredQualDetails(){
   const list = [];
   DATA.coaches.forEach(c=>{
     (c.quals||[]).forEach(link=>{
-      if(qualStatus(link.expiryDate)==='expired'){
+      if(qualStatus(link.expiryDate, link.dateObtained)==='expired'){
         const q = DATA.qualifications.find(x=>x.id===link.qualificationId);
         list.push({coach:c, qualName: q ? q.name : 'Unknown qualification', expiryDate: link.expiryDate});
       }
@@ -1510,7 +1573,7 @@ function missingQualDetails(){
   const list = [];
   DATA.coaches.forEach(c=>{
     (c.quals||[]).forEach(link=>{
-      if(qualStatus(link.expiryDate)==='missing'){
+      if(qualStatus(link.expiryDate, link.dateObtained)==='missing'){
         const q = DATA.qualifications.find(x=>x.id===link.qualificationId);
         list.push({coach:c, qualName: q ? q.name : 'Unknown qualification'});
       }
@@ -1522,7 +1585,7 @@ function qualsOverviewStats(){
   let expired = 0, expiring = 0, valid = 0, missing = 0;
   DATA.coaches.forEach(c=>{
     (c.quals||[]).forEach(link=>{
-      const s = qualStatus(link.expiryDate);
+      const s = qualStatus(link.expiryDate, link.dateObtained);
       if(s==='expired') expired++;
       else if(s==='expiring') expiring++;
       else if(s==='valid') valid++;
@@ -1570,7 +1633,7 @@ function qualifiedCoachesList(){
   return DATA.coaches.filter(c=>
     mandatoryIds.every(qid=>{
       const link = (c.quals||[]).find(l=>l.qualificationId===qid);
-      const status = link ? qualStatus(link.expiryDate) : 'missing';
+      const status = link ? qualStatus(link.expiryDate, link.dateObtained) : 'missing';
       return status==='valid' || status==='expiring';
     })
   );
@@ -1584,7 +1647,7 @@ function qualificationActivity(){
       if(link.dateObtained){
         items.push({type:'obtained', qualName:qDef.name, coachName:c.name||'Unnamed coach', date:link.dateObtained});
       }
-      if(link.expiryDate && qualStatus(link.expiryDate)==='expired'){
+      if(link.expiryDate && qualStatus(link.expiryDate, link.dateObtained)==='expired'){
         items.push({type:'expired', qualName:qDef.name, coachName:c.name||'Unnamed coach', date:link.expiryDate});
       }
     });
@@ -2550,7 +2613,22 @@ function render(){
   setupTabBarScrollBehavior();
   fitPitchSvgsToViewport();
   setupPitchDragHandlers();
+  applyViewOnlyLock(app);
+  renderViewOnlyBadge();
   pitchQuarterTransitionDir = 0; // consumed by this render already - don't replay the slide on an unrelated later re-render
+}
+function renderViewOnlyBadge(){
+  let badge = document.getElementById('view-only-badge');
+  if(myEffectivePermission()!=='level2'){
+    if(badge) badge.remove();
+    return;
+  }
+  if(badge) return;
+  badge = document.createElement('div');
+  badge.id = 'view-only-badge';
+  badge.textContent = 'View only';
+  badge.style.cssText = 'position:fixed; top:env(safe-area-inset-top,0px); left:50%; transform:translateX(-50%); z-index:999; background:rgba(0,0,0,0.78); color:#fff; font-size:11px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; padding:4px 12px; border-radius:0 0 8px 8px; pointer-events:none;';
+  document.body.appendChild(badge);
 }
 function setupTabBarScrollBehavior(){
   const contentEl = document.querySelector('.content');
@@ -2854,7 +2932,8 @@ const TAB_DEFS = [
 ];
 function renderTabBar(){
   const hasPendingMatchToday = todaysFixtures().some(f=>f.status!=='finished');
-  return `<div class="tabbar">${TAB_DEFS.map(t=>{
+  const visibleTabs = myEffectivePermission()==='admin' ? TAB_DEFS : TAB_DEFS.filter(t=>t.id!=='team');
+  return `<div class="tabbar">${visibleTabs.map(t=>{
     const isActive = VIEW.tab===t.id || (t.id==='home' && (VIEW.tab==='fixtures' || VIEW.tab==='results'));
     const vibrate = (t.id==='matchday' && hasPendingMatchToday) ? 'icon-vibrate' : '';
     return `
@@ -4521,21 +4600,38 @@ function renderCoachEditor(id){
     <input type="text" id="c-role" value="${esc(c.role||'')}" placeholder="e.g. Head Coach, Assistant, First Aid Officer">
     <label>Start date</label>
     <input type="date" id="c-startdate" value="${c.startDate||''}">
+    ${(editing && supabaseClient && currentUser) ? `
+    <label>App access</label>
+    <div class="card" style="margin-bottom:16px;">
+      ${c.authUserId ? `
+      <div style="display:flex; align-items:center; gap:10px;">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" style="flex-shrink:0; color:var(--win);"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.8"/><path d="M8 12l2.5 2.5L16 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div>
+          <div style="font-weight:600; font-size:14px; color:var(--ink);">Has app access</div>
+          <div class="small" style="color:var(--ink-soft);">They can log in and see this team.</div>
+        </div>
+      </div>
+      ` : `
+      <div class="small" style="color:var(--ink-soft); margin-bottom:12px;">Not yet invited. Generate a one-time code so ${c.name?esc(c.name):'this coach'} can log in and see this team — same players, fixtures and results, kept in sync with yours.</div>
+      <button type="button" class="btn amber" data-invite-this-coach="${c.id}" style="margin-bottom:0;">Invite to app</button>
+      `}
+    </div>
+    ` : ''}
     <label>Email <span style="font-weight:400; color:var(--ink-soft);">— for login, once accounts are set up</span></label>
     <input type="email" id="c-email" value="${esc(c.email||'')}" placeholder="coach@example.com">
     <label>Access level</label>
     <div class="card" style="margin-bottom:16px;">
       <label style="display:flex; align-items:flex-start; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); cursor:pointer; margin-bottom:0;">
         <input type="radio" name="c-permission" value="admin" ${c.permissionLevel==='admin'?'checked':''} style="width:auto; margin:3px 0 0;">
-        <span><span style="font-weight:600; font-size:14px; color:var(--ink); text-transform:none; display:block;">Admin</span><span class="small" style="color:var(--ink-soft);">Full access to every area, including Settings</span></span>
+        <span><span style="font-weight:600; font-size:14px; color:var(--ink); text-transform:none; display:block;">High – Team (App) Admin</span><span class="small" style="color:var(--ink-soft);">Full access to every area, including Settings</span></span>
       </label>
       <label style="display:flex; align-items:flex-start; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); cursor:pointer; margin-bottom:0;">
-        <input type="radio" name="c-permission" value="level2" ${c.permissionLevel==='level2'?'checked':''} style="width:auto; margin:3px 0 0;">
-        <span><span style="font-weight:600; font-size:14px; color:var(--ink); text-transform:none; display:block;">Level 2 — Read only</span><span class="small" style="color:var(--ink-soft);">Can view every area except Settings, no editing</span></span>
+        <input type="radio" name="c-permission" value="level3" ${c.permissionLevel==='level3'?'checked':''} style="width:auto; margin:3px 0 0;">
+        <span><span style="font-weight:600; font-size:14px; color:var(--ink); text-transform:none; display:block;">Medium – Team Admin</span><span class="small" style="color:var(--ink-soft);">Can edit everywhere except Settings, which stays hidden</span></span>
       </label>
       <label style="display:flex; align-items:flex-start; gap:10px; padding:8px 0; cursor:pointer; margin-bottom:0;">
-        <input type="radio" name="c-permission" value="level3" ${c.permissionLevel==='level3'?'checked':''} style="width:auto; margin:3px 0 0;">
-        <span><span style="font-weight:600; font-size:14px; color:var(--ink); text-transform:none; display:block;">Level 3 — Edit access</span><span class="small" style="color:var(--ink-soft);">Can edit everywhere except Settings, which stays hidden</span></span>
+        <input type="radio" name="c-permission" value="level2" ${c.permissionLevel==='level2'?'checked':''} style="width:auto; margin:3px 0 0;">
+        <span><span style="font-weight:600; font-size:14px; color:var(--ink); text-transform:none; display:block;">Basic – View Only Access</span><span class="small" style="color:var(--ink-soft);">Can view every area except Settings, no editing</span></span>
       </label>
     </div>
     <div class="small" style="color:var(--ink-soft); margin-top:-10px; margin-bottom:16px;">These levels aren't enforced yet — they're ready for when coach logins are added.</div>
@@ -4773,6 +4869,31 @@ function renderAwardDisplayCard(f, a){
     ${description ? `<div style="font-size:14px; color:var(--ink);">${esc(description)}</div>` : ''}
   </div>`;
 }
+function openCoachQualsModal(coachId){
+  const c = DATA.coaches.find(x=>x.id===coachId);
+  if(!c) return;
+  const body = `
+    <button class="icon-x" data-close-modal>&times;</button>
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px; padding-right:36px;">
+      ${coachAvatarHtml(c)}
+      <div style="flex:1; min-width:0;">
+        <div style="font-weight:700; font-family:'Oswald',sans-serif; font-size:17px; color:var(--ink);">${esc(c.name || 'Unnamed coach')}</div>
+        <div class="small" style="color:var(--ink-soft);">${esc(c.role || 'No role set')}</div>
+      </div>
+      <button type="button" data-modal-edit-coach="${c.id}" title="Edit coach" style="background:none; border:none; padding:7px; cursor:pointer; color:var(--ink-soft); display:flex; align-items:center; flex-shrink:0;">
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="none"><path d="M12 20h9" stroke="currentColor" stroke-width="1.8"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+    ${renderCoachQualsSection(c, false)}
+  `;
+  openModal(body, {floating:true});
+  attachModalHandlers();
+  const editBtn = document.querySelector('[data-modal-edit-coach]');
+  if(editBtn) editBtn.addEventListener('click', ()=>{
+    closeModal();
+    go(VIEW.tab,'coachEditor',{id:coachId});
+  });
+}
 function renderCoachQualsSection(c, showAddButton){
   if(showAddButton === undefined) showAddButton = true;
   const quals = c.quals || [];
@@ -4785,7 +4906,7 @@ function renderCoachQualsSection(c, showAddButton){
       ${quals.length===0 ? '<div class="small" style="color:var(--ink-soft);">No qualifications recorded</div>' :
         quals.map(link=>{
           const qDef = DATA.qualifications.find(q=>q.id===link.qualificationId);
-          const status = qualStatus(link.expiryDate);
+          const status = qualStatus(link.expiryDate, link.dateObtained);
           const statusLabel = {expired:'Expired', expiring:'Expiring soon', valid:'Valid', missing:'Missing'}[status];
           const pillClass = {expired:'loss', expiring:'draw', valid:'win', missing:'loss'}[status];
           const isPlaceholder = !link.dateObtained;
@@ -4837,7 +4958,7 @@ function renderCoachesTab(){
         displayedCoaches.length===0 ? `<div class="small" style="color:var(--ink-soft);">${coachQualifyFilter==='qualified' ? 'No coaches are fully qualified yet.' : coachQualifyFilter==='unqualified' ? 'Every coach is fully qualified.' : 'No coaches to show.'}</div>` :
         displayedCoaches.map(c=>`
         <div style="padding:6px 0; border-bottom:1px solid var(--line);">
-          <div class="player-row tap" data-toggle-coach-expand="${c.id}" style="border:none; padding:0;">
+          <div class="player-row tap" data-open-coach-quals-modal="${c.id}" style="border:none; padding:0;">
             ${coachAvatarHtml(c)}
             <div style="flex:1;">
               <div class="pname">${esc(c.name || 'Unnamed coach')}</div>
@@ -4847,7 +4968,6 @@ function renderCoachesTab(){
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M12 20h9" stroke="currentColor" stroke-width="1.8"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
             </button>
           </div>
-          ${expandedCoachId===c.id ? `<div style="padding-top:10px;">${renderCoachQualsSection(c, false)}</div>` : ''}
         </div>`).join('')}
     </div>
 
@@ -4865,9 +4985,6 @@ function renderCoachesTab(){
   <div class="topbar" style="position:relative;">
     ${teamLogoWatermarkHtml()}
     <div style="display:flex; align-items:center; justify-content:center; gap:5px; cursor:pointer; margin:0 auto 8px; width:fit-content;" data-open-team-switcher>${DATA.teamBadge ? `<img src="${DATA.teamBadge}" style="width:16px;height:16px;border-radius:50%;object-fit:cover;">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-    ${(supabaseClient && currentUser) ? `<button type="button" data-invite-coach title="Invite a coach" style="position:absolute; top:14px; right:14px; background:rgba(255,255,255,0.15); border:none; border-radius:50%; width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:#fff; cursor:pointer;">
-      <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9" cy="7" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M19 8v6M22 11h-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    </button>` : ''}
     <h1>Coaches</h1>
     <div class="sub">${DATA.coaches.length} coach${DATA.coaches.length===1?'':'es'} · qualifications &amp; certifications</div>
   </div>
@@ -5942,6 +6059,7 @@ function openModal(html, opts){
     if(e.target===wrap) closeModal();
   }, true);
   document.body.appendChild(wrap);
+  applyViewOnlyLock(wrap);
 }
 function closeModal(){
   document.querySelectorAll('#modal-root').forEach(m=> m.remove());
@@ -10123,12 +10241,8 @@ function attachHandlers(){
       go(VIEW.tab,'coachEditor',{id:el.dataset.openCoachEdit});
     });
   });
-  document.querySelectorAll('[data-toggle-coach-expand]').forEach(el=>{
-    el.addEventListener('click', ()=>{
-      const cid = el.dataset.toggleCoachExpand;
-      expandedCoachId = (expandedCoachId===cid) ? null : cid;
-      render();
-    });
+  document.querySelectorAll('[data-open-coach-quals-modal]').forEach(el=>{
+    el.addEventListener('click', ()=> openCoachQualsModal(el.dataset.openCoachQualsModal));
   });
   const expiredQualsBtn = document.querySelector('[data-open-expired-quals]');
   if(expiredQualsBtn) expiredQualsBtn.addEventListener('click', openExpiredQualsModal);
@@ -10160,6 +10274,17 @@ function attachHandlers(){
   });
   document.querySelectorAll('[data-remove-coach]').forEach(el=>{
     el.addEventListener('click', ()=> openRemoveCoachConfirm(el.dataset.removeCoach));
+  });
+  const inviteThisCoachBtn = document.querySelector('[data-invite-this-coach]');
+  if(inviteThisCoachBtn) inviteThisCoachBtn.addEventListener('click', ()=>{
+    // Use whichever access level is selected on screen right now, even if "Save coach"
+    // hasn't been tapped yet - choosing a level and inviting in one go is the point.
+    const checkedLevel = document.querySelector('input[name="c-permission"]:checked');
+    const coachId = inviteThisCoachBtn.dataset.inviteThisCoach;
+    const coach = DATA.coaches.find(x=>x.id===coachId);
+    const level = checkedLevel ? checkedLevel.value : (coach && coach.permissionLevel) || 'level2';
+    inviteThisCoachBtn.textContent = 'Generating...';
+    createTeamInvite(coachId, level, inviteThisCoachBtn);
   });
 
   // qualifications library
