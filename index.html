@@ -191,6 +191,11 @@
   .pill.loss{background:var(--loss-bg); color:var(--loss);}
   .pill.live{background:var(--loss-bg); color:var(--loss); animation:pulse 1.6s infinite;}
   @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.55;}}
+  /* Live-quarter indicators, reusing the same red + pulse already used for the "LIVE"
+     pill elsewhere (e.g. the fixtures list) so this reads as the same signal. */
+  .live-cell-border{ border:2px solid var(--loss) !important; animation:pulse 1.6s infinite; }
+  .live-corner-badge{ position:absolute; top:8px; left:8px; z-index:5; display:flex; align-items:center; gap:4px; background:var(--loss-bg); color:var(--loss); font-weight:800; font-size:10px; padding:3px 7px; border-radius:8px; letter-spacing:0.03em; animation:pulse 1.6s infinite; }
+  .live-inline-badge{ display:inline-flex; align-items:center; gap:5px; background:var(--loss-bg); color:var(--loss); font-weight:800; font-size:11.5px; padding:4px 9px; border-radius:9px; letter-spacing:0.03em; animation:pulse 1.6s infinite; }
   .empty{
     text-align:center;
     padding:60px 20px;
@@ -287,8 +292,9 @@
     text-align:center;
     margin-bottom:16px;
   }
-  .scoreboard .quarter{font-size:13px; color:#F6C7CC; font-weight:600; letter-spacing:.03em;}
+  .scoreboard .quarter{font-size:16px; color:#ffffff; font-weight:800; letter-spacing:.04em;}
   .scoreboard .timer{font-size:48px; font-weight:600; margin:4px 0;}
+  .scoreboard .timer.stoppage{color:#FFD54A;}
   .scoreboard .score{font-size:22px; font-weight:600; margin-top:4px;}
   .clockbtns{display:flex; gap:8px; margin-bottom:16px;}
   .clockbtns .btn{flex:1;}
@@ -313,7 +319,7 @@
   /* A floating, centred variant for short, single-purpose popups (e.g. quick actions on
      a tapped card) rather than the bottom-sheet style used for longer forms and lists. */
   .modal-bg.floating{ align-items:center; padding:20px; }
-  .modal.floating{ width:calc(100% - 20px); max-width:400px; border-radius:18px; padding:22px 20px 24px; max-height:80vh; box-shadow:0 12px 40px rgba(0,0,0,0.35); }
+  .modal.floating{ width:calc(100% - 20px); max-width:400px; border-radius:18px; padding:22px 20px 24px; max-height:80vh; box-shadow:0 12px 40px rgba(0,0,0,0.35); border:1.5px solid var(--pitch); }
   .modal h3{margin:0 0 14px; font-size:18px;}
   input[type=range]{width:100%; accent-color:var(--pitch);}
   .player-row{
@@ -399,7 +405,7 @@
   .icon-add-btn:active{background:var(--amber-soft);}
   .row.tap:active{background:var(--surface-2);}
   .celebration-overlay{
-    position:fixed; inset:0; z-index:300; pointer-events:none;
+    position:fixed; inset:0; z-index:950; pointer-events:none;
     display:flex; align-items:center; justify-content:center;
     overflow:hidden;
   }
@@ -434,7 +440,7 @@
     100%{ transform:translateY(110vh) rotate(720deg); opacity:.85; }
   }
   .angry-overlay-bg{
-    position:fixed; inset:0; background:rgba(200,16,46,.18); z-index:299; pointer-events:none;
+    position:fixed; inset:0; background:rgba(200,16,46,.18); z-index:949; pointer-events:none;
     animation: angryFlash 1.7s ease forwards;
   }
   @keyframes angryFlash{
@@ -471,7 +477,7 @@
     0%{ transform:rotate(-120deg) scale(0.4); opacity:0; }
     100%{ transform:rotate(0deg) scale(1); opacity:1; }
   }
-  .card-overlay-bg{ position:fixed; inset:0; z-index:299; pointer-events:none; animation: cardFlash 1.7s ease forwards; }
+  .card-overlay-bg{ position:fixed; inset:0; z-index:949; pointer-events:none; animation: cardFlash 1.7s ease forwards; }
   .card-overlay-bg.yellow{ background:rgba(234,179,8,.18); }
   .card-overlay-bg.red{ background:rgba(200,16,46,.22); }
   @keyframes cardFlash{ 0%{ opacity:0; } 15%{ opacity:1; } 75%{ opacity:1; } 100%{ opacity:0; } }
@@ -559,6 +565,16 @@
     50%{ stroke:var(--marker-pulse-color, var(--draw)); stroke-width:7; }
   }
   .marker-quick-pulse circle{ animation:markerQuickLogPulse 0.5s ease-in-out 3; }
+  @keyframes markerNeedsResetGlow{
+    0%, 100%{ stroke:#fff; stroke-width:3; }
+    50%{ stroke:var(--loss); stroke-width:6; }
+  }
+  .marker-needs-reset circle{ animation:markerNeedsResetGlow 1.3s ease-in-out infinite; }
+  @keyframes exclaimBadgePulse{
+    0%, 100%{ opacity:1; }
+    50%{ opacity:0.45; }
+  }
+  .marker-needs-reset .exclaim-badge{ animation:exclaimBadgePulse 1.1s ease-in-out infinite; }
   .wheel-wrap{ position:relative; height:160px; margin-bottom:16px; }
   .wheel-highlight{
     position:absolute; top:50%; left:0; right:0; height:40px; margin-top:-20px;
@@ -631,6 +647,7 @@ let DATA = { players: [], fixtures: [], coaches: [], config: null, teamName: '',
 let TEAMS_STORE = { teams: [], activeTeamId: null };
 let VIEW = { tab: 'home', screen: null, params: {} };
 let timerInterval = null;
+let timerFixtureId = null; // which fixture the running interval (if any) belongs to
 let playersChartMetric = 'apps';
 let matchesSinceAwardFilter = null;
 let playerProfileSeasonFilter = 'all';
@@ -681,6 +698,22 @@ let liveViewingQuarter = null;
 const APP_VERSION = 2;
 function getViewingQuarter(f){
   return liveViewingQuarter !== null ? liveViewingQuarter : f.liveState.quarter;
+}
+function setEnlargedQuarter(v){
+  // The enlarged pitch view's own quarter and the main live screen's "which quarter
+  // am I looking at" state are kept in sync on the live screen specifically (not
+  // Match Setup, Results, or Review, which don't have this live-viewing concept) -
+  // moving quarter in one is reflected in the other, same logic the main screen's own
+  // "Next quarter (view)" button already uses.
+  gridPitchEnlargedQuarter = v;
+  const f = DATA.fixtures.find(x=>x.id===VIEW.params.id);
+  if(f && VIEW.screen==='live' && f.status!=='finished' && f.liveState && !(reviewMode && reviewFixtureId===f.id)){
+    // Only collapse to null (meaning "at live") on an exact match - unlike the main
+    // screen's own prev/next, this can browse past the live quarter to a not-yet-
+    // started one (to reach "Start quarter"), so anything other than the live quarter
+    // itself needs to be tracked explicitly, before or after it.
+    liveViewingQuarter = (v === f.liveState.quarter) ? null : v;
+  }
 }
 let pendingConfig = null;
 let teamSetupWizard = null;
@@ -844,6 +877,39 @@ function quarterWatermarkLabel(f, quarterKey){
 }
 function currentEventQuarter(f){
   return getViewingQuarter(f);
+}
+function liveTimerDisplay(ls){
+  // Shared by every place the live clock is shown (main scoreboard, enlarged pitch
+  // view) so the regular-time and stoppage-time formats never drift apart between them.
+  if(!ls || ls.secondsLeft>0){
+    const secondsLeft = ls ? ls.secondsLeft : 0;
+    const m=Math.floor(secondsLeft/60), s=(secondsLeft%60).toString().padStart(2,'0');
+    return {text:`${m}m ${s}s`, stoppage:false};
+  }
+  const stoppage = ls.stoppageSeconds||0;
+  const sm=Math.floor(stoppage/60), ss=(stoppage%60).toString().padStart(2,'0');
+  return {text:`+${sm}m ${ss}s`, stoppage:true};
+}
+function hasRedCard(f, playerId){
+  return !!playerId && (f.events||[]).some(e=>e.type==='redcard' && e.player===playerId);
+}
+function redCardedBeforeQuarter(f, playerId, quarterNum){
+  // Sent off in an earlier quarter than this one - still legitimately shown as having
+  // started whichever quarter they were actually sent off in, just not any later one.
+  return !!playerId && (f.events||[]).some(e=>e.type==='redcard' && e.player===playerId && e.quarter<quarterNum);
+}
+function checkSecondYellowAutoRed(f, playerId, quarterNum){
+  // Standard football rule: a second caution in the same match is an automatic
+  // sending-off - logs the red itself rather than leaving the coach to notice and add
+  // it separately. Counts across the whole match, not just this quarter, and only
+  // fires once (a player already shown red doesn't get a second one stacked on top).
+  if(!playerId || hasRedCard(f, playerId)) return false;
+  const yellowCount = (f.events||[]).filter(e=>e.type==='yellowcard' && e.player===playerId).length;
+  if(yellowCount>=2){
+    f.events.push({id:uid(), type:'redcard', player:playerId, quarter:quarterNum, loggedAt:new Date().toISOString(), secondYellow:true});
+    return true;
+  }
+  return false;
 }
 const POS_LABELS = {
   def: {L:'LB', C:'CB', R:'RB'},
@@ -1060,7 +1126,7 @@ async function loadData(){
         if(c.photo === undefined) c.photo = null;
         if(!c.registeredSeasons) c.registeredSeasons = [];
         if(typeof c.email !== 'string') c.email = '';
-        if(!c.permissionLevel) c.permissionLevel = 'level3';
+        if(!c.permissionLevel) c.permissionLevel = 'level2';
       });
       DATA.fixtures.forEach(f=>{
         normalizeFixtureLineup(f);
@@ -1479,7 +1545,7 @@ function go(tab, screen, params){
   gridPitchEnlargedQuarter = null;
   if(screen === 'resultDetail') resultDetailTab = 'timeline';
   if(screen === 'live' && !(VIEW.screen==='live' && params && VIEW.params && params.id===VIEW.params.id)){
-    liveTab = 'timeline';
+    liveTab = 'test';
     if(!(reviewMode && params && reviewFixtureId === params.id)){
       liveViewingQuarter = null;
     }
@@ -2040,7 +2106,7 @@ function renderReviewMinutesSection(f, squad, useActual){
       <div class="row" style="padding-bottom:8px; border-bottom:1px solid var(--line); margin-bottom:6px;">
         <div style="width:70px; flex-shrink:0;"></div>
         <div style="display:flex; flex:1; gap:5px;">
-          ${periodKeys(f).map((pk,i)=>`<div class="small" style="flex:1; text-align:center; font-weight:700; color:var(--ink-soft);">Q${i+1}</div>`).join('')}
+          ${periodKeys(f).map((pk,i)=>`<div class="small" style="flex:1; text-align:center; font-weight:700; color:var(--ink-soft);">${esc(periodBadgeLabel(f, i+1))}</div>`).join('')}
         </div>
         <div class="small" style="width:38px; flex-shrink:0; text-align:right; font-weight:700; color:var(--ink-soft);">Tot</div>
       </div>
@@ -2701,7 +2767,7 @@ function renderReportViewOverlay(){
     </div>
     <div class="report-view-grid" style="grid-template-columns: 54px repeat(${periods.length}, 1fr); grid-template-rows: 30px repeat(${posCount}, 1fr);">
       <div class="rv-cell rv-head"></div>
-      ${periods.map((q,i)=>`<div class="rv-cell rv-head" style="font-size:12px;">Q${i+1}</div>`).join('')}
+      ${periods.map((q,i)=>`<div class="rv-cell rv-head" style="font-size:12px;">${esc(periodBadgeLabel(f, i+1))}</div>`).join('')}
       ${f.positions.map(pos=>{
         const posLabel = `<div class="rv-cell rv-pos" style="font-size:12px;">${esc(pos)}</div>`;
         const qCells = periods.map(q=>{
@@ -2718,6 +2784,31 @@ function renderReportViewOverlay(){
     </div>
   </div>`;
 }
+function renderBenchStripForQuarter(f, quarterKey, useActual){
+  // Players in the matchday squad who aren't a starter or a sub-on at any position
+  // this quarter - genuinely on the bench for this one quarter specifically.
+  const lineup = useActual ? (f.actualLineup || f.lineup) : f.lineup;
+  const quarterLineup = lineup[quarterKey] || {};
+  const onPitchIds = new Set();
+  Object.values(quarterLineup).forEach(slot=>{
+    if(slot && slot.a) onPitchIds.add(slot.a);
+    if(slot && slot.b) onPitchIds.add(slot.b);
+  });
+  const squad = availablePlayersForFixture(f);
+  const benchPlayers = squad.filter(p=>!onPitchIds.has(p.id));
+  if(benchPlayers.length===0) return '';
+  return `
+  <div style="margin-top:12px;">
+    <div class="small" style="color:var(--ink-soft); margin-bottom:6px; font-weight:600;">Bench</div>
+    <div style="display:flex; flex-wrap:wrap; gap:8px;">
+      ${benchPlayers.map(p=>`
+        <div style="display:flex; align-items:center; gap:6px; background:var(--surface-2); border-radius:20px; padding:5px 11px 5px 5px;">
+          ${shirtHtml(p, 'width:22px;height:22px;font-size:10px;')}
+          <span style="font-size:12.5px; font-weight:600; color:var(--ink);">${esc(p.name.split(' ')[0])}</span>
+        </div>`).join('')}
+    </div>
+  </div>`;
+}
 function renderGridPitchEnlargeOverlay(){
   const f = DATA.fixtures.find(x=>x.id===VIEW.params.id);
   if(!f || !gridPitchEnlargedQuarter) return '';
@@ -2725,16 +2816,40 @@ function renderGridPitchEnlargeOverlay(){
   const qKey = periods[gridPitchEnlargedQuarter-1];
   if(!qKey) return '';
   // Planning a fixture (Match Setup/Fixture editor) has no lock concept and edits the
-  // plan, not the actual record - always unlocked there. Viewing a result is read-only
-  // (with tap-for-stats instead) unless it's actually open for editing via "Review &
-  // edit match".
+  // plan, not the actual record - always unlocked there. A genuinely live, in-progress
+  // match is also always unlocked - you're actively managing it in real time, same as
+  // review mode logically. Viewing a finished result afterwards is read-only (with
+  // tap-for-stats instead) unless it's actually open for editing via "Review & edit
+  // match".
   const isPlanningContext = VIEW.screen === 'matchSetup' || VIEW.screen === 'fixtureEditor';
+  const isActuallyLive = VIEW.screen === 'live' && f.status !== 'finished' && !!f.liveState && !(reviewMode && reviewFixtureId === f.id);
   const useActual = !isPlanningContext;
-  const unlocked = isPlanningContext ? true : (reviewMode && reviewFixtureId === f.id);
+  const unlocked = isPlanningContext || isActuallyLive || (reviewMode && reviewFixtureId === f.id);
+  const isThisQuarterLive = isActuallyLive && gridPitchEnlargedQuarter === f.liveState.quarter;
+  const isPastQuarter = isActuallyLive && gridPitchEnlargedQuarter < f.liveState.quarter;
+  const isFutureQuarter = isActuallyLive && gridPitchEnlargedQuarter > f.liveState.quarter;
+  const isLastQuarter = gridPitchEnlargedQuarter >= periods.length;
+  // Only computed when actually needed (isActuallyLive) - f.liveState may not exist
+  // on a fixture that's never gone live, and these aren't shown outside that case.
+  const timerDisplay = isActuallyLive ? liveTimerDisplay(f.liveState) : {text:'0m 00s', stoppage:false};
+  const scoreDiff = f.finalScore.us - f.finalScore.them;
+  const scoreState = scoreDiff>0 ? 'Winning' : (scoreDiff<0 ? 'Losing' : 'Drawing');
+  const scoreStateColor = scoreDiff>0 ? 'var(--win)' : (scoreDiff<0 ? 'var(--loss)' : 'var(--ink-soft)');
+  const qGoalsUs = isPastQuarter ? (f.events||[]).filter(e=>e.type==='goal' && e.quarter===gridPitchEnlargedQuarter).length : 0;
+  const qGoalsThem = isPastQuarter ? (f.events||[]).filter(e=>e.type==='oppogoal' && e.quarter===gridPitchEnlargedQuarter).length : 0;
+  // The running score as it stood at the END of this quarter specifically, not
+  // wherever the match has got to since - f.finalScore is the latest total, which
+  // would be wrong here once more goals have gone in after this quarter finished.
+  const cumUsByQ = isPastQuarter ? (f.events||[]).filter(e=>e.type==='goal' && e.quarter<=gridPitchEnlargedQuarter).length : 0;
+  const cumThemByQ = isPastQuarter ? (f.events||[]).filter(e=>e.type==='oppogoal' && e.quarter<=gridPitchEnlargedQuarter).length : 0;
   return `
   <div class="pitch-enlarge-overlay" id="grid-pitch-enlarge">
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px;">
-      <div style="flex:1;"></div>
+      <div style="flex:1; display:flex; align-items:center;">
+        ${isThisQuarterLive ? `<div class="live-inline-badge"><span style="width:6px; height:6px; border-radius:50%; background:var(--loss);"></span>LIVE</div>`
+          : isPastQuarter ? `<div style="color:var(--ink-soft); font-size:13px; font-weight:600; line-height:1.35;">${esc(periodWord(f))} finished ${qGoalsUs}&ndash;${qGoalsThem}<br>Agg score ${cumUsByQ}&ndash;${cumThemByQ}</div>`
+          : ''}
+      </div>
       <div style="font-weight:700; font-family:'Oswald',sans-serif; font-size:24px; color:var(--ink); text-align:center;">${esc(periodFullLabel(f, gridPitchEnlargedQuarter))}</div>
       <div style="flex:1; text-align:right;">
         <button type="button" data-close-grid-pitch-enlarge title="Close" style="background:var(--surface-2); border:none; border-radius:50%; width:32px; height:32px; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; color:var(--ink);">
@@ -2742,8 +2857,29 @@ function renderGridPitchEnlargeOverlay(){
         </button>
       </div>
     </div>
-    <div id="grid-pitch-enlarge-pitch" class="card pitch-holder ${pitchQuarterTransitionDir===1?'pitch-quarter-fwd':pitchQuarterTransitionDir===-1?'pitch-quarter-back':''}" style="padding:0;">${renderPitchFormation(f, qKey, {showSubs:true, tapEnabled:unlocked, showName:true, fitScreen:true, fitScreenOffset:150, allowReset:unlocked, allowAutoGenerate:isPlanningContext, allowPlayerMins:true, showSwipeHints:true, showQuarterWatermark:true, useActual, lockedUntilReview:!unlocked && !isPlanningContext, allowInfoTap:!unlocked && !isPlanningContext})}</div>
-    ${(!unlocked && !isPlanningContext) ? `<div class="small" style="color:var(--ink-soft); text-align:center; margin-top:10px;">Tap "Review &amp; edit match" to correct anything here, or tap a marker for their stats this quarter.</div>` : ''}
+    ${isActuallyLive ? `
+    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; align-items:center; gap:6px; margin-bottom:${isThisQuarterLive?'2px':'10px'};">
+      <div style="display:flex; justify-content:flex-start; min-width:0;">
+        ${(!isFutureQuarter && gridPitchEnlargedQuarter>1) ? `<button type="button" class="btn ghost small" data-enlarge-prev-quarter style="margin-bottom:0; width:100%; padding-left:6px; padding-right:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">&larr; Review prev Q</button>`
+          : isFutureQuarter ? `<button type="button" class="btn ghost small" data-enlarge-return-to-live style="margin-bottom:0; width:100%; padding-left:6px; padding-right:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Return to live</button>` : ''}
+      </div>
+      <div style="display:flex; justify-content:center; min-width:0;">
+        ${isThisQuarterLive ? `<div class="scoreboard" style="background:none; padding:0;"><button type="button" data-enlarge-timer-toggle="${f.id}" title="${f.liveState.running?'Pause':'Start'} clock" class="timer${timerDisplay.stoppage?' stoppage':''}" style="font-family:'Oswald',sans-serif; font-size:22px; font-weight:800; color:${timerDisplay.stoppage?'#FFD54A':'var(--ink)'}; text-align:center; white-space:nowrap; background:none; border:none; padding:0; cursor:pointer;">${timerDisplay.text}</button></div>`
+          : isPastQuarter ? `<button type="button" class="btn ghost small" data-enlarge-return-to-live style="margin-bottom:0; width:100%; padding-left:6px; padding-right:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Return to live</button>`
+          : `<button type="button" class="btn amber small" data-start-this-quarter="${gridPitchEnlargedQuarter}" style="margin-bottom:0; width:100%; padding-left:6px; padding-right:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Go live in this ${f.periods===2?'half':'Q'}</button>`}
+      </div>
+      <div style="display:flex; justify-content:flex-end; min-width:0;">
+        ${isThisQuarterLive && isLastQuarter ? `<button type="button" class="btn ghost small" data-enlarge-game-ended style="margin-bottom:0; width:100%; border-color:var(--loss); color:var(--loss);">End game</button>`
+          : isThisQuarterLive ? `<button type="button" class="btn ghost small" data-enlarge-next-quarter style="margin-bottom:0; width:100%; padding-left:6px; padding-right:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Start ${esc(periodBadgeLabel(f, gridPitchEnlargedQuarter+1))} &rarr;</button>`
+          : (isFutureQuarter && isLastQuarter) ? `<button type="button" class="btn ghost small" data-enlarge-game-ended style="margin-bottom:0; width:100%; border-color:var(--loss); color:var(--loss);">End game</button>`
+          : ''}
+      </div>
+    </div>
+    ${isThisQuarterLive ? `<div class="small" style="text-align:center; font-weight:700; color:${scoreStateColor}; margin-bottom:10px;">${scoreState} ${f.finalScore.us}&ndash;${f.finalScore.them}</div>` : ''}
+    ` : ''}
+    <div id="grid-pitch-enlarge-pitch" class="card pitch-holder ${pitchQuarterTransitionDir===1?'pitch-quarter-fwd':pitchQuarterTransitionDir===-1?'pitch-quarter-back':''}" style="padding:0;">${renderPitchFormation(f, qKey, {showSubs:true, tapEnabled:unlocked, showName:true, fitScreen:true, fitScreenOffset:150, allowReset:unlocked, allowAutoGenerate:isPlanningContext, allowPlayerMins:true, allowOppoGoal:(isActuallyLive || (reviewMode && reviewFixtureId===f.id)), showSwipeHints:true, showQuarterWatermark:true, useActual, lockedUntilReview:!unlocked && !isPlanningContext, allowInfoTap:!unlocked && !isPlanningContext})}</div>
+    ${renderBenchStripForQuarter(f, qKey, useActual)}
+    ${(!unlocked && !isPlanningContext) ? `<div class="small" style="color:var(--ink-soft); text-align:center; margin-top:10px;">Tap "Review &amp; edit match" to correct anything here, or tap a marker for their stats this ${periodWord(f).toLowerCase()}.</div>` : ''}
   </div>`;
 }
 function renderPlanPitchFullscreenOverlay(){
@@ -2777,7 +2913,7 @@ function renderPlanPitchFullscreenOverlay(){
     <div id="plan-pitch-fullscreen-pitch" class="${pitchQuarterTransitionDir===1?'pitch-quarter-fwd':pitchQuarterTransitionDir===-1?'pitch-quarter-back':''}">${renderPitchFormation(f, qKey, {showSubs:true, tapEnabled:unlocked, showName:true, fitScreen:true, fitScreenOffset:150, allowReset:unlocked, allowAutoGenerate:!useActual && unlocked, allowPlayerMins:true, showSwipeHints:true, showQuarterWatermark:true, useActual})}</div>
     ${!unlocked ? `<div class="small" style="color:var(--ink-soft); text-align:center; margin-top:10px;">Tap "Review &amp; edit match" to correct anything here.</div>` : ''}
     ${unused.length>0 ? `<div style="margin-top:10px;">
-      <div class="small" style="color:var(--ink-soft); margin-bottom:6px;">Not used this quarter</div>
+      <div class="small" style="color:var(--ink-soft); margin-bottom:6px;">Not used this ${periodWord(f).toLowerCase()}</div>
       <div style="display:flex; flex-wrap:wrap; gap:6px;">
         ${unused.map(p=>`<span style="background:var(--surface-2); border-radius:14px; padding:5px 11px; font-size:12px; font-weight:600; color:var(--ink-soft);">${esc(p.name)}</span>`).join('')}
       </div>
@@ -3330,9 +3466,9 @@ function renderFixtureEditor(id){
     </div>
     ${renderPlanRevamped(f, squad)}
     ` : `
-    <div class="section-title" style="margin:0;">Quarter view <span style="font-weight:400; color:var(--ink-soft);">— prepare one quarter at a time</span></div>
+    <div class="section-title" style="margin:0;">${periodWord(f)} view <span style="font-weight:400; color:var(--ink-soft);">— prepare one ${periodWord(f).toLowerCase()} at a time</span></div>
     <div class="toggle-group" style="margin-bottom:12px; margin-top:8px;">
-      ${periodKeys(f).map((pk,i)=>`<button type="button" class="${planGridQuarter===i+1?'on':''}" data-plan-grid-quarter="${i+1}">Q${i+1}</button>`).join('')}
+      ${periodKeys(f).map((pk,i)=>`<button type="button" class="${planGridQuarter===i+1?'on':''}" data-plan-grid-quarter="${i+1}">${esc(periodBadgeLabel(f, i+1))}</button>`).join('')}
     </div>
     ${renderPlanQuarterGrid(f, squad, planGridQuarter)}
     `}
@@ -3464,7 +3600,10 @@ function renderMatchSetup(id){
   } else if(tab==='gridpitch'){
     const gPeriods = periodKeys(f);
     tabHtml = `
-    <div class="section-title" style="margin-top:0;">All ${gPeriods.length===2?'halves':'quarters'} <span style="font-weight:400; color:var(--ink-soft);">— tap one to enlarge</span></div>
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:0; margin-bottom:10px;">
+      <div class="section-title" style="margin:0;">Interactive boards <span style="font-weight:400; color:var(--ink-soft);">— tap to enlarge and interact</span></div>
+      ${squad.length>0 ? `<button type="button" data-view-player-mins="${f.id}" class="btn ghost small" style="margin-bottom:0; flex-shrink:0; padding:6px 12px; font-size:11.5px;">Player mins</button>` : ''}
+    </div>
     ${squad.length===0 ? `<div class="small" style="color:var(--ink-soft);">No one's marked available for this match yet — mark players in the <span data-match-setup-tab="availability" style="color:var(--pitch); text-decoration:underline; cursor:pointer;">Player availability</span> tab first.</div>` : `
     <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px;">
       ${gPeriods.map((qk,i)=>`
@@ -3514,9 +3653,14 @@ function renderMatchSetup(id){
     <div class="backbar" data-exit-match-setup>&larr; Exit</div>
     <h1 style="padding-right:70px; word-wrap:break-word;">${f.opponent ? 'vs '+esc(f.opponent) : 'Match setup'}${venueBadge(f)}</h1>
     <div class="sub" style="display:flex; align-items:center; flex-wrap:wrap;">${fmtDate(f.dateTime)}${f.location?` · <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(f.location)}" target="_blank" rel="noopener" style="color:inherit; text-decoration:none; display:inline-flex; align-items:center; gap:3px; white-space:nowrap;">${esc(f.location)}<svg viewBox="0 0 24 24" width="13" height="13" fill="none" style="flex-shrink:0;"><path d="M12 22s7-7.2 7-12a7 7 0 10-14 0c0 4.8 7 12 7 12z" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="10" r="2.5" stroke="currentColor" stroke-width="1.8"/></svg></a>`:''}</div>
-    <button data-save-match-setup="${f.id}" title="Save" style="position:absolute; top:14px; right:14px; background:rgba(255,255,255,0.15); border:none; border-radius:50%; width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:#fff; cursor:pointer;">
-      <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M4 4.5A1.5 1.5 0 015.5 3H15l5 5v10.5a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.5v-14z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8 3v5h7V3" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><rect x="7" y="13" width="10" height="6.5" stroke="currentColor" stroke-width="1.7"/></svg>
-    </button>
+    <div style="position:absolute; top:14px; right:14px; display:flex; gap:8px;">
+      ${f.status==='planned' ? `<button data-start-match="${f.id}" title="Go live" style="background:rgba(255,255,255,0.15); border:none; border-radius:50%; width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:#fff; cursor:pointer;">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M6 4l14 8-14 8V4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" fill="currentColor"/></svg>
+      </button>` : ''}
+      <button data-save-match-setup="${f.id}" title="Save" style="background:rgba(255,255,255,0.15); border:none; border-radius:50%; width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:#fff; cursor:pointer;">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M4 4.5A1.5 1.5 0 015.5 3H15l5 5v10.5a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.5v-14z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8 3v5h7V3" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><rect x="7" y="13" width="10" height="6.5" stroke="currentColor" stroke-width="1.7"/></svg>
+      </button>
+    </div>
   </div>
   <div class="content">
     <div class="toggle-group">
@@ -3535,9 +3679,18 @@ function renderLive(id){
   const f = DATA.fixtures.find(x=>x.id===id);
   if(!f) return '<div class="content">Fixture not found</div>';
   const isReview = reviewMode && reviewFixtureId === id;
+  // The clock's actual setInterval lives only in memory, so a page reload (or just
+  // coming back to this screen after the interval got cleared some other way) leaves
+  // f.liveState.running: true in the saved data with nothing actually ticking - the
+  // pause icon shows correctly but the time never moves. Catch that here once per
+  // fixture (the timerFixtureId guard stops this from restarting the interval - and
+  // resetting its 1-second timing - on every single render while it's already correctly
+  // running).
+  if(!isReview && f.status!=='finished' && f.liveState && f.liveState.running && timerFixtureId!==id){
+    startTimer(id);
+  }
   const squad = availablePlayersForFixture(f);
-  const mins = Math.floor(f.liveState.secondsLeft/60);
-  const secs = (f.liveState.secondsLeft%60).toString().padStart(2,'0');
+  const timerDisplay = liveTimerDisplay(f.liveState);
   const viewQ = isReview ? (liveViewingQuarter || 1) : getViewingQuarter(f);
   const atLive = isReview ? false : (viewQ === f.liveState.quarter);
   const playIcon = '<svg viewBox="0 0 24 24" width="15" height="15" fill="#fff"><path d="M8 5v14l11-7z"/></svg>';
@@ -3552,7 +3705,7 @@ function renderLive(id){
   // A live match still needs all of them for real-time management.
   const tabs = isReview
     ? [{id:'timeline', label:'Timeline'}, {id:'report', label:'Match report'}, {id:'test', label:'Pitch view'}, {id:'awards', label:'Awards'}]
-    : [{id:'timeline', label:'Timeline'}, {id:'selection', label:'Selection'}, {id:'test', label:'Pitch view'}, {id:'lineup', label:'Full Lineup'}];
+    : [{id:'timeline', label:'Timeline'}, {id:'test', label:'Pitch view'}, {id:'lineup', label:'Grid view'}];
   let tabHtml = '';
   if(liveTab==='timeline'){
     if(isReview){
@@ -3587,7 +3740,7 @@ function renderLive(id){
     tabHtml = `
     <div class="section-title" style="margin-top:0;">Q${viewQ} team selection <span style="font-weight:400; color:var(--ink-soft);">— quick edit</span></div>
     <div class="small" style="color:var(--ink-soft); margin-bottom:10px;">
-      Same data as Full Lineup and everywhere else in the app — changes here show up instantly there too.
+      Same data as Grid view and everywhere else in the app — changes here show up instantly there too.
     </div>
     ${squad.length===0 ? '<div class="card"><div class="small" style="color:var(--ink-soft);">No squad recorded for this match</div></div>' : renderCurrentQuarterGrid(f, squad, viewQ)}
     ${isReview ? '' : `
@@ -3621,12 +3774,14 @@ function renderLive(id){
     // Results screen's own Pitch view tab - tap one to enlarge it, which is where
     // the full tap-to-edit/reset/player-mins functionality lives when unlocked.
     const tPeriods = periodKeys(f);
+    const liveQuarterNum = (!isReview && f.status!=='finished' && f.liveState) ? f.liveState.quarter : null;
     tabHtml = `
-    <div class="section-title" style="margin-top:0;">All ${tPeriods.length===2?'halves':'quarters'} <span style="font-weight:400; color:var(--ink-soft);">— tap one to enlarge</span></div>
+    <div class="section-title" style="margin-top:0;">Interactive boards <span style="font-weight:400; color:var(--ink-soft);">— tap to enlarge and interact</span></div>
     ${squad.length===0 ? '<div class="card"><div class="small" style="color:var(--ink-soft); padding:16px;">No squad recorded</div></div>' : `
     <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px;">
       ${tPeriods.map((qk,i)=>`
-        <div class="card tap" data-enlarge-grid-pitch="${i+1}" style="padding:0; overflow:hidden;">
+        <div class="card tap ${liveQuarterNum===i+1?'live-cell-border':''}" data-enlarge-grid-pitch="${i+1}" style="padding:0; overflow:hidden; position:relative;">
+          ${liveQuarterNum===i+1 ? `<div class="live-corner-badge"><span style="width:5px; height:5px; border-radius:50%; background:var(--loss);"></span>LIVE</div>` : ''}
           ${renderPitchFormation(f, qk, {showSubs:true, showName:true, fitScreen:false, showQuarterWatermark:true, useActual:true})}
         </div>`).join('')}
     </div>
@@ -3670,9 +3825,8 @@ function renderLive(id){
   ${isReview ? `<div style="background:var(--amber-soft); padding:9px 20px; font-size:12.5px; color:var(--ink); text-align:center;">Reviewing a finished match — nothing here is live. Changes save as you make them; tap "Exit review" above when you're done.</div>` : ''}
   <div class="content">
     <div class="scoreboard" style="position:relative;">
-      ${isReview ? '' : `<div style="position:absolute; top:12px; left:14px; background:rgba(255,255,255,0.22); border:1.5px solid rgba(255,255,255,0.5); border-radius:9px; padding:6px 14px; font-size:21px; font-weight:800; color:#ffffff; letter-spacing:.01em; text-shadow:0 1px 3px rgba(0,0,0,.3);">${esc(periodBadgeLabel(f, viewQ))}</div>`}
       <div class="quarter">${isReview ? 'REVIEW MODE' : periodWord(f).toUpperCase() + ' ' + f.liveState.quarter + ' OF ' + f.periods}</div>
-      ${isReview ? '' : `<div class="timer">${mins}:${secs}</div>`}
+      ${isReview ? '' : `<div class="timer${timerDisplay.stoppage?' stoppage':''}">${timerDisplay.text}</div>`}
       <div class="score">${esc(teamShort().slice(0,10))} ${f.finalScore.us} – ${f.finalScore.them} ${esc((f.opponent||'OPP').slice(0,10))}</div>
       ${isReview ? '' : `<button data-timer-toggle title="${f.liveState.running?'Pause':'Start'} clock" style="position:absolute; top:12px; right:14px; background:none; border:none; padding:0; cursor:pointer; width:40px; height:46px; display:flex; align-items:flex-end; justify-content:center;">
         <div style="position:relative; width:36px; height:36px; border-radius:50%; background:rgba(255,255,255,0.18); border:2.5px solid rgba(255,255,255,0.65); display:flex; align-items:center; justify-content:center;">
@@ -3681,27 +3835,16 @@ function renderLive(id){
           ${f.liveState.running ? pauseIcon : playIcon}
         </div>
       </button>`}
+      ${isReview ? '' : `
+      <div style="text-align:center; margin-top:12px;">
+        ${atLive
+              ? (f.liveState.quarter>=f.periods
+                  ? `<button class="btn amber" data-next-quarter style="display:inline-block; width:auto; margin-bottom:0; padding:9px 22px;">End Match</button>`
+                  : `<button data-next-quarter style="background:rgba(255,255,255,0.18); border:1.5px solid rgba(255,255,255,0.65); border-radius:20px; padding:9px 20px; color:#fff; font-weight:700; font-size:13.5px; font-family:'Inter',sans-serif; cursor:pointer;">Start ${esc(periodBadgeLabel(f, f.liveState.quarter+1))} &rarr;</button>`)
+              : `<button data-view-next-quarter style="background:rgba(255,255,255,0.18); border:1.5px solid rgba(255,255,255,0.65); border-radius:20px; padding:9px 20px; color:#fff; font-weight:700; font-size:13.5px; font-family:'Inter',sans-serif; cursor:pointer;">Review next ${periodWord(f).toLowerCase()} &rarr;</button>`}
+      </div>`}
     </div>
-    ${isReview ? '' : `
-    <div class="clockbtns">
-      <button class="btn ghost" data-view-prev-quarter ${viewQ<=1?'disabled':''} style="border-color:#fff; color:#fff;">&larr; Previous ${periodWord(f).toLowerCase()}</button>
-      ${atLive
-            ? (f.liveState.quarter>=f.periods
-                ? `<button class="btn amber" data-next-quarter>End Match</button>`
-                : `<button class="btn ghost" data-next-quarter style="border-color:#fff; color:#fff;">Next ${periodWord(f).toLowerCase()} &rarr;</button>`)
-            : `<button class="btn ghost" data-view-next-quarter style="border-color:#fff; color:#fff;">Next ${periodWord(f).toLowerCase()} &rarr;</button>`}
-    </div>
-    ${!atLive ? `<div class="small" style="background:var(--amber-soft); color:var(--ink); text-align:center; padding:9px; border-radius:8px; margin:-4px 0 14px;">Viewing Q${viewQ} (not live) — <span style="text-decoration:underline; cursor:pointer;" data-view-back-to-live>jump back to live Q${f.liveState.quarter}</span></div>` : ''}
-    <div class="eventbtns">
-      <button class="btn primary small" data-log-event="goal">⚽ Goal</button>
-      <button class="btn primary small" data-log-event="sub">🔄 Substitution</button>
-      <button class="btn primary small" data-log-event="oppoGoal">🥅 Oppo goal</button>
-      <div style="display:flex; gap:6px;">
-        <button class="btn primary small" data-log-event="yellowcard" style="flex:1; padding-left:4px; padding-right:4px;">🟨 Yellow</button>
-        <button class="btn primary small" data-log-event="redcard" style="flex:1; padding-left:4px; padding-right:4px;">🟥 Red</button>
-      </div>
-    </div>
-    `}
+
 
     <div class="toggle-group">
       ${tabs.map(t=>`<button type="button" class="${liveTab===t.id?'on':''}" data-live-tab="${t.id}">${t.label}</button>`).join('')}
@@ -3753,7 +3896,13 @@ function renderPlanRevamped(f, squad, attrPrefix, locked){
   const usedInQuarter = {};
   periodList.forEach(q=>{ usedInQuarter[q] = usedPlayersInQuarter(lineupData, f.positions, q); });
   function groupedOptions(q, currentValue, excludeId, allowSwap){
-    return groupedPlayerOptions(squad, usedInQuarter[q], currentValue, excludeId, allowSwap);
+    // Same red-card eligibility rule as the marker popup's own picker - not selectable
+    // for a quarter later than whichever one they were sent off in (but the currently
+    // selected value stays shown even if now ineligible, so the dropdown doesn't just
+    // silently blank out an existing pick).
+    const qNumForElig = parseInt(q.slice(1), 10);
+    const eligibleSquad = squad.filter(p=> p.id===currentValue || !(f.events||[]).some(e=>e.type==='redcard' && e.player===p.id && e.quarter<qNumForElig));
+    return groupedPlayerOptions(eligibleSquad, usedInQuarter[q], currentValue, excludeId, allowSwap);
   }
   return `
   <div class="scroll-x">
@@ -3764,7 +3913,7 @@ function renderPlanRevamped(f, squad, attrPrefix, locked){
       </colgroup>
       <thead><tr>
         <th style="text-align:left;">Pos</th>
-        ${periodList.map((k,i)=>`<th>Q${i+1}</th>`).join('')}
+        ${periodList.map((k,i)=>`<th>${esc(periodBadgeLabel(f, i+1))}</th>`).join('')}
       </tr></thead>
       <tbody>
       ${f.positions.map(pos=>`
@@ -3886,7 +4035,7 @@ function openSubAtModal(attrPrefix, q, pos, currentVal, mpp){
     <div style="height:10px;"></div>
     <button class="btn danger small" data-remove-sub="${attrPrefix}|${q}|${pos}" style="display:block; width:100%;">Remove this substitution</button>
   `;
-  openModal(body);
+  openModal(body, {floating:true});
   attachModalHandlers();
   const input = document.getElementById('subat-input');
   const confirmBtn = document.querySelector('[data-confirm-subat]');
@@ -3982,13 +4131,18 @@ function renderPitchFormation(f, quarterKey, opts){
   };
   const motmFirstQuarter = firstStarterQuarterFor(f.motm);
   const momentPlayerFirstQuarter = firstStarterQuarterFor(f.momentPlayer);
+  const periodNum = parseInt(quarterKey.slice(1), 10);
   const rows = { gk: [], def: [], mid: [], fwd: [] };
   f.positions.forEach(pos=>{
     const {group, qualifier} = classifyPosition(pos);
     const slot = (lineup[quarterKey] && lineup[quarterKey][pos]) || {a:'',b:''};
-    const player = slot.a ? getPlayer(slot.a) : null;
+    // A starter who's since been sent off in an earlier quarter can't legitimately be
+    // lined up here any more - shown and treated as an empty, unassigned slot (with its
+    // own warning marker) rather than silently still crediting them with starting.
+    const starterIneligible = !!slot.a && redCardedBeforeQuarter(f, slot.a, periodNum);
+    const player = (slot.a && !starterIneligible) ? getPlayer(slot.a) : null;
     const subPlayer = (opts.showSubs && slot.b && slot.b !== slot.a) ? getPlayer(slot.b) : null;
-    rows[group].push({pos, qualifier, player, subPlayer, subAt: slot.subAt});
+    rows[group].push({pos, qualifier, player, subPlayer, subAt: slot.subAt, needsReset: starterIneligible});
   });
   const qOrder = {L:0, C:1, R:2};
   ['def','mid','fwd'].forEach(g=> rows[g].sort((a,b)=> qOrder[a.qualifier]-qOrder[b.qualifier]));
@@ -4013,7 +4167,6 @@ function renderPitchFormation(f, quarterKey, opts){
   // Match-event badges: who scored or assisted in this specific quarter, and who holds
   // the match's two player-linked awards overall (shown on the marker whichever quarter
   // they're in). Quarter keys are 'q1','q2'... so the number is just the digit.
-  const periodNum = parseInt(quarterKey.slice(1), 10);
   const quarterGoals = {}, quarterAssists = {}, quarterCards = {};
   (f.events||[]).forEach(ev=>{
     if(ev.quarter!==periodNum) return;
@@ -4043,16 +4196,30 @@ function renderPitchFormation(f, quarterKey, opts){
       const num = item.player && item.player.shirtNumber ? item.player.shirtNumber : '-';
       const starterAssisted = item.player && quarterAssists[item.player.id];
       const subAssisted = item.subPlayer && quarterAssists[item.subPlayer.id];
-      const scored = (item.player && quarterGoals[item.player.id]) || (item.subPlayer && quarterGoals[item.subPlayer.id]);
+      // Scoped to the starter only now - previously this combined starter and sub with
+      // an OR, so a sub's goal would light up the starter's own goal badge (wrong
+      // attribution) and there was no way to show both having scored at once. The sub's
+      // events get their own separate icons instead, next to their name below.
+      const scored = item.player && quarterGoals[item.player.id];
       const isPotm = item.player && f.motm===item.player.id && quarterKey===motmFirstQuarter;
       const isMotm = item.player && f.momentPlayer===item.player.id && quarterKey===momentPlayerFirstQuarter;
-      const card = (item.player && quarterCards[item.player.id]) || (item.subPlayer && quarterCards[item.subPlayer.id]) || null;
+      const card = (item.player && quarterCards[item.player.id]) || null;
       const secondLine = (opts.showName && item.player) ? item.player.name.split(' ')[0] + (starterAssisted?' (a)':'') : item.pos;
-      // Colour only the sub indicator itself (green for who's coming on) - the player
-      // name text stays the same white as everywhere else on the pitch.
-      const subLabel = item.subPlayer ? `<tspan fill="#7CFFA8">\u21c4 ${esc(item.subPlayer.name.split(' ')[0])}${subAssisted?' (a)':''}</tspan> <tspan fill="#fff">${item.subAt!=null?item.subAt:'?'}'</tspan>` : '';
+      const subScored = item.subPlayer && quarterGoals[item.subPlayer.id];
+      const subCard = item.subPlayer ? (quarterCards[item.subPlayer.id] || null) : null;
+      let subIcons = '';
+      if(subScored) subIcons += '\u26bd';
+      if(subCard==='yellow') subIcons += '\ud83d\udfe8';
+      if(subCard==='red') subIcons += '\ud83d\udfe5';
+      // Colour only the sub indicator itself so it stands out from the player name text
+      // above it - a light gold rather than the previous bright green, which was very
+      // low-contrast against the pitch's own green background. Any goal/card icons for
+      // the sub specifically go right before their name, not as a badge on the circle -
+      // there's no spare room up there once the starter's own badges are showing too.
+      const subLabel = item.subPlayer ? `${subIcons ? `<tspan font-size="10">${subIcons} </tspan>` : ''}<tspan fill="#FFD966">\u21c4 ${esc(item.subPlayer.name.split(' ')[0])}${subAssisted?' (a)':''}</tspan> <tspan fill="#fff">${item.subAt!=null?item.subAt:'?'}'</tspan>` : '';
+      const pulseClass = (justLoggedPulse && justLoggedPulse.posKey===posKey && justLoggedPulse.pos===item.pos) ? ' marker-quick-pulse' : (item.needsReset ? ' marker-needs-reset' : '');
       circles += `
-        <g class="pitch-token${(justLoggedPulse && justLoggedPulse.posKey===posKey && justLoggedPulse.pos===item.pos) ? ' marker-quick-pulse' : ''}" data-pitch-token="${item.pos}" style="cursor:${editing?'grab':'default'}; touch-action:none; ${(justLoggedPulse && justLoggedPulse.posKey===posKey && justLoggedPulse.pos===item.pos) ? `--marker-pulse-color:${justLoggedPulse.color};` : ''}">
+        <g class="pitch-token${pulseClass}" data-pitch-token="${item.pos}" style="cursor:${editing?'grab':'default'}; touch-action:none; ${(justLoggedPulse && justLoggedPulse.posKey===posKey && justLoggedPulse.pos===item.pos) ? `--marker-pulse-color:${justLoggedPulse.color};` : ''}">
           <circle cx="${x}" cy="${y}" r="26" fill="url(#pitchPlayerGrad)" stroke="#fff" stroke-width="3"/>
           <text x="${x}" y="${y+8}" text-anchor="middle" font-family="Oswald,sans-serif" font-weight="600" font-size="22" fill="#fff" style="pointer-events:none;">${esc(String(num))}</text>
           <text x="${x}" y="${y+46}" text-anchor="middle" font-family="Inter,sans-serif" font-weight="700" font-size="14" fill="#fff" style="pointer-events:none;">${esc(secondLine)}</text>
@@ -4061,6 +4228,7 @@ function renderPitchFormation(f, quarterKey, opts){
           ${isPotm ? `<g style="pointer-events:none;"><circle cx="${x-20}" cy="${y-18}" r="11" fill="#FFD54A" stroke="#fff" stroke-width="1.5"/><text x="${x-20}" y="${y-14}" text-anchor="middle" font-size="12">\ud83c\udfc6</text></g>` : ''}
           ${isMotm ? `<g style="pointer-events:none;"><circle cx="${x-20}" cy="${y+18}" r="11" fill="#8FB8E8" stroke="#fff" stroke-width="1.5"/><text x="${x-20}" y="${y+22}" text-anchor="middle" font-size="12">\ud83c\udfc6</text></g>` : ''}
           ${card ? `<rect x="${x+13}" y="${y+10}" width="13" height="17" rx="2" fill="${card==='red'?'#E0393E':'#F4C430'}" stroke="#fff" stroke-width="1.3"/>` : ''}
+          ${item.needsReset ? `<g class="exclaim-badge" style="pointer-events:none;"><circle cx="${x+20}" cy="${y-18}" r="11" fill="var(--loss)" stroke="#fff" stroke-width="1.5"/><text x="${x+20}" y="${y-13}" text-anchor="middle" font-family="Oswald,sans-serif" font-weight="800" font-size="15" fill="#fff">!</text></g>` : ''}
         </g>`;
     });
   });
@@ -4093,10 +4261,18 @@ function renderPitchFormation(f, quarterKey, opts){
   </svg>`;
   if(!opts.allowReset && !opts.allowFullscreen && !opts.allowAutoGenerate && !opts.allowPlayerMins && !opts.showSwipeHints) return svgHtml;
   const overlayBtnStyle = 'flex:1; min-width:0; background:rgba(0,0,0,0.6); border:1px solid rgba(255,255,255,0.5); border-radius:20px; padding:6px 4px; color:#fff; font-size:11px; font-weight:600; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;';
+  // Squarer than the view-toggle pills around it - this one logs a match event rather
+  // than just changing what's shown, so it's deliberately a different shape.
+  // Noticeably taller than its neighbours (the row no longer stretches everything to
+  // match, so this genuinely stands proud above and below them) - this is the one that
+  // logs a match event, so it's worth it being easier to spot and tap than the others.
+  const oppoGoalBtnStyle = 'flex:1; min-width:0; background:rgba(0,0,0,0.6); border:1px solid rgba(255,255,255,0.5); border-radius:6px; padding:12px 4px; color:#fff; font-size:11px; font-weight:600; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;';
   const swipeHintStyle = 'position:absolute; top:50%; transform:translateY(-50%); display:flex; flex-direction:column; align-items:center; gap:2px; color:rgba(255,255,255,0.85); pointer-events:none;';
+  const quarterNumForOppoGoal = periodKeys(f).indexOf(quarterKey) + 1;
   const overlayButtons = [
     opts.allowFullscreen ? `<button type="button" data-open-plan-pitch-fullscreen ${opts.useActual?'data-use-actual="true"':''} ${opts.lockedUntilReview?'data-locked="true"':''} style="${overlayBtnStyle}">Full screen</button>` : '',
     opts.allowPlayerMins ? `<button type="button" data-view-player-mins="${f.id}" ${opts.useActual?'data-use-actual="true"':''} style="${overlayBtnStyle}">Player mins</button>` : '',
+    opts.allowOppoGoal ? `<button type="button" data-log-oppo-goal-marker="${f.id}|${quarterNumForOppoGoal}" style="${oppoGoalBtnStyle}">🥅 Oppo goal</button>` : '',
     (opts.allowAutoGenerate && !opts.useActual) ? `<button type="button" data-open-spread-minutes="${f.id}" style="${overlayBtnStyle}">Auto-generate</button>` : '',
     opts.allowReset ? `<button type="button" data-reset-pitch-formation="${posKey}" style="${overlayBtnStyle}">Reset markers</button>` : ''
   ].filter(Boolean);
@@ -4109,7 +4285,7 @@ function renderPitchFormation(f, quarterKey, opts){
   return `
   <div style="position:relative;">
     ${svgHtml}
-    <div style="position:absolute; top:10px; left:10px; right:10px; display:flex; gap:6px; ${overlayButtons.length===1?'justify-content:center;':''}">
+    <div style="position:absolute; top:10px; left:10px; right:10px; display:flex; align-items:center; gap:6px; ${overlayButtons.length===1?'justify-content:center;':''}">
       ${overlayButtons.join('')}
     </div>
     ${(opts.showSwipeHints && prevPeriodNum) ? `<div style="${swipeHintStyle} left:2px;">
@@ -4143,7 +4319,10 @@ function sortEventsForDisplay(qEvents){
     }
     return a.key.val - b.key.val;
   });
-  return keyed.map(x=>x.ev);
+  // Most recent first within the quarter - a long list of cards/goals reads more
+  // naturally with whatever just happened at the top, rather than having to scroll
+  // past everything earlier in the quarter to see it.
+  return keyed.map(x=>x.ev).reverse();
 }
 function renderEventItem(ev, fixtureId){
   const tags = {goal:'GOAL', sub:'SUB', penalty:'PEN', comment:'NOTE', oppogoal:'OPP GOAL', yellowcard:'🟨 CARD', redcard:'🟥 CARD'};
@@ -4170,7 +4349,8 @@ function renderEventItem(ev, fixtureId){
     const p = getPlayer(ev.player);
     text = `${p?p.name:'?'} — red card — Q${ev.quarter}${time?' · '+time:''}`;
   }
-  const editBtn = (fixtureId && (ev.type==='goal' || ev.type==='oppogoal')) ? `<button type="button" data-edit-goal="${fixtureId}|${ev.id}" title="Edit time/period" style="background:none; border:none; padding:0 0 0 8px; cursor:pointer; color:var(--ink-soft); display:flex; align-items:center;">
+  const editAttr = (ev.type==='yellowcard' || ev.type==='redcard') ? 'data-edit-card' : (ev.type==='goal' || ev.type==='oppogoal') ? 'data-edit-goal' : null;
+  const editBtn = (fixtureId && editAttr) ? `<button type="button" ${editAttr}="${fixtureId}|${ev.id}" title="Edit time/period" style="background:none; border:none; padding:0 0 0 8px; cursor:pointer; color:var(--ink-soft); display:flex; align-items:center;">
     <svg viewBox="0 0 24 24" width="14" height="14" fill="none"><path d="M12 20h9" stroke="currentColor" stroke-width="1.8"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
   </button>` : '';
   const delBtn = fixtureId ? `<button class="icon-x" style="position:static; font-size:16px; padding:0 0 0 8px;" data-delete-event="${fixtureId}|${ev.id}">&times;</button>` : '';
@@ -4265,7 +4445,7 @@ function renderResultDetail(id){
       const qEvents = sortEventsForDisplay((f.events||[]).filter(ev=>ev.quarter===i+1));
       return `
       <div style="border:1.5px solid var(--pitch); border-radius:10px; padding:10px; margin-bottom:${i===periodKeys(f).length-1?'0':'10px'};">
-        <div class="small" style="font-weight:700; color:var(--ink-soft); margin-bottom:6px;">Q${i+1}</div>
+        <div class="small" style="font-weight:700; color:var(--ink-soft); margin-bottom:6px;">${esc(periodBadgeLabel(f, i+1))}</div>
         <div class="card" style="margin-bottom:0;">
           ${qEvents.length>0 ? qEvents.map(ev=>renderEventItem(ev, null)).join('') : '<div class="small" style="color:var(--ink-soft); text-align:center; padding:8px;">No events logged</div>'}
         </div>
@@ -4326,7 +4506,7 @@ function renderResultDetail(id){
   } else if(tab==='gridpitch'){
     const gPeriods = periodKeys(f);
     tabHtml = `
-    <div class="section-title" style="margin-top:0;">All ${gPeriods.length===2?'halves':'quarters'} <span style="font-weight:400; color:var(--ink-soft);">— tap one to enlarge</span></div>
+    <div class="section-title" style="margin-top:0;">Interactive boards <span style="font-weight:400; color:var(--ink-soft);">— tap to enlarge and interact</span></div>
     ${squad.length===0 ? '<div class="card"><div class="small" style="color:var(--ink-soft); padding:16px;">No squad recorded</div></div>' : `
     <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px;">
       ${gPeriods.map((qk,i)=>`
@@ -4377,7 +4557,7 @@ function renderResultDetail(id){
       <div class="score" style="font-size:28px;">${f.finalScore.us} – ${f.finalScore.them}</div>
       <div style="margin-top:6px; display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap;">
         <span class="pill ${res}">${res.toUpperCase()}</span>
-        <span style="font-size:11px; color:rgba(255,255,255,0.85); font-weight:600;">${periodKeys(f).map((q,i)=>`Q${i+1} ${stats.goalsByQuarter[i+1]}-${stats.oppoGoalsByQuarter[i+1]}`).join(' · ')}</span>
+        <span style="font-size:11px; color:rgba(255,255,255,0.85); font-weight:600;">${periodKeys(f).map((q,i)=>`${periodBadgeLabel(f, i+1)} ${stats.goalsByQuarter[i+1]}-${stats.oppoGoalsByQuarter[i+1]}`).join(' · ')}</span>
       </div>
     </div>
 
@@ -4622,6 +4802,7 @@ function renderCoachEditor(id){
     ${editing ? `
     <div class="toggle-group">
       <button type="button" class="${coachEditorTab==='details'?'on':''}" data-coach-editor-tab="details">Basic info</button>
+      <button type="button" class="${coachEditorTab==='access'?'on':''}" data-coach-editor-tab="access">App access</button>
       <button type="button" class="${coachEditorTab==='quals'?'on':''}" data-coach-editor-tab="quals">Qualifications</button>
     </div>` : ''}
     ${(!editing || coachEditorTab==='details') ? `
@@ -4636,7 +4817,18 @@ function renderCoachEditor(id){
     <input type="text" id="c-role" value="${esc(c.role||'')}" placeholder="e.g. Head Coach, Assistant, First Aid Officer">
     <label>Start date</label>
     <input type="date" id="c-startdate" value="${c.startDate||''}">
-    ${(editing && supabaseClient && currentUser) ? `
+    <label>Registered seasons</label>
+    <div class="card" style="margin-bottom:16px;">
+      ${DATA.seasons.length===0 ? `<div class="small" style="color:var(--ink-soft);">No seasons set up yet — add one in Settings &rarr; Seasons.</div>` :
+        DATA.seasons.map(s=>`
+        <label style="display:flex; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid var(--line); cursor:pointer; margin-bottom:0;">
+          <input type="checkbox" data-c-reg-season="${s.label}" ${(c.registeredSeasons||[]).includes(s.label)?'checked':''} style="width:auto; margin:0;">
+          <span style="font-weight:500; font-size:14px; color:var(--ink); text-transform:none;">${esc(s.label)}${s.current?' (current)':''}</span>
+        </label>`).join('')}
+    </div>
+    ` : ''}
+    ${(editing && coachEditorTab==='access') ? `
+    ${(supabaseClient && currentUser) ? `
     <label>App access</label>
     <div class="card" style="margin-bottom:16px;">
       ${c.authUserId ? `
@@ -4671,16 +4863,8 @@ function renderCoachEditor(id){
       </label>
     </div>
     <div class="small" style="color:var(--ink-soft); margin-top:-10px; margin-bottom:16px;">These levels aren't enforced yet — they're ready for when coach logins are added.</div>
-    <label>Registered seasons</label>
-    <div class="card" style="margin-bottom:16px;">
-      ${DATA.seasons.length===0 ? `<div class="small" style="color:var(--ink-soft);">No seasons set up yet — add one in Settings &rarr; Seasons.</div>` :
-        DATA.seasons.map(s=>`
-        <label style="display:flex; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid var(--line); cursor:pointer; margin-bottom:0;">
-          <input type="checkbox" data-c-reg-season="${s.label}" ${(c.registeredSeasons||[]).includes(s.label)?'checked':''} style="width:auto; margin:0;">
-          <span style="font-weight:500; font-size:14px; color:var(--ink); text-transform:none;">${esc(s.label)}${s.current?' (current)':''}</span>
-        </label>`).join('')}
-    </div>
-    ` : renderCoachQualsSection(c)}
+    ` : ''}
+    ${(editing && coachEditorTab==='quals') ? renderCoachQualsSection(c) : ''}
   </div>`;
 }
 
@@ -5022,7 +5206,7 @@ function renderCoachesTab(){
         </div>`).join('')}
     </div>
 
-    <div class="section-title">Qualification activity</div>
+    <div class="section-title">Recent qualification activities</div>
     <div class="card">
       ${activity.length===0 ? `<div class="small" style="color:var(--ink-soft);">No qualification activity yet.</div>` :
         activity.slice(0,15).map(x=>`
@@ -5085,7 +5269,7 @@ function openTeamSwitcherModal(){
       ${TEAMS_STORE.teams.map(t=>{
         const isActive = t.id === TEAMS_STORE.activeTeamId;
         const ageGroup = t.data && t.data.config ? t.data.config.ageGroup : null;
-        return `<div class="player-row tap" data-switch-team="${t.id}" style="${isActive?'background:color-mix(in srgb, var(--win) 18%, transparent); border-radius:8px;':''}">
+        return `<div class="player-row tap" data-switch-team="${t.id}" style="padding:11px 10px; border-radius:8px; ${isActive?'background:color-mix(in srgb, var(--win) 18%, transparent);':''}">
           <div style="width:32px; height:32px; border-radius:50%; overflow:hidden; background:var(--pitch); display:flex; align-items:center; justify-content:center; color:#fff; font-weight:600; font-size:13px; flex-shrink:0;">
             ${t.badge ? `<img src="${t.badge}" style="width:100%; height:100%; object-fit:cover;">` : esc(((t.name||'?')[0]||'?').toUpperCase())}
           </div>
@@ -5103,7 +5287,7 @@ function openTeamSwitcherModal(){
       Log out${currentUser.email ? ` (${esc(currentUser.email)})` : ''}
     </button>` : ''}
   `;
-  openModal(body);
+  openModal(body, {floating:true});
   attachModalHandlers();
   document.querySelectorAll('[data-switch-team]').forEach(el=>{
     el.addEventListener('click', ()=>{
@@ -5760,55 +5944,11 @@ function renderTeamTab(){
       `).join('')}
     </div>`;
   } else if(tab==='notifications'){
-    const notif = DATA.notifications || {fullTimeResults:true, newFixtureAdded:true, incompleteSquad:true, incompleteSquadDays:3, incompleteTeamsheet:true, incompleteTeamsheetDays:3};
-    const daysOptions = [1,2,3,4,5,7];
-    const daysSelector = (key, value)=>`
-      <div style="padding:0 8px 10px 8px; display:flex; align-items:center; gap:7px; flex-wrap:wrap;">
-        <span class="small" style="color:var(--ink-soft);">Remind</span>
-        <select data-notif-days="${key}" style="width:auto; padding:5px 8px; font-size:13px;">
-          ${daysOptions.map(d=>`<option value="${d}" ${value===d?'selected':''}>${d}</option>`).join('')}
-        </select>
-        <span class="small" style="color:var(--ink-soft);">day${value===1?'':'s'} before kick-off</span>
-      </div>`;
     tabHtml = `
     <div class="section-title" style="margin-top:0;">Notifications</div>
-    <div class="small" style="color:var(--ink-soft); margin-bottom:14px;">
-      Choose which updates go out to your fellow coaches. These settings are saved and ready to use — actually delivering them as phone notifications needs the app to be set up with accounts and push notifications first, which isn't wired up yet.
-    </div>
-    <div class="card">
-      <div class="tap" data-notif-toggle="fullTimeResults" style="display:flex; align-items:center; gap:10px; padding:10px 8px; margin:0 -8px 2px; border-radius:8px; cursor:pointer; ${notif.fullTimeResults?'background:color-mix(in srgb, var(--win) 18%, transparent);':''}">
-        <div style="flex:1;">
-          <div style="font-weight:600; font-size:14px; color:var(--ink);">Full time results</div>
-          <div class="small" style="color:var(--ink-soft); margin-top:2px;">Notify coaches with the final score when a match ends</div>
-        </div>
-        ${notif.fullTimeResults ? `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" style="flex-shrink:0;"><path d="M5 13l4 4L19 7" stroke="var(--win)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>` : ''}
-      </div>
-      <div class="tap" data-notif-toggle="newFixtureAdded" style="display:flex; align-items:center; gap:10px; padding:10px 8px; margin:0 -8px; border-radius:8px; cursor:pointer; ${notif.newFixtureAdded?'background:color-mix(in srgb, var(--win) 18%, transparent);':''}">
-        <div style="flex:1;">
-          <div style="font-weight:600; font-size:14px; color:var(--ink);">New fixture added</div>
-          <div class="small" style="color:var(--ink-soft); margin-top:2px;">Notify coaches when a new fixture is added to the calendar</div>
-        </div>
-        ${notif.newFixtureAdded ? `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" style="flex-shrink:0;"><path d="M5 13l4 4L19 7" stroke="var(--win)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>` : ''}
-      </div>
-      <div class="tap" data-notif-toggle="incompleteSquad" style="display:flex; align-items:center; gap:10px; padding:10px 8px; margin:0 -8px; border-radius:8px; cursor:pointer; ${notif.incompleteSquad?'background:color-mix(in srgb, var(--win) 18%, transparent);':''}">
-        <div style="flex:1;">
-          <div style="font-weight:600; font-size:14px; color:var(--ink);">Incomplete squad selection</div>
-          <div class="small" style="color:var(--ink-soft); margin-top:2px;">Remind coaches if the squad hasn't been picked yet</div>
-        </div>
-        ${notif.incompleteSquad ? `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" style="flex-shrink:0;"><path d="M5 13l4 4L19 7" stroke="var(--win)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>` : ''}
-      </div>
-      ${notif.incompleteSquad ? daysSelector('incompleteSquadDays', notif.incompleteSquadDays) : ''}
-      <div class="tap" data-notif-toggle="incompleteTeamsheet" style="display:flex; align-items:center; gap:10px; padding:10px 8px; margin:0 -8px; border-radius:8px; cursor:pointer; ${notif.incompleteTeamsheet?'background:color-mix(in srgb, var(--win) 18%, transparent);':''}">
-        <div style="flex:1;">
-          <div style="font-weight:600; font-size:14px; color:var(--ink);">Incomplete teamsheet</div>
-          <div class="small" style="color:var(--ink-soft); margin-top:2px;">Remind coaches if the on-field lineup hasn't been filled in yet</div>
-        </div>
-        ${notif.incompleteTeamsheet ? `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" style="flex-shrink:0;"><path d="M5 13l4 4L19 7" stroke="var(--win)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>` : ''}
-      </div>
-      ${notif.incompleteTeamsheet ? daysSelector('incompleteTeamsheetDays', notif.incompleteTeamsheetDays) : ''}
-    </div>
-    <div class="small" style="color:var(--ink-soft); margin-top:10px;">
-      Only goes to coaches listed in Coaches for this team. Tapping a notification will open straight to that match's result or fixture record, once logins are in place to check who's opening it.
+    <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:60px 20px;">
+      <svg viewBox="0 0 24 24" width="44" height="44" fill="none" style="color:var(--ink-soft); margin-bottom:16px;"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M13.73 21a2 2 0 01-3.46 0" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div style="font-family:'Oswald',sans-serif; font-weight:600; font-size:22px; color:var(--ink);">Coming soon</div>
     </div>`;
   } else if(tab==='backup'){
     tabHtml = `
@@ -6216,6 +6356,7 @@ function commitMatchStart(fixtureId, quarter, secondsLeft, actualStartTime){
   if(!f.actualLineup) f.actualLineup = JSON.parse(JSON.stringify(f.lineup));
   f.liveState.quarter = quarter;
   f.liveState.secondsLeft = secondsLeft;
+  f.liveState.stoppageSeconds = 0;
   f.liveState.running = true;
   f.liveState.actualStartTime = actualStartTime || null;
   saveData();
@@ -6674,7 +6815,7 @@ function openStartMatchConfirm(fixtureId){
       reviewMode = true;
       reviewFixtureId = fixtureId;
       liveViewingQuarter = 1;
-      liveTab = 'timeline';
+      liveTab = 'test';
       go(VIEW.tab==='fixtures'||VIEW.tab==='matchday' ? VIEW.tab : 'matchday', 'live', {id:fixtureId});
     }, 350);
   };
@@ -6687,9 +6828,9 @@ function openKickoffTimeConfirm(fixtureId){
     <button class="icon-x" data-close-modal>&times;</button>
     <div class="small" style="color:var(--ink-soft); margin-top:-6px; margin-bottom:16px;">vs ${esc(f.opponent||'TBC')}</div>
     <label>Kick-off time</label>
-    <div style="display:flex; gap:8px; margin-bottom:10px;">
-      <button type="button" data-kickoff-quick="${f.dateTime && f.dateTime.includes('T') ? f.dateTime.split('T')[1].slice(0,5) : nowHHMM()}" class="btn ghost small" style="flex:1; margin-bottom:0;">Original KO time</button>
-      <button type="button" data-kickoff-quick="${nowHHMM()}" class="btn ghost small" style="flex:1; margin-bottom:0;">Now</button>
+    <div class="toggle-group" id="kickoff-quick-group">
+      <button type="button" data-kickoff-quick="${f.dateTime && f.dateTime.includes('T') ? f.dateTime.split('T')[1].slice(0,5) : nowHHMM()}">Original KO time</button>
+      <button type="button" class="on" data-kickoff-quick="${nowHHMM()}">Now</button>
     </div>
     <input type="time" id="kickoff-time" value="${nowHHMM()}">
     <div class="small" style="color:var(--ink-soft); margin-top:-10px; margin-bottom:18px;">Pick whichever's right, or set your own time above.</div>
@@ -6706,7 +6847,14 @@ function openKickoffTimeConfirm(fixtureId){
     btn.addEventListener('click', ()=>{
       const timeInput = document.getElementById('kickoff-time');
       if(timeInput) timeInput.value = btn.dataset.kickoffQuick;
+      document.querySelectorAll('#kickoff-quick-group [data-kickoff-quick]').forEach(b=> b.classList.toggle('on', b===btn));
     });
+  });
+  const kickoffTimeInput = document.getElementById('kickoff-time');
+  if(kickoffTimeInput) kickoffTimeInput.addEventListener('input', ()=>{
+    // A manually-typed time no longer exactly matches either quick option, so neither
+    // should read as "selected" once it's been hand-edited.
+    document.querySelectorAll('#kickoff-quick-group [data-kickoff-quick]').forEach(b=> b.classList.remove('on'));
   });
   const confirmBtn = document.querySelector('[data-kickoff-confirm]');
   if(confirmBtn) confirmBtn.onclick = ()=>{
@@ -6736,7 +6884,7 @@ function openMatchAlreadyStartedModal(fixtureId){
     <button class="icon-x" data-close-modal>&times;</button>
     <label>Current period</label>
     <div class="toggle-group" id="already-started-quarter" data-selected="1">
-      ${periodKeys(f).map((q,i)=>`<button type="button" class="${i===0?'on':''}" data-quarter-opt="${i+1}">Q${i+1}</button>`).join('')}
+      ${periodKeys(f).map((q,i)=>`<button type="button" class="${i===0?'on':''}" data-quarter-opt="${i+1}">${esc(periodBadgeLabel(f, i+1))}</button>`).join('')}
     </div>
     <label>How many minutes has this period been running for?</label>
     ${renderMinuteWheel('already-started-minutes', Array.from({length: mpp+1}, (_,m)=>m), 0, "'")}
@@ -6777,6 +6925,28 @@ function openMatchAlreadyStartedModal(fixtureId){
     }, 350);
   };
 }
+function openEndGameConfirm(fixtureId){
+  // Ending a match is hard to cleanly undo (it moves screens and marks the fixture
+  // finished), so this is a real confirm/cancel step rather than a bare button -
+  // opened as a modal over whatever's currently showing (the enlarged pitch view,
+  // the live screen, wherever), so Cancel just closes it and leaves that exactly as
+  // it was, with nothing committed.
+  const f = DATA.fixtures.find(x=>x.id===fixtureId);
+  if(!f) return;
+  const body = `
+    <h3>End the match?</h3>
+    <button class="icon-x" data-close-modal>&times;</button>
+    <div class="small" style="color:var(--ink-soft); margin-bottom:16px;">This marks the match as finished and takes you to the result. You can still correct anything afterwards via "Review &amp; edit match".</div>
+    <div style="text-align:center;">
+      <button class="btn danger" data-confirm-end-game="${fixtureId}" style="margin-bottom:10px; width:auto; min-width:160px; padding-left:24px; padding-right:24px;">End match</button>
+      <button class="btn ghost" data-close-modal style="width:auto; min-width:160px; padding-left:24px; padding-right:24px;">Cancel</button>
+    </div>
+  `;
+  openModal(body, {floating:true});
+  attachModalHandlers();
+  const confirmBtn = document.querySelector('[data-confirm-end-game]');
+  if(confirmBtn) confirmBtn.onclick = ()=> openFinishMatchConfirm(fixtureId);
+}
 function openFinishMatchConfirm(fixtureId){
   const f = DATA.fixtures.find(x=>x.id===fixtureId);
   if(!f) return;
@@ -6786,6 +6956,188 @@ function openFinishMatchConfirm(fixtureId){
   saveData();
   go('results','resultDetail',{id:f.id});
   setTimeout(()=> openDynamicAwardsModal(f.id, true), 50);
+}
+function openLogOppoGoalConfirm(fixtureId, quarterNum){
+  const f = DATA.fixtures.find(x=>x.id===fixtureId);
+  if(!f) return;
+  const commit = (minute, clockTime)=>{
+    const ev = {id:uid(), type:'oppogoal', quarter:quarterNum, loggedAt:new Date().toISOString()};
+    if(typeof minute === 'number') ev.minute = minute;
+    if(clockTime) ev.clockTime = clockTime;
+    f.events.push(ev);
+    f.finalScore.them += 1;
+    saveData();
+    closeModal();
+    render();
+    showOppoGoalReaction();
+  };
+  // No "now" to log against unless this is actually the live quarter - a past quarter
+  // being corrected, or a review, needs to say when in that quarter it happened.
+  const needsMinuteStep = (reviewMode && reviewFixtureId===f.id) || quarterNum !== f.liveState.quarter;
+  if(!needsMinuteStep){
+    const body = `
+      <h3>Log an opponent goal?</h3>
+      <button class="icon-x" data-close-modal>&times;</button>
+      <div class="card" style="margin-bottom:16px;"><div class="small" style="color:var(--ink-soft);">Adds a goal for ${esc(f.opponent||'the opponent')} in ${esc(periodBadgeLabel(f, quarterNum))} and updates the score.</div></div>
+      <div style="display:flex; gap:10px;">
+        <button class="btn ghost" data-close-modal style="flex:1; margin-bottom:0;">Cancel</button>
+        <button class="btn amber" data-confirm-log-oppo-goal style="flex:1; margin-bottom:0;">Confirm</button>
+      </div>
+    `;
+    openModal(body, {floating:true});
+    attachModalHandlers();
+    const confirmBtn = document.querySelector('[data-confirm-log-oppo-goal]');
+    if(confirmBtn) confirmBtn.onclick = ()=> commit();
+    return;
+  }
+  const mpp = f.minutesPerPeriod || DEFAULT_CONFIG.minutesPerPeriod;
+  const defaultMinute = Math.round(mpp/2);
+  const body = `
+    <h3>When did this happen?</h3>
+    <button class="icon-x" data-close-modal>&times;</button>
+    <div class="small" style="color:var(--ink-soft); margin-bottom:10px;">Opponent goal &mdash; ${esc(periodBadgeLabel(f, quarterNum))}</div>
+    <div class="toggle-group" id="oppo-confirm-time-mode" data-selected="quarter">
+      <button type="button" class="on" data-oppo-confirm-time-mode-opt="quarter">${esc(periodWord(f))} mins</button>
+      <button type="button" data-oppo-confirm-time-mode-opt="clock">Real time</button>
+    </div>
+    <div id="oppo-confirm-quarter-mode-fields">
+      <div class="wheel-wrap">
+        <div class="wheel-highlight"></div>
+        <div class="wheel-scroll" id="oppo-confirm-minute-wheel" data-selected="${defaultMinute}">
+          ${Array.from({length: mpp+11}, (_,i)=>i).map(m=>`<div class="wheel-item" data-value="${m}">${m<=mpp?m+"'":'+'+(m-mpp)+"'"}</div>`).join('')}
+        </div>
+      </div>
+    </div>
+    <div id="oppo-confirm-clock-mode-fields" style="display:none;">
+      <input type="time" id="oppo-confirm-clock-input" value="${esc(nowHHMM())}">
+    </div>
+    <button class="btn amber" data-confirm-oppo-goal-time>Log opponent goal</button>
+  `;
+  openModal(body, {floating:true});
+  attachModalHandlers();
+  setupWheelPicker('oppo-confirm-minute-wheel');
+  document.querySelectorAll('[data-oppo-confirm-time-mode-opt]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const grp = document.getElementById('oppo-confirm-time-mode');
+      grp.dataset.selected = btn.dataset.oppoConfirmTimeModeOpt;
+      grp.querySelectorAll('[data-oppo-confirm-time-mode-opt]').forEach(b=> b.classList.toggle('on', b.dataset.oppoConfirmTimeModeOpt===btn.dataset.oppoConfirmTimeModeOpt));
+      document.getElementById('oppo-confirm-quarter-mode-fields').style.display = btn.dataset.oppoConfirmTimeModeOpt==='quarter' ? 'block' : 'none';
+      document.getElementById('oppo-confirm-clock-mode-fields').style.display = btn.dataset.oppoConfirmTimeModeOpt==='clock' ? 'block' : 'none';
+      if(btn.dataset.oppoConfirmTimeModeOpt==='clock'){
+        const ci = document.getElementById('oppo-confirm-clock-input');
+        if(ci){ ci.focus(); try{ ci.showPicker(); }catch(e){ /* not supported on this browser */ } }
+      }
+    });
+  });
+  const confirmTimeBtn = document.querySelector('[data-confirm-oppo-goal-time]');
+  if(confirmTimeBtn) confirmTimeBtn.onclick = ()=>{
+    const mode = document.getElementById('oppo-confirm-time-mode').dataset.selected;
+    if(mode==='clock'){
+      const clockVal = document.getElementById('oppo-confirm-clock-input').value;
+      if(!clockVal){ alert('Please set a time'); return; }
+      commit(undefined, clockVal);
+    } else {
+      commit(parseInt(document.getElementById('oppo-confirm-minute-wheel').dataset.selected));
+    }
+  };
+}
+function openStartQuarterModal(fixtureId, quarterNum){
+  // Reached from the enlarged pitch view when browsing to a quarter that isn't the
+  // live one yet - lets the coach jump straight to managing that period instead of
+  // only ever being able to advance one quarter at a time from the main screen.
+  const f = DATA.fixtures.find(x=>x.id===fixtureId);
+  if(!f) return;
+  const mpp = f.minutesPerPeriod || DEFAULT_CONFIG.minutesPerPeriod;
+  const commitStart = (secondsLeft)=>{
+    f.liveState.quarter = quarterNum;
+    f.liveState.secondsLeft = Math.max(0, Math.min(mpp*60, secondsLeft));
+    f.liveState.stoppageSeconds = 0;
+    f.liveState.running = true;
+    f.liveState.actualStartTime = new Date().toISOString();
+    liveViewingQuarter = null;
+    gridPitchEnlargedQuarter = quarterNum;
+    stopTimer();
+    saveData();
+    startTimer(f.id);
+    closeModal();
+    render();
+  };
+  const renderChoiceStep = ()=>{
+    const body = `
+      <h3>Start ${esc(periodFullLabel(f, quarterNum))}</h3>
+      <button class="icon-x" data-close-modal>&times;</button>
+      <div class="small" style="color:var(--ink-soft); margin-bottom:16px;">When did this period actually go live?</div>
+      <button class="btn amber" data-start-quarter-now style="margin-bottom:10px;">Starting now</button>
+      <button class="btn ghost" data-start-quarter-already style="margin-bottom:10px;">It already started</button>
+      <button class="btn ghost" data-close-modal>Cancel</button>
+    `;
+    openModal(body, {floating:true});
+    attachModalHandlers();
+    const nowBtn = document.querySelector('[data-start-quarter-now]');
+    if(nowBtn) nowBtn.onclick = ()=> commitStart(mpp*60);
+    const alreadyBtn = document.querySelector('[data-start-quarter-already]');
+    if(alreadyBtn) alreadyBtn.onclick = renderAlreadyStartedStep;
+  };
+  const renderAlreadyStartedStep = ()=>{
+    const now = new Date();
+    const defaultClock = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+    const body = `
+      <h3>Start ${esc(periodFullLabel(f, quarterNum))}</h3>
+      <button class="icon-x" data-close-modal>&times;</button>
+      <div class="toggle-group" id="start-q-mode" data-selected="minutes">
+        <button type="button" class="on" data-start-q-mode-opt="minutes">Minutes ago</button>
+        <button type="button" data-start-q-mode-opt="clock">Actual time</button>
+      </div>
+      <div id="start-q-minutes-fields">
+        <label>How many minutes ago did it start?</label>
+        <div class="wheel-wrap">
+          <div class="wheel-highlight"></div>
+          <div class="wheel-scroll" id="start-q-minutes-wheel" data-selected="1">
+            ${Array.from({length: mpp}, (_,i)=>i+1).map(m=>`<div class="wheel-item" data-value="${m}">${m}'</div>`).join('')}
+          </div>
+        </div>
+      </div>
+      <div id="start-q-clock-fields" style="display:none;">
+        <label>What time did it actually start?</label>
+        <input type="time" id="start-q-clock-input" value="${esc(defaultClock)}">
+      </div>
+      <button class="btn amber" data-confirm-start-already>Start period</button>
+    `;
+    openModal(body, {floating:true});
+    attachModalHandlers();
+    setupWheelPicker('start-q-minutes-wheel');
+    document.querySelectorAll('[data-start-q-mode-opt]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const grp = document.getElementById('start-q-mode');
+        grp.dataset.selected = btn.dataset.startQModeOpt;
+        grp.querySelectorAll('[data-start-q-mode-opt]').forEach(b=> b.classList.toggle('on', b.dataset.startQModeOpt===btn.dataset.startQModeOpt));
+        document.getElementById('start-q-minutes-fields').style.display = btn.dataset.startQModeOpt==='minutes' ? 'block' : 'none';
+        document.getElementById('start-q-clock-fields').style.display = btn.dataset.startQModeOpt==='clock' ? 'block' : 'none';
+        if(btn.dataset.startQModeOpt==='clock'){
+          const clockInput = document.getElementById('start-q-clock-input');
+          if(clockInput){ clockInput.focus(); try{ clockInput.showPicker(); }catch(e){ /* not supported on this browser */ } }
+        }
+      });
+    });
+    const confirmBtn = document.querySelector('[data-confirm-start-already]');
+    if(confirmBtn) confirmBtn.onclick = ()=>{
+      const mode = document.getElementById('start-q-mode').dataset.selected;
+      if(mode==='clock'){
+        const clockVal = document.getElementById('start-q-clock-input').value;
+        if(!clockVal){ alert('Please set a time'); return; }
+        const [h,m] = clockVal.split(':').map(Number);
+        const started = new Date();
+        started.setHours(h, m, 0, 0);
+        let elapsedMs = Date.now() - started.getTime();
+        if(elapsedMs < 0) elapsedMs = 0; // clock time was in the future relative to now - treat as just starting
+        commitStart(mpp*60 - Math.round(elapsedMs/1000));
+      } else {
+        const minutesAgo = parseInt(document.getElementById('start-q-minutes-wheel').dataset.selected);
+        commitStart(mpp*60 - minutesAgo*60);
+      }
+    };
+  };
+  renderChoiceStep();
 }
 function openDeletePlayerConfirm(playerId){
   const p = getPlayer(playerId);
@@ -7129,7 +7481,7 @@ function renderResultSharePreviewBody(f, sel){
         <span class="pill ${res}">${res.toUpperCase()}</span>
         <span style="font-size:11px; color:rgba(255,255,255,0.85); font-weight:600;">${fmtDate(f.dateTime)}</span>
       </div>
-      <div style="margin-top:6px; font-size:11px; color:rgba(255,255,255,0.85); font-weight:600;">${periodKeys(f).map((q,i)=>`Q${i+1} ${stats.goalsByQuarter[i+1]}-${stats.oppoGoalsByQuarter[i+1]}`).join(' · ')}</div>
+      <div style="margin-top:6px; font-size:11px; color:rgba(255,255,255,0.85); font-weight:600;">${periodKeys(f).map((q,i)=>`${periodBadgeLabel(f, i+1)} ${stats.goalsByQuarter[i+1]}-${stats.oppoGoalsByQuarter[i+1]}`).join(' · ')}</div>
     </div>
   `;
   if(sel.summary && f.matchSummary){
@@ -7139,7 +7491,7 @@ function renderResultSharePreviewBody(f, sel){
     html += `<div class="section-title">Timeline</div><div class="card" style="padding:10px 14px;">`;
     periodKeys(f).forEach((q,i)=>{
       const qEvents = sortEventsForDisplay((f.events||[]).filter(ev=>ev.quarter===i+1));
-      html += `<div style="${i>0?'margin-top:8px; padding-top:7px; border-top:1px solid var(--line);':''}"><div class="small" style="font-weight:700; color:var(--ink-soft); margin-bottom:2px;">Q${i+1}</div>${qEvents.length>0 ? qEvents.map(ev=>renderEventItem(ev, null)).join('') : '<div class="small" style="color:var(--ink-soft); padding:3px 0;">No action!</div>'}</div>`;
+      html += `<div style="${i>0?'margin-top:8px; padding-top:7px; border-top:1px solid var(--line);':''}"><div class="small" style="font-weight:700; color:var(--ink-soft); margin-bottom:2px;">${esc(periodBadgeLabel(f, i+1))}</div>${qEvents.length>0 ? qEvents.map(ev=>renderEventItem(ev, null)).join('') : '<div class="small" style="color:var(--ink-soft); padding:3px 0;">No action!</div>'}</div>`;
     });
     html += `</div>`;
   }
@@ -7201,7 +7553,7 @@ function resultShareText(f, sel){
   const lines = [
     `${esc(teamShort())} ${f.finalScore.us} - ${f.finalScore.them} ${f.opponent||'TBC'} (${res.toUpperCase()})`,
     fmtDate(f.dateTime),
-    periodKeys(f).map((q,i)=>`Q${i+1} ${stats.goalsByQuarter[i+1]}-${stats.oppoGoalsByQuarter[i+1]}`).join(' · ')
+    periodKeys(f).map((q,i)=>`${periodBadgeLabel(f, i+1)} ${stats.goalsByQuarter[i+1]}-${stats.oppoGoalsByQuarter[i+1]}`).join(' · ')
   ];
   if(sel.summary && f.matchSummary){
     lines.push('', 'Match summary:', f.matchSummary);
@@ -7418,10 +7770,11 @@ function openRemoveQualConfirm(qualId){
   };
 }
 function openRandomizeSpreadConfirm(fixtureId){
+  const f = getEditingFixture(fixtureId);
   const body = `
     <h3>Randomise again?</h3>
     <button class="icon-x" data-close-modal>&times;</button>
-    <div class="small" style="color:var(--ink-soft); margin-bottom:18px;">This replaces your current teamsheet for every quarter with a new shuffle, using the same players and settings as last time.</div>
+    <div class="small" style="color:var(--ink-soft); margin-bottom:18px;">This replaces your current teamsheet for every ${periodWord(f).toLowerCase()} with a new shuffle, using the same players and settings as last time.</div>
     <div style="display:flex; gap:10px;">
       <button class="btn ghost" data-close-modal style="flex:1; margin-bottom:0;">Cancel</button>
       <button class="btn amber" data-confirm-randomize-spread="${fixtureId}" style="flex:1; margin-bottom:0;">Randomise</button>
@@ -7446,12 +7799,12 @@ function openClearMinutesModal(fixtureId){
   const body = `
     <h3>Clear teamsheet</h3>
     <button class="icon-x" data-close-modal>&times;</button>
-    <div class="small" style="color:var(--ink-soft); margin-bottom:14px;">Pick which quarter(s) to clear. Everyone's Start and Sub for those quarters will be removed — nothing else is affected.</div>
+    <div class="small" style="color:var(--ink-soft); margin-bottom:14px;">Pick which ${periodWord(f).toLowerCase()}(s) to clear. Everyone's Start and Sub for those ${periodWord(f).toLowerCase()}s will be removed — nothing else is affected.</div>
     <div class="card" style="margin-bottom:16px;">
       ${periodKeys(f).map((q,i)=>`
         <label style="display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid var(--line); cursor:pointer; font-weight:500; color:var(--ink); text-transform:none;">
           <input type="checkbox" data-clear-period="${q}" style="width:auto; margin:0;">
-          <span>Q${i+1}</span>
+          <span>${esc(periodBadgeLabel(f, i+1))}</span>
         </label>
       `).join('')}
     </div>
@@ -7468,7 +7821,7 @@ function openClearMinutesModal(fixtureId){
       .filter(el=>el.checked)
       .map(el=>el.dataset.clearPeriod);
     if(periodsToClear.length===0){
-      alert('Select at least one quarter to clear.');
+      alert(`Select at least one ${periodWord(getEditingFixture(fixtureId)).toLowerCase()} to clear.`);
       return;
     }
     const fLive = getEditingFixture(fixtureId);
@@ -7498,10 +7851,11 @@ function openAutoGenerateWizard(fixtureId){
   renderAutoGenAskGk();
 }
 function renderAutoGenAskGk(){
+  const f = getEditingFixture(autoGenWizard.fixtureId);
   const body = `
     <h3>Fix goalkeeper(s)?</h3>
     <button class="icon-x" data-close-modal>&times;</button>
-    <div class="small" style="color:var(--ink-soft); margin-bottom:18px;">Choose exactly who plays in goal each quarter yourself, or let auto-generate pick a goalkeeper for you along with everyone else.</div>
+    <div class="small" style="color:var(--ink-soft); margin-bottom:18px;">Choose exactly who plays in goal each ${periodWord(f).toLowerCase()} yourself, or let auto-generate pick a goalkeeper for you along with everyone else.</div>
     <div style="display:flex; gap:10px;">
       <button class="btn ghost" data-gk-choice="no" style="flex:1; margin-bottom:0;">No, auto-generate</button>
       <button class="btn amber" data-gk-choice="yes" style="flex:1; margin-bottom:0;">Yes, let me fix</button>
@@ -7523,7 +7877,7 @@ function renderAutoGenGkPicker(){
   const body = `
     <h3>Who starts in goal?</h3>
     <button class="icon-x" data-close-modal>&times;</button>
-    <div class="small" style="color:var(--ink-soft); margin-bottom:14px;">Pick a goalkeeper for each quarter — leave any as "-" to let auto-generate decide that one instead.</div>
+    <div class="small" style="color:var(--ink-soft); margin-bottom:14px;">Pick a goalkeeper for each ${periodWord(f).toLowerCase()} — leave any as "-" to let auto-generate decide that one instead.</div>
     ${periods.map((q,i)=>{
       const current = squad.find(p=>p.id===autoGenWizard.gkByQuarter[q]);
       return `<label>${esc(periodBadgeLabel(f,i+1))}</label>${pickerFieldHtml('gk-'+q, current)}`;
@@ -7686,7 +8040,7 @@ function renderAutoGenDirectConfirm(){
   const body = `
     <h3>Ready to auto-generate</h3>
     <button class="icon-x" data-close-modal>&times;</button>
-    <div class="small" style="color:var(--ink-soft); margin-bottom:18px;">This replaces the current teamsheet for every quarter, spreading minutes evenly across the squad using their preferred positions.</div>
+    <div class="small" style="color:var(--ink-soft); margin-bottom:18px;">This replaces the current teamsheet for every ${periodWord(f).toLowerCase()}, spreading minutes evenly across the squad using their preferred positions.</div>
     <button class="btn amber" data-direct-auto-generate style="margin-bottom:0;">Auto-generate</button>
     <div style="height:10px;"></div>
     <button class="btn ghost" data-gk-back-to-customize>Back</button>
@@ -7751,7 +8105,7 @@ function openSpreadMinutesModal(fixtureId, gkByQuarter, startingLineup, minSubMi
       <div style="flex-shrink:0;">
         <h3>Players to include</h3>
         <button class="icon-x" data-close-modal>&times;</button>
-        <div class="small" style="color:var(--ink-soft); margin-bottom:10px; font-size:13px;">Tap a player to include or exclude them and pick which positions they can be spread across. Tap a green position to fix them there for the selected quarter — everyone left unfixed spreads automatically across their eligible positions (preferred positions from their profile, plus whatever's picked here).</div>
+        <div class="small" style="color:var(--ink-soft); margin-bottom:10px; font-size:13px;">Tap a player to include or exclude them and pick which positions they can be spread across. Tap a green position to fix them there for the selected ${periodWord(f).toLowerCase()} — everyone left unfixed spreads automatically across their eligible positions (preferred positions from their profile, plus whatever's picked here).</div>
         <div class="toggle-group" id="spread-fix-quarter" style="margin-bottom:10px;">
           ${periods.map((q,i)=>`<button type="button" class="${i===0?'on':''}" data-spread-fix-quarter="${q}">${esc(periodBadgeLabel(f,i+1))}</button>`).join('')}
         </div>
@@ -7867,10 +8221,11 @@ function openSpreadMinutesModal(fixtureId, gkByQuarter, startingLineup, minSubMi
   };
 }
 function openAutoGenerateFixChoice(fixtureId, sel){
+  const f = getEditingFixture(fixtureId);
   const body = `
     <h3>Fix any players first?</h3>
     <button class="icon-x" data-close-modal>&times;</button>
-    <div class="small" style="color:var(--ink-soft); margin-bottom:18px;">You can lock specific players into specific quarters and positions yourself before the rest is auto-generated around them — or just let auto-generate handle the whole teamsheet.</div>
+    <div class="small" style="color:var(--ink-soft); margin-bottom:18px;">You can lock specific players into specific ${periodWord(f).toLowerCase()}s and positions yourself before the rest is auto-generated around them — or just let auto-generate handle the whole teamsheet.</div>
     <div style="display:flex; gap:10px;">
       <button class="btn ghost" data-fix-choice="no" style="flex:1; margin-bottom:0;">No, auto-generate all</button>
       <button class="btn amber" data-fix-choice="yes" style="flex:1; margin-bottom:0;">Yes, let me fix some</button>
@@ -7936,7 +8291,7 @@ function openFullLineupGridModal(fixtureId, selectedIds, fixedGkId, eligiblePosi
       picksThisPeriod.forEach(p=>{ presetLineup[q][p.pos] = p.val; });
     });
     if(hasDuplicate){
-      alert('The same player is picked for more than one position in the same quarter — please fix that before continuing.');
+      alert(`The same player is picked for more than one position in the same ${periodWord(f).toLowerCase()} — please fix that before continuing.`);
       return;
     }
     const fLive = getEditingFixture(fixtureId);
@@ -8103,7 +8458,7 @@ function openDeleteEventConfirm(fixtureId, eventId){
     <button class="btn danger" data-confirm-delete-event="${fixtureId}|${eventId}" style="width:100%; margin-bottom:10px;">Delete event</button>
     <button class="btn ghost" data-close-modal>Cancel</button>
   `;
-  openModal(body);
+  openModal(body, {floating:true});
   attachModalHandlers();
   const confirmBtn = document.querySelector('[data-confirm-delete-event]');
   if(confirmBtn) confirmBtn.onclick = ()=>{
@@ -8163,14 +8518,14 @@ function openOppoGoalMinuteStep(fixtureId){
     <button class="icon-x" data-close-modal>&times;</button>
     <div class="small" style="color:var(--ink-soft); margin-bottom:10px;">Opponent goal — Q${q}</div>
     <div class="toggle-group" id="oppo-time-mode" data-selected="quarter">
-      <button type="button" class="on" data-oppo-time-mode-opt="quarter">Quarter mins</button>
+      <button type="button" class="on" data-oppo-time-mode-opt="quarter">${periodWord(f)} mins</button>
       <button type="button" data-oppo-time-mode-opt="clock">Real time</button>
     </div>
     <div id="oppo-quarter-mode-fields">
       <div class="wheel-wrap">
         <div class="wheel-highlight"></div>
         <div class="wheel-scroll" id="oppo-minute-wheel" data-selected="${defaultMinute}">
-          ${Array.from({length: mpp+1}, (_,i)=>i).map(m=>`<div class="wheel-item" data-value="${m}">${m}'</div>`).join('')}
+          ${Array.from({length: mpp+11}, (_,i)=>i).map(m=>`<div class="wheel-item" data-value="${m}">${m<=mpp?m+"'":'+'+(m-mpp)+"'"}</div>`).join('')}
         </div>
       </div>
     </div>
@@ -8232,14 +8587,14 @@ function openSubMinuteStep(fixtureId, outId, inId){
     <button class="icon-x" data-close-modal>&times;</button>
     <div class="small" style="color:var(--ink-soft); margin-bottom:10px;">${esc(out?out.name:'?')} off, ${esc(inPlayer?inPlayer.name:'?')} on — Q${q}</div>
     <div class="toggle-group" id="sub-time-mode" data-selected="quarter">
-      <button type="button" class="on" data-sub-time-mode-opt="quarter">Quarter mins</button>
+      <button type="button" class="on" data-sub-time-mode-opt="quarter">${periodWord(f)} mins</button>
       <button type="button" data-sub-time-mode-opt="clock">Real time</button>
     </div>
     <div id="sub-quarter-mode-fields">
       <div class="wheel-wrap">
         <div class="wheel-highlight"></div>
         <div class="wheel-scroll" id="sub-minute-wheel" data-selected="${defaultMinute}">
-          ${Array.from({length: mpp+1}, (_,i)=>i).map(m=>`<div class="wheel-item" data-value="${m}">${m}'</div>`).join('')}
+          ${Array.from({length: mpp+11}, (_,i)=>i).map(m=>`<div class="wheel-item" data-value="${m}">${m<=mpp?m+"'":'+'+(m-mpp)+"'"}</div>`).join('')}
         </div>
       </div>
     </div>
@@ -8304,7 +8659,7 @@ function performQuarterSwap(f, quarterKey, existingSlot, targetPos, targetSeg, p
     if(s.b && s.b !== s.a) projectedSubs++;
   });
   if(projectedSubs > f.bench){
-    alert(`Only ${f.bench} substitute${f.bench===1?'':'s'} are allowed per quarter (based on this match's bench size). This swap would exceed that.`);
+    alert(`Only ${f.bench} substitute${f.bench===1?'':'s'} are allowed per ${periodWord(f).toLowerCase()} (based on this match's bench size). This swap would exceed that.`);
     return false;
   }
   lineup[targetPos][targetSeg] = playerId;
@@ -8328,6 +8683,11 @@ function renderGroupedPlayerPicker(f, quarterKey, excludePos, excludeSeg, player
   // quarterSwapLabel returning nothing for them (because they match excludePos/excludeSeg)
   // previously fell through to "bench", which is how the current GK starter ended up
   // listed as a bench option for his own slot. Leave them out entirely instead.
+  // Someone sent off in an earlier quarter can't be picked to start or sub back on in a
+  // later one - they can still appear for the quarter they were actually sent off in,
+  // since they were legitimately on the pitch up until that point.
+  const quarterNumForElig = parseInt((quarterKey||'q0').slice(1), 10);
+  players = players.filter(p=> !(f.events||[]).some(e=>e.type==='redcard' && e.player===p.id && e.quarter<quarterNumForElig));
   const lineup = f[lineupField||'lineup'];
   const currentOccupantId = lineup[quarterKey][excludePos] ? lineup[quarterKey][excludePos][excludeSeg] : '';
   const bench = [];
@@ -8417,9 +8777,12 @@ function openPlanLineupSubModal(fixtureId, quarterKey, pos, useActual){
   const slot = f[lineupField][quarterKey][pos];
   const squad = availablePlayersForFixture(f);
   const qNum = periodKeys(f).indexOf(quarterKey) + 1;
-  // An empty slot has nothing to show on the summary step - go straight to picking
-  // a starter rather than making the user tap "Change starter" on a blank screen.
-  if(!slot.a) renderStarterStep(); else renderMainStep();
+  // An empty slot has nothing to show on the summary step - go straight to picking a
+  // starter rather than making the user tap "Change starter" on a blank screen. A
+  // starter who's since been sent off in an earlier quarter is treated exactly the
+  // same way here - the marker itself already renders as reset/empty for this reason.
+  const starterIneligible = slot.a && redCardedBeforeQuarter(f, slot.a, qNum);
+  if(!slot.a || starterIneligible) renderStarterStep(); else renderMainStep();
   function renderMainStep(){
     const starter = slot.a ? getPlayer(slot.a) : null;
     const sub = (slot.b && slot.b !== slot.a) ? getPlayer(slot.b) : null;
@@ -8428,14 +8791,41 @@ function openPlanLineupSubModal(fixtureId, quarterKey, pos, useActual){
     // planning a future one, where no goals or cards exist yet to attach to anyone.
     const showQuickLog = useActual && starter;
     const quickBtnStyle = 'flex:1; border:none; border-radius:10px; padding:10px 4px; font-size:19px; cursor:pointer; line-height:1;';
+    // Anything this quarter that involves whoever's shown above (starter or sub) as
+    // scorer, assister, or the carded player - not the whole match's events, just
+    // theirs, for this one quarter, same as the markers' own badges are scoped.
+    const involvesPlayer = (ev, pid)=> ev.scorer===pid || ev.assist===pid || ev.player===pid;
+    const quarterEvents = showQuickLog ? sortEventsForDisplay((f.events||[]).filter(ev=>
+      ev.quarter===qNum && (involvesPlayer(ev, starter.id) || (sub && involvesPlayer(ev, sub.id)))
+    )) : [];
     const body = `
       <h3>${esc(pos)} &mdash; ${esc(periodBadgeLabel(f, qNum))}</h3>
       <button class="icon-x" data-close-modal>&times;</button>
-      ${showQuickLog ? `
+      ${showQuickLog ? (sub ? `
+      <div class="small" style="color:var(--ink-soft); margin-bottom:8px;">Log a goal or card for:</div>
+      <div style="display:flex; justify-content:center; gap:28px; margin-bottom:16px;">
+        <button type="button" ${hasRedCard(f,starter.id)?'disabled':`data-quick-log-for-player="${starter.id}"`} style="background:none; border:none; cursor:${hasRedCard(f,starter.id)?'default':'pointer'}; display:flex; flex-direction:column; align-items:center; gap:4px; padding:2px; min-width:0; opacity:${hasRedCard(f,starter.id)?'0.4':'1'};">
+          ${shirtHtml(starter, 'width:56px; height:56px; font-size:19px; border:3px solid #fff; box-shadow:0 2px 8px rgba(0,0,0,0.35);')}
+          <div style="font-weight:700; font-size:12.5px; color:var(--ink); max-width:92px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(starter.name)}</div>
+          <div class="small" style="color:var(--ink-soft);">${hasRedCard(f,starter.id)?'Sent off':'Started'}</div>
+        </button>
+        <button type="button" ${hasRedCard(f,sub.id)?'disabled':`data-quick-log-for-player="${sub.id}"`} style="background:none; border:none; cursor:${hasRedCard(f,sub.id)?'default':'pointer'}; display:flex; flex-direction:column; align-items:center; gap:4px; padding:2px; min-width:0; opacity:${hasRedCard(f,sub.id)?'0.4':'1'};">
+          ${shirtHtml(sub, 'width:56px; height:56px; font-size:19px; border:3px solid #fff; box-shadow:0 2px 8px rgba(0,0,0,0.35);')}
+          <div style="font-weight:700; font-size:12.5px; color:var(--ink); max-width:92px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(sub.name)}</div>
+          <div class="small" style="color:var(--ink-soft);">${hasRedCard(f,sub.id)?'Sent off':`Sub @ ${slot.subAt!=null?slot.subAt:'?'}'`}</div>
+        </button>
+      </div>` : (hasRedCard(f,starter.id) ? `
+      <div class="small" style="color:var(--loss); font-weight:600; margin-bottom:14px;">${esc(starter.name)} has been sent off — no further events can be logged for them this match.</div>
+      ` : `
       <div style="display:flex; gap:8px; margin-bottom:14px;">
         <button type="button" data-quick-marker-event="goal" style="${quickBtnStyle} background:#2E9E3F;" title="Log a goal for ${esc(starter.name)}">⚽</button>
         <button type="button" data-quick-marker-event="yellowcard" style="${quickBtnStyle} background:#F4C430;" title="Log a yellow card for ${esc(starter.name)}">🟨</button>
         <button type="button" data-quick-marker-event="redcard" style="${quickBtnStyle} background:#E0393E;" title="Log a red card for ${esc(starter.name)}">🟥</button>
+      </div>`)) : ''}
+      ${showQuickLog && quarterEvents.length>0 ? `
+      <div class="small" style="color:var(--ink-soft); margin-bottom:6px; font-weight:600;">This ${periodWord(f).toLowerCase()}</div>
+      <div class="card" style="margin-bottom:16px; max-height:180px; overflow-y:auto;">
+        ${quarterEvents.map(ev=>renderEventItem(ev, f.id)).join('')}
       </div>` : ''}
       <div class="small" style="color:var(--ink-soft); margin-bottom:16px;">
         ${useActual ? 'Who actually started?' : 'Starting:'} <strong style="color:var(--ink);">${starter?esc(starter.name):'Not set'}</strong>
@@ -8447,6 +8837,26 @@ function openPlanLineupSubModal(fixtureId, quarterKey, pos, useActual){
     `;
     openModal(body, {floating:true});
     attachModalHandlers();
+    // This modal's own content isn't covered by the page-level attachHandlers() pass,
+    // so the timeline's edit/delete buttons need wiring here directly.
+    document.querySelectorAll('[data-edit-goal]').forEach(el=>{
+      el.addEventListener('click', ()=>{
+        const [fid, eid] = el.dataset.editGoal.split('|');
+        openEditGoalModal(fid, eid);
+      });
+    });
+    document.querySelectorAll('[data-edit-card]').forEach(el=>{
+      el.addEventListener('click', ()=>{
+        const [fid, eid] = el.dataset.editCard.split('|');
+        openEditCardModal(fid, eid);
+      });
+    });
+    document.querySelectorAll('[data-delete-event]').forEach(el=>{
+      el.addEventListener('click', ()=>{
+        const [fid, eid] = el.dataset.deleteEvent.split('|');
+        openDeleteEventConfirm(fid, eid);
+      });
+    });
     const starterBtn = document.querySelector('[data-plan-pick-starter]');
     if(starterBtn) starterBtn.onclick = renderStarterStep;
     const subBtn = document.querySelector('[data-plan-pick-sub]');
@@ -8459,23 +8869,89 @@ function openPlanLineupSubModal(fixtureId, quarterKey, pos, useActual){
       closeModal();
       render();
     };
-    const finishQuickLog = (type, assistId)=>{
+    const finishQuickLog = (type, assistId, forPlayer, minute, clockTime)=>{
+      forPlayer = forPlayer || starter;
       const pulsePosKey = f.id + '_' + quarterKey;
       const pulseColor = type==='goal' ? '#2E9E3F' : (type==='yellowcard' ? '#F4C430' : '#E0393E');
+      const evBase = {id:uid(), quarter:qNum, loggedAt:new Date().toISOString()};
+      if(typeof minute === 'number') evBase.minute = minute;
+      if(clockTime) evBase.clockTime = clockTime;
       if(type === 'goal'){
-        f.events.push({id:uid(), type:'goal', scorer:starter.id, assist:assistId||null, quarter:qNum, loggedAt:new Date().toISOString()});
+        f.events.push({...evBase, type:'goal', scorer:forPlayer.id, assist:assistId||null});
         f.finalScore.us += 1;
       } else {
-        f.events.push({id:uid(), type, player:starter.id, quarter:qNum, loggedAt:new Date().toISOString()});
+        f.events.push({...evBase, type, player:forPlayer.id});
       }
+      const autoRed = type==='yellowcard' ? checkSecondYellowAutoRed(f, forPlayer.id, qNum) : false;
       saveData();
       closeModal();
       justLoggedPulse = {posKey:pulsePosKey, pos, color:pulseColor};
       render();
       if(type==='goal') showGoalCelebration();
+      else if(type==='yellowcard' || type==='redcard') showCardAnimation(forPlayer.name, type);
+      if(autoRed) setTimeout(()=> showCardAnimation(forPlayer.name, 'redcard'), 1900);
       setTimeout(()=>{ justLoggedPulse = null; render(); }, 1600);
     };
-    const renderQuickGoalAssistStep = ()=>{
+    // Whether THIS marker's quarter is the one actually live right now - if not (a
+    // past quarter being corrected, or a review), there's no "now" to log against, so
+    // the coach needs to say when in that quarter it actually happened.
+    const needsQuickLogTimeStep = ()=> (reviewMode && reviewFixtureId===f.id) || qNum !== f.liveState.quarter;
+    const renderQuickLogTimeStep = (type, assistId, forPlayer)=>{
+      const mpp = f.minutesPerPeriod || DEFAULT_CONFIG.minutesPerPeriod;
+      const defaultMinute = Math.round(mpp/2);
+      const eventLabel = type==='goal' ? 'goal' : (type==='yellowcard' ? 'yellow card' : 'red card');
+      const body = `
+        <h3>When did this happen?</h3>
+        <button class="icon-x" data-close-modal>&times;</button>
+        <div class="small" style="color:var(--ink-soft); margin-bottom:10px;">${esc(forPlayer.name)} &mdash; ${eventLabel}</div>
+        <div class="toggle-group" id="quick-log-time-mode" data-selected="quarter">
+          <button type="button" class="on" data-quick-log-time-mode-opt="quarter">${esc(periodWord(f))} mins</button>
+          <button type="button" data-quick-log-time-mode-opt="clock">Real time</button>
+        </div>
+        <div id="quick-log-quarter-mode-fields">
+          <div class="wheel-wrap">
+            <div class="wheel-highlight"></div>
+            <div class="wheel-scroll" id="quick-log-minute-wheel" data-selected="${defaultMinute}">
+              ${Array.from({length: mpp+11}, (_,i)=>i).map(m=>`<div class="wheel-item" data-value="${m}">${m<=mpp?m+"'":'+'+(m-mpp)+"'"}</div>`).join('')}
+            </div>
+          </div>
+        </div>
+        <div id="quick-log-clock-mode-fields" style="display:none;">
+          <input type="time" id="quick-log-clock-input" value="${esc(nowHHMM())}">
+        </div>
+        <button class="btn amber" data-confirm-quick-log-time>Log ${eventLabel}</button>
+      `;
+      openModal(body, {floating:true});
+      attachModalHandlers();
+      setupWheelPicker('quick-log-minute-wheel');
+      document.querySelectorAll('[data-quick-log-time-mode-opt]').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          const grp = document.getElementById('quick-log-time-mode');
+          grp.dataset.selected = btn.dataset.quickLogTimeModeOpt;
+          grp.querySelectorAll('[data-quick-log-time-mode-opt]').forEach(b=> b.classList.toggle('on', b.dataset.quickLogTimeModeOpt===btn.dataset.quickLogTimeModeOpt));
+          document.getElementById('quick-log-quarter-mode-fields').style.display = btn.dataset.quickLogTimeModeOpt==='quarter' ? 'block' : 'none';
+          document.getElementById('quick-log-clock-mode-fields').style.display = btn.dataset.quickLogTimeModeOpt==='clock' ? 'block' : 'none';
+          if(btn.dataset.quickLogTimeModeOpt==='clock'){
+            const ci = document.getElementById('quick-log-clock-input');
+            if(ci){ ci.focus(); try{ ci.showPicker(); }catch(e){ /* not supported on this browser */ } }
+          }
+        });
+      });
+      const confirmBtn = document.querySelector('[data-confirm-quick-log-time]');
+      if(confirmBtn) confirmBtn.onclick = ()=>{
+        const mode = document.getElementById('quick-log-time-mode').dataset.selected;
+        if(mode==='clock'){
+          const clockVal = document.getElementById('quick-log-clock-input').value;
+          if(!clockVal){ alert('Please set a time'); return; }
+          finishQuickLog(type, assistId, forPlayer, undefined, clockVal);
+        } else {
+          const minuteVal = parseInt(document.getElementById('quick-log-minute-wheel').dataset.selected);
+          finishQuickLog(type, assistId, forPlayer, minuteVal);
+        }
+      };
+    };
+    const renderQuickGoalAssistStep = (forPlayer)=>{
+      forPlayer = forPlayer || starter;
       // Only players who actually appeared in this quarter (as a starter or a sub at
       // any position) could realistically have set this goal up - not the whole squad.
       const quarterLineup = f[lineupField][quarterKey] || {};
@@ -8484,11 +8960,11 @@ function openPlanLineupSubModal(fixtureId, quarterKey, pos, useActual){
         if(slot.a) onPitchIds.add(slot.a);
         if(slot.b) onPitchIds.add(slot.b);
       });
-      const assistOptions = squad.filter(p=>p.id!==starter.id && onPitchIds.has(p.id));
+      const assistOptions = squad.filter(p=>p.id!==forPlayer.id && onPitchIds.has(p.id));
       const body = `
         <h3>Who assisted? <span style="font-size:13px; color:var(--ink-soft); font-family:'Inter';">(optional)</span></h3>
         <button class="icon-x" data-close-modal>&times;</button>
-        <div class="small" style="color:var(--ink-soft); margin-bottom:10px;">Goal: <strong style="color:var(--ink);">${esc(starter.name)}</strong></div>
+        <div class="small" style="color:var(--ink-soft); margin-bottom:10px;">Goal: <strong style="color:var(--ink);">${esc(forPlayer.name)}</strong></div>
         <button class="btn ghost" data-pick-quick-assist="" style="margin-bottom:12px;">No assist — log goal</button>
         <div class="card" style="max-height:50vh; overflow-y:auto;">
           ${assistOptions.length===0 ? '' : assistOptions.map(p=>`
@@ -8501,16 +8977,53 @@ function openPlanLineupSubModal(fixtureId, quarterKey, pos, useActual){
       openModal(body, {floating:true});
       attachModalHandlers();
       document.querySelectorAll('[data-pick-quick-assist]').forEach(el=>{
-        el.addEventListener('click', ()=> finishQuickLog('goal', el.dataset.pickQuickAssist || null));
+        el.addEventListener('click', ()=>{
+          const assistId = el.dataset.pickQuickAssist || null;
+          if(needsQuickLogTimeStep()){ renderQuickLogTimeStep('goal', assistId, forPlayer); return; }
+          finishQuickLog('goal', assistId, forPlayer);
+        });
       });
     };
+    // Reached directly (no sub this quarter - only one possible player to log for).
     document.querySelectorAll('[data-quick-marker-event]').forEach(el=>{
       el.addEventListener('click', ()=>{
         const type = el.dataset.quickMarkerEvent;
-        if(type === 'goal'){ renderQuickGoalAssistStep(); return; }
-        finishQuickLog(type, null);
+        if(type === 'goal'){ renderQuickGoalAssistStep(starter); return; }
+        if(needsQuickLogTimeStep()){ renderQuickLogTimeStep(type, null, starter); return; }
+        finishQuickLog(type, null, starter);
       });
     });
+    // A sub happened this quarter, so there are two possible players a goal/card could
+    // belong to - tapping either opens the same goal/card picker scoped to just them.
+    document.querySelectorAll('[data-quick-log-for-player]').forEach(el=>{
+      el.addEventListener('click', ()=> renderQuickLogForPlayerStep(getPlayer(el.dataset.quickLogForPlayer)));
+    });
+    function renderQuickLogForPlayerStep(forPlayer){
+      const body = `
+        <h3>${esc(forPlayer.name)} &mdash; ${esc(periodBadgeLabel(f, qNum))}</h3>
+        <button class="icon-x" data-close-modal>&times;</button>
+        <div style="display:flex; gap:8px;">
+          <button type="button" data-quick-marker-event-for="goal" style="${quickBtnStyle} background:#2E9E3F;" title="Log a goal for ${esc(forPlayer.name)}">⚽</button>
+          <button type="button" data-quick-marker-event-for="yellowcard" style="${quickBtnStyle} background:#F4C430;" title="Log a yellow card for ${esc(forPlayer.name)}">🟨</button>
+          <button type="button" data-quick-marker-event-for="redcard" style="${quickBtnStyle} background:#E0393E;" title="Log a red card for ${esc(forPlayer.name)}">🟥</button>
+        </div>
+      `;
+      openModal(body, {floating:true});
+      attachModalHandlers();
+      // Closing this (X) goes back to the two-player picker rather than dropping all
+      // the way out, same as other nested popups elsewhere in the app.
+      document.querySelectorAll('[data-close-modal]').forEach(el=>{
+        el.addEventListener('click', renderMainStep);
+      });
+      document.querySelectorAll('[data-quick-marker-event-for]').forEach(el=>{
+        el.addEventListener('click', ()=>{
+          const type = el.dataset.quickMarkerEventFor;
+          if(type === 'goal'){ renderQuickGoalAssistStep(forPlayer); return; }
+          if(needsQuickLogTimeStep()){ renderQuickLogTimeStep(type, null, forPlayer); return; }
+          finishQuickLog(type, null, forPlayer);
+        });
+      });
+    }
   }
   function renderStarterStep(){
     const body = `
@@ -8563,7 +9076,7 @@ function openPlanLineupSubModal(fixtureId, quarterKey, pos, useActual){
           const wasSub = slot.b && slot.b !== slot.a;
           const projected = currentSubs - (wasSub?1:0) + 1;
           if(projected > f.bench){
-            alert(`Only ${f.bench} substitute${f.bench===1?'':'s'} are allowed per quarter (based on this match's bench size). Remove another substitution first.`);
+            alert(`Only ${f.bench} substitute${f.bench===1?'':'s'} are allowed per ${periodWord(f).toLowerCase()} (based on this match's bench size). Remove another substitution first.`);
             return;
           }
           slot.b = newId;
@@ -8657,7 +9170,7 @@ function openEditGoalModal(fixtureId, eventId){
     <div class="small" style="color:var(--ink-soft); margin-bottom:14px;">${isOppo ? 'Opponent goal' : (scorer?esc(scorer.name):'Unknown')+(ev.assist ? ', assist by '+esc(getPlayer(ev.assist)?getPlayer(ev.assist).name:'?') : '')}</div>
     <label>Period</label>
     <div class="toggle-group" id="edit-goal-quarter" data-selected="${ev.quarter}">
-      ${periodKeys(f).map((q,i)=>`<button type="button" class="${ev.quarter===i+1?'on':''}" data-quarter-opt="${i+1}">Q${i+1}</button>`).join('')}
+      ${periodKeys(f).map((q,i)=>`<button type="button" class="${ev.quarter===i+1?'on':''}" data-quarter-opt="${i+1}">${esc(periodBadgeLabel(f, i+1))}</button>`).join('')}
     </div>
     ${!isOppo ? `
     <label>Assisted by <span style="font-weight:400; color:var(--ink-soft);">— optional</span></label>
@@ -8667,7 +9180,7 @@ function openEditGoalModal(fixtureId, eventId){
     </select>` : ''}
     <label>When</label>
     <div class="toggle-group" id="edit-goal-time-mode" data-selected="${startMode}">
-      <button type="button" class="${startMode==='quarter'?'on':''}" data-time-mode-opt="quarter">Quarter mins</button>
+      <button type="button" class="${startMode==='quarter'?'on':''}" data-time-mode-opt="quarter">${periodWord(f)} mins</button>
       <button type="button" class="${startMode==='clock'?'on':''}" data-time-mode-opt="clock">Real time</button>
     </div>
     <div id="edit-goal-quarter-mode-fields" style="display:${startMode==='quarter'?'block':'none'};">
@@ -8675,7 +9188,7 @@ function openEditGoalModal(fixtureId, eventId){
       <div class="wheel-wrap">
         <div class="wheel-highlight"></div>
         <div class="wheel-scroll" id="edit-goal-minute-wheel" data-selected="${currentMinute}">
-          ${Array.from({length: mpp+1}, (_,i)=>i).map(m=>`<div class="wheel-item" data-value="${m}">${m}'</div>`).join('')}
+          ${Array.from({length: mpp+11}, (_,i)=>i).map(m=>`<div class="wheel-item" data-value="${m}">${m<=mpp?m+"'":'+'+(m-mpp)+"'"}</div>`).join('')}
         </div>
       </div>
     </div>
@@ -8685,7 +9198,7 @@ function openEditGoalModal(fixtureId, eventId){
     </div>
     <button class="btn amber" data-save-goal-edit="${fixtureId}|${eventId}">Save changes</button>
   `;
-  openModal(body);
+  openModal(body, {floating:true});
   attachModalHandlers();
   document.querySelectorAll('[data-quarter-opt]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
@@ -8737,9 +9250,97 @@ function openEditGoalModal(fixtureId, eventId){
     showSavedToast();
   };
 }
+function openEditCardModal(fixtureId, eventId){
+  // Same shape as openEditGoalModal (period + when), just without the scorer/assist
+  // fields a card has no use for - cards previously had no edit option anywhere.
+  const f = DATA.fixtures.find(x=>x.id===fixtureId);
+  if(!f) return;
+  const ev = (f.events||[]).find(e=>e.id===eventId);
+  if(!ev || (ev.type!=='yellowcard' && ev.type!=='redcard')) return;
+  const player = getPlayer(ev.player);
+  const mpp = f.minutesPerPeriod || DEFAULT_CONFIG.minutesPerPeriod;
+  const currentMinute = (typeof ev.minute==='number') ? ev.minute : Math.round(mpp/2);
+  const startMode = ev.clockTime ? 'clock' : 'quarter';
+  const body = `
+    <h3>Edit ${ev.type==='redcard'?'red':'yellow'} card</h3>
+    <button class="icon-x" data-close-modal>&times;</button>
+    <div class="small" style="color:var(--ink-soft); margin-bottom:14px;">${player?esc(player.name):'Unknown'}</div>
+    <label>Period</label>
+    <div class="toggle-group" id="edit-card-quarter" data-selected="${ev.quarter}">
+      ${periodKeys(f).map((q,i)=>`<button type="button" class="${ev.quarter===i+1?'on':''}" data-quarter-opt="${i+1}">${esc(periodBadgeLabel(f, i+1))}</button>`).join('')}
+    </div>
+    <label>When</label>
+    <div class="toggle-group" id="edit-card-time-mode" data-selected="${startMode}">
+      <button type="button" class="${startMode==='quarter'?'on':''}" data-time-mode-opt="quarter">${periodWord(f)} mins</button>
+      <button type="button" class="${startMode==='clock'?'on':''}" data-time-mode-opt="clock">Real time</button>
+    </div>
+    <div id="edit-card-quarter-mode-fields" style="display:${startMode==='quarter'?'block':'none'};">
+      <label>Minute</label>
+      <div class="wheel-wrap">
+        <div class="wheel-highlight"></div>
+        <div class="wheel-scroll" id="edit-card-minute-wheel" data-selected="${currentMinute}">
+          ${Array.from({length: mpp+11}, (_,i)=>i).map(m=>`<div class="wheel-item" data-value="${m}">${m<=mpp?m+"'":'+'+(m-mpp)+"'"}</div>`).join('')}
+        </div>
+      </div>
+    </div>
+    <div id="edit-card-clock-mode-fields" style="display:${startMode==='clock'?'block':'none'};">
+      <label>Time</label>
+      <input type="time" id="edit-card-clock-input" value="${esc(ev.clockTime||'')}">
+    </div>
+    <button class="btn amber" data-save-card-edit="${fixtureId}|${eventId}">Save changes</button>
+  `;
+  openModal(body, {floating:true});
+  attachModalHandlers();
+  document.querySelectorAll('#edit-card-quarter [data-quarter-opt]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const grp = document.getElementById('edit-card-quarter');
+      grp.dataset.selected = btn.dataset.quarterOpt;
+      grp.querySelectorAll('[data-quarter-opt]').forEach(b=> b.classList.toggle('on', b.dataset.quarterOpt===btn.dataset.quarterOpt));
+    });
+  });
+  const wheelEl = document.getElementById('edit-card-minute-wheel');
+  if(wheelEl) wheelEl.scrollTop = currentMinute * 40;
+  setupWheelPicker('edit-card-minute-wheel');
+  document.querySelectorAll('#edit-card-time-mode [data-time-mode-opt]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const grp = document.getElementById('edit-card-time-mode');
+      grp.dataset.selected = btn.dataset.timeModeOpt;
+      grp.querySelectorAll('[data-time-mode-opt]').forEach(b=> b.classList.toggle('on', b.dataset.timeModeOpt===btn.dataset.timeModeOpt));
+      document.getElementById('edit-card-quarter-mode-fields').style.display = btn.dataset.timeModeOpt==='quarter' ? 'block' : 'none';
+      document.getElementById('edit-card-clock-mode-fields').style.display = btn.dataset.timeModeOpt==='clock' ? 'block' : 'none';
+      if(btn.dataset.timeModeOpt==='clock'){
+        const clockInput = document.getElementById('edit-card-clock-input');
+        if(clockInput){
+          clockInput.focus();
+          try{ clockInput.showPicker(); }catch(e){ /* not supported on this browser */ }
+        }
+      }
+    });
+  });
+  const saveBtn = document.querySelector('[data-save-card-edit]');
+  if(saveBtn) saveBtn.onclick = ()=>{
+    ev.quarter = parseInt(document.getElementById('edit-card-quarter').dataset.selected);
+    const mode = document.getElementById('edit-card-time-mode').dataset.selected;
+    if(mode==='clock'){
+      const clockVal = document.getElementById('edit-card-clock-input').value;
+      if(!clockVal){ alert('Please set a time'); return; }
+      ev.clockTime = clockVal;
+      delete ev.minute;
+    } else {
+      ev.minute = parseInt(document.getElementById('edit-card-minute-wheel').dataset.selected);
+      delete ev.clockTime;
+    }
+    saveData();
+    closeModal();
+    render();
+    showSavedToast();
+  };
+}
 function openGoalModal(fixtureId){
   const f = DATA.fixtures.find(x=>x.id===fixtureId);
-  const squad = availablePlayersForFixture(f);
+  // Someone already sent off can't score (or be credited with an assist, further down
+  // in this same flow) - leave them off the list entirely.
+  const squad = availablePlayersForFixture(f).filter(p=>!hasRedCard(f, p.id));
   renderScorerStep();
   function renderScorerStep(){
     const body = `
@@ -8814,14 +9415,14 @@ function openGoalModal(fixtureId){
       <button class="icon-x" data-close-modal>&times;</button>
       <div class="small" style="color:var(--ink-soft); margin-bottom:10px;">Goal: <strong style="color:var(--ink);">${esc(scorer.name)}</strong> — Q${q}</div>
       <div class="toggle-group" id="goal-time-mode" data-selected="quarter">
-        <button type="button" class="on" data-goal-time-mode-opt="quarter">Quarter mins</button>
+        <button type="button" class="on" data-goal-time-mode-opt="quarter">${periodWord(f)} mins</button>
         <button type="button" data-goal-time-mode-opt="clock">Real time</button>
       </div>
       <div id="goal-quarter-mode-fields">
         <div class="wheel-wrap">
           <div class="wheel-highlight"></div>
           <div class="wheel-scroll" id="goal-minute-wheel" data-selected="${defaultMinute}">
-            ${Array.from({length: mpp+1}, (_,i)=>i).map(m=>`<div class="wheel-item" data-value="${m}">${m}'</div>`).join('')}
+            ${Array.from({length: mpp+11}, (_,i)=>i).map(m=>`<div class="wheel-item" data-value="${m}">${m<=mpp?m+"'":'+'+(m-mpp)+"'"}</div>`).join('')}
           </div>
         </div>
       </div>
@@ -8874,7 +9475,9 @@ function openGoalModal(fixtureId){
 }
 function openCardModal(fixtureId, type){
   const f = DATA.fixtures.find(x=>x.id===fixtureId);
-  const squad = availablePlayersForFixture(f);
+  // Someone already sent off can't pick up a further card - leave them off the list
+  // entirely rather than let the coach select them and get a confusing second red.
+  const squad = availablePlayersForFixture(f).filter(p=>!hasRedCard(f, p.id));
   const cardLabel = type==='yellowcard' ? 'Yellow card' : 'Red card';
   const cardIcon = type==='yellowcard' ? '🟨' : '🟥';
   renderPlayerStep();
@@ -8917,7 +9520,7 @@ function openCardModal(fixtureId, type){
       <div class="wheel-wrap">
         <div class="wheel-highlight"></div>
         <div class="wheel-scroll" id="card-minute-wheel" data-selected="${defaultMinute}">
-          ${Array.from({length: mpp+1}, (_,i)=>i).map(m=>`<div class="wheel-item" data-value="${m}">${m}'</div>`).join('')}
+          ${Array.from({length: mpp+11}, (_,i)=>i).map(m=>`<div class="wheel-item" data-value="${m}">${m<=mpp?m+"'":'+'+(m-mpp)+"'"}</div>`).join('')}
         </div>
       </div>
       <button class="btn amber" data-confirm-card-minute>Log ${cardLabel.toLowerCase()}</button>
@@ -8937,11 +9540,13 @@ function openCardModal(fixtureId, type){
     const ev = {id:uid(), type, player:playerId, quarter:currentEventQuarter(f), loggedAt:new Date().toISOString()};
     if(typeof minute === 'number') ev.minute = minute;
     f.events.push(ev);
+    const autoRed = type==='yellowcard' ? checkSecondYellowAutoRed(f, playerId, ev.quarter) : false;
     saveData();
     closeModal();
     render();
     const player = getPlayer(playerId);
     showCardAnimation(player ? player.name : 'Player', type);
+    if(autoRed) setTimeout(()=> showCardAnimation(player ? player.name : 'Player', 'redcard'), 1900);
   }
 }
 function openEventModal(fixtureId, type){
@@ -8960,9 +9565,9 @@ function openEventModal(fixtureId, type){
       </div>
       <button class="btn amber" data-confirm-penalty="${fixtureId}">Add penalty</button>`;
   } else if(type==='comment'){
-    body = `<h3>Quarter note</h3>
+    body = `<h3>${periodWord(f)} note</h3>
       <button class="icon-x" data-close-modal>&times;</button>
-      <label>Note for Q${f.liveState.quarter}</label>
+      <label>Note for ${esc(periodBadgeLabel(f, f.liveState.quarter))}</label>
       <textarea id="ev-comment" placeholder="e.g. Pressed well, lost shape late">${esc(f.quarterComments['q'+currentEventQuarter(f)]||'')}</textarea>
       <button class="btn amber" data-confirm-comment="${fixtureId}">Save note</button>`;
   }
@@ -8980,65 +9585,93 @@ function openEventModal(fixtureId, type){
 }
 
 function openDynamicAwardsModal(fixtureId, isEndOfMatch){
+  // Rebuilt to use the same themed, in-app player picker the rest of the app uses
+  // instead of a bare native <select> - a native select here was rendering outside
+  // the app's own styling (showing as a plain system-coloured bar, not matching the
+  // theme at all) and opening its dropdown wasn't reliable in this modal context on
+  // every device.
   const f = DATA.fixtures.find(x=>x.id===fixtureId);
   if(!f) return;
   if(!f.awardRecords) f.awardRecords = {};
   const squad = availablePlayersForFixture(f).filter(p=>computeActualMinutes(f,p.id)>0);
   const activeAwards = DATA.awardTypes.filter(a=>a.active);
-  const body = `
+  const playerDraft = {}, descDraft = {};
+  activeAwards.forEach(a=>{
+    const rec = f.awardRecords[a.id] || {};
+    playerDraft[a.id] = rec.playerId || null;
+    descDraft[a.id] = rec.description || '';
+  });
+  const renderBody = ()=> `
     <h3>Match awards</h3>
     <button class="icon-x" data-close-modal>&times;</button>
     <div class="small" style="color:var(--ink-soft); margin-bottom:16px;">
       Generated from your Awards config in My Team.
     </div>
     ${activeAwards.length===0 ? `<div class="card"><div class="small" style="color:var(--ink-soft);">No active awards configured. Add some in Settings &rarr; Awards.</div></div>` : activeAwards.map(a=>{
-      const rec = f.awardRecords[a.id] || {};
+      const currentPlayer = playerDraft[a.id] ? getPlayer(playerDraft[a.id]) : null;
       return `
       <div class="card" style="margin-bottom:10px;">
         <div style="font-weight:700; font-family:'Oswald',sans-serif; font-size:14.5px; color:var(--ink); margin-bottom:8px;">${esc(a.name)}</div>
-        ${a.linkedToPlayer ? `
-          <select data-dyn-award-player="${a.id}">
-            <option value="">Select player</option>
-            ${squad.map(p=>`<option value="${p.id}" ${rec.playerId===p.id?'selected':''}>${esc(p.name)}</option>`).join('')}
-          </select>` : ''}
-        ${a.hasDescription ? `<textarea data-dyn-award-desc="${a.id}" placeholder="Description / comments">${esc(rec.description||'')}</textarea>` : ''}
+        ${a.linkedToPlayer ? pickerFieldHtml('dyn-award-'+a.id, currentPlayer) : ''}
+        ${a.hasDescription ? `<textarea data-dyn-award-desc="${a.id}" placeholder="Description / comments" style="${a.linkedToPlayer?'margin-top:10px;':''}">${esc(descDraft[a.id])}</textarea>` : ''}
         ${!a.linkedToPlayer && !a.hasDescription ? `<div class="small" style="color:var(--ink-soft);">No player or description configured for this award — nothing to record.</div>` : ''}
       </div>`;
     }).join('')}
-    <button class="btn amber" data-save-dynamic-awards="${fixtureId}">${activeAwards.length===0 ? 'Close' : 'Save'}</button>
+    <button class="btn primary" data-save-dynamic-awards="${fixtureId}">${activeAwards.length===0 ? 'Close' : 'Save'}</button>
   `;
-  openModal(body);
-  attachModalHandlers();
-  const saveBtn = document.querySelector('[data-save-dynamic-awards]');
-  if(saveBtn) saveBtn.onclick = ()=>{
+  const captureDescriptions = ()=>{
     activeAwards.forEach(a=>{
-      const rec = f.awardRecords[a.id] || {};
-      if(a.linkedToPlayer){
-        const sel = document.querySelector(`[data-dyn-award-player="${a.id}"]`);
-        rec.playerId = sel && sel.value ? sel.value : null;
-      }
       if(a.hasDescription){
         const ta = document.querySelector(`[data-dyn-award-desc="${a.id}"]`);
-        rec.description = ta ? ta.value : '';
-      }
-      f.awardRecords[a.id] = rec;
-      // Linked by id (not name) so this still works even if the award gets renamed later.
-      if(a.legacyMapping==='motm'){
-        f.motm = rec.playerId || null;
-      } else if(a.legacyMapping==='moment'){
-        f.moment = rec.description || '';
-        f.momentPlayer = rec.playerId || null;
+        if(ta) descDraft[a.id] = ta.value;
       }
     });
-    saveData();
-    showSavedToast();
-    if(isEndOfMatch){
-      openMatchSummaryPrompt(fixtureId);
-    } else {
-      closeModal();
-      render();
-    }
   };
+  const rerender = ()=>{
+    openModal(renderBody(), {floating:true});
+    attachModalHandlers();
+    wireUp();
+  };
+  function wireUp(){
+    document.querySelectorAll('[data-picker-field^="dyn-award-"]').forEach(field=>{
+      field.addEventListener('click', ()=>{
+        const awardId = field.dataset.pickerField.replace('dyn-award-', '');
+        const a = DATA.awardTypes.find(x=>x.id===awardId);
+        if(!a) return;
+        openSimplePlayerPicker(a.name, squad, playerDraft[awardId], true, (val)=>{
+          captureDescriptions();
+          playerDraft[awardId] = val;
+          rerender();
+        });
+      });
+    });
+    const saveBtn = document.querySelector('[data-save-dynamic-awards]');
+    if(saveBtn) saveBtn.onclick = ()=>{
+      captureDescriptions();
+      activeAwards.forEach(a=>{
+        const rec = f.awardRecords[a.id] || {};
+        if(a.linkedToPlayer) rec.playerId = playerDraft[a.id] || null;
+        if(a.hasDescription) rec.description = descDraft[a.id] || '';
+        f.awardRecords[a.id] = rec;
+        // Linked by id (not name) so this still works even if the award gets renamed later.
+        if(a.legacyMapping==='motm'){
+          f.motm = rec.playerId || null;
+        } else if(a.legacyMapping==='moment'){
+          f.moment = rec.description || '';
+          f.momentPlayer = rec.playerId || null;
+        }
+      });
+      saveData();
+      showSavedToast();
+      if(isEndOfMatch){
+        openMatchSummaryPrompt(fixtureId);
+      } else {
+        closeModal();
+        render();
+      }
+    };
+  }
+  rerender();
 }
 function openMatchSummaryPrompt(fixtureId){
   const body = `
@@ -9050,7 +9683,7 @@ function openMatchSummaryPrompt(fixtureId){
       <button class="btn amber" data-summary-yes="${fixtureId}" style="flex:1; margin-bottom:0;">Yes</button>
     </div>
   `;
-  openModal(body);
+  openModal(body, {floating:true});
   attachModalHandlers();
   const noBtn = document.querySelector('[data-summary-no]');
   if(noBtn) noBtn.onclick = ()=>{ closeModal(); render(); };
@@ -9067,7 +9700,7 @@ function openMatchSummaryEditor(fixtureId){
     <div class="small" style="color:var(--ink-soft); text-align:right; margin-top:-10px; margin-bottom:14px;"><span id="summary-char-count">${(f.matchSummary||'').length}</span>/1000</div>
     <button class="btn amber" data-save-match-summary="${fixtureId}">Save summary</button>
   `;
-  openModal(body);
+  openModal(body, {floating:true});
   attachModalHandlers();
   const ta = document.getElementById('match-summary-text');
   const counter = document.getElementById('summary-char-count');
@@ -9144,7 +9777,12 @@ function attachHandlers(){
 
   document.querySelectorAll('[data-back-to-fixture]').forEach(el=>{
     el.addEventListener('click', ()=>{
-      stopTimer();
+      // Deliberately NOT stopping the timer here - the match clock should keep
+      // counting down in real time even while browsing elsewhere in the app, not
+      // freeze and pick up from a stale value whenever the coach comes back to it.
+      // The interval that's already running keeps ticking in the background
+      // regardless of which screen is on display; renderLive()'s own resume check
+      // covers the case where it somehow isn't (e.g. after a page reload).
       const fid = el.dataset.backToFixture;
       homeTab = 'fixtures';
       highlightFixtureId = fid;
@@ -9287,7 +9925,7 @@ function attachHandlers(){
             if(s.b && s.b !== s.a) projectedSubs++;
           });
           if(projectedSubs > f.bench){
-            alert(`Only ${f.bench} substitute${f.bench===1?'':'s'} are allowed per quarter (based on this match's bench size). This swap would exceed that — remove another substitution first.`);
+            alert(`Only ${f.bench} substitute${f.bench===1?'':'s'} are allowed per ${periodWord(f).toLowerCase()} (based on this match's bench size). This swap would exceed that — remove another substitution first.`);
             render();
             return;
           }
@@ -9317,7 +9955,7 @@ function attachHandlers(){
         const currentSubs = subsUsedInQuarter(f,q);
         const projected = currentSubs - (wasSub?1:0) + (willBeSub?1:0);
         if(projected > f.bench){
-          alert(`Only ${f.bench} substitute${f.bench===1?'':'s'} are allowed per quarter (based on this match's bench size). Remove another substitution first.`);
+          alert(`Only ${f.bench} substitute${f.bench===1?'':'s'} are allowed per ${periodWord(f).toLowerCase()} (based on this match's bench size). Remove another substitution first.`);
           render();
           return;
         }
@@ -9362,7 +10000,7 @@ function attachHandlers(){
             if(s.b && s.b !== s.a) projectedSubs++;
           });
           if(projectedSubs > f.bench){
-            alert(`Only ${f.bench} substitute${f.bench===1?'':'s'} are allowed per quarter (based on this match's bench size). This swap would exceed that — remove another substitution first.`);
+            alert(`Only ${f.bench} substitute${f.bench===1?'':'s'} are allowed per ${periodWord(f).toLowerCase()} (based on this match's bench size). This swap would exceed that — remove another substitution first.`);
             render();
             return;
           }
@@ -9392,7 +10030,7 @@ function attachHandlers(){
         const currentSubs = subsUsedInLineup(f.actualLineup, f.positions, q);
         const projected = currentSubs - (wasSub?1:0) + (willBeSub?1:0);
         if(projected > f.bench){
-          alert(`Only ${f.bench} substitute${f.bench===1?'':'s'} are allowed per quarter (based on this match's bench size). Remove another substitution first.`);
+          alert(`Only ${f.bench} substitute${f.bench===1?'':'s'} are allowed per ${periodWord(f).toLowerCase()} (based on this match's bench size). Remove another substitution first.`);
           render();
           return;
         }
@@ -9433,6 +10071,12 @@ function attachHandlers(){
     el.addEventListener('click', ()=>{
       const [fixtureId, eventId] = el.dataset.editGoal.split('|');
       openEditGoalModal(fixtureId, eventId);
+    });
+  });
+  document.querySelectorAll('[data-edit-card]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const [fixtureId, eventId] = el.dataset.editCard.split('|');
+      openEditCardModal(fixtureId, eventId);
     });
   });
   document.querySelectorAll('[data-delete-event]').forEach(el=>{
@@ -9530,7 +10174,7 @@ function attachHandlers(){
       reviewMode = true;
       reviewFixtureId = fid;
       liveViewingQuarter = 1;
-      liveTab = 'timeline';
+      liveTab = 'test';
       go(VIEW.tab, 'live', {id:fid});
     });
   });
@@ -9642,17 +10286,28 @@ function attachHandlers(){
     if(f.liveState.running) startTimer(f.id); else stopTimer();
     render();
   });
+  document.querySelectorAll('[data-enlarge-timer-toggle]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const f = DATA.fixtures.find(x=>x.id===el.dataset.enlargeTimerToggle);
+      if(!f) return;
+      f.liveState.running = !f.liveState.running;
+      saveData();
+      if(f.liveState.running) startTimer(f.id); else stopTimer();
+      render();
+    });
+  });
   const nextQ = document.querySelector('[data-next-quarter]');
   if(nextQ) nextQ.addEventListener('click', ()=>{
     const f = DATA.fixtures.find(x=>x.id===VIEW.params.id);
     if(!f) return;
     if(f.liveState.quarter >= f.periods){
-      openFinishMatchConfirm(f.id);
+      openEndGameConfirm(f.id);
     } else {
       // The score is already kept live-synced as Goal/Oppo goal events are logged, so
       // there's nothing left to confirm here - just move straight into the next period.
       f.liveState.quarter = Math.min(f.periods, f.liveState.quarter+1);
       f.liveState.secondsLeft = f.minutesPerPeriod * 60;
+      f.liveState.stoppageSeconds = 0;
       f.liveState.running = false;
       liveViewingQuarter = null;
       stopTimer();
@@ -9783,7 +10438,7 @@ function attachHandlers(){
     });
   });
   const finishBtn = document.querySelector('[data-finish-match]');
-  if(finishBtn) finishBtn.addEventListener('click', ()=> openFinishMatchConfirm(finishBtn.dataset.finishMatch));
+  if(finishBtn) finishBtn.addEventListener('click', ()=> openEndGameConfirm(finishBtn.dataset.finishMatch));
 
   // result detail
   document.querySelectorAll('[data-rd-tab]').forEach(btn=>{
@@ -9902,22 +10557,6 @@ function attachHandlers(){
   if(delPlayer) delPlayer.addEventListener('click', ()=> openDeletePlayerConfirm(delPlayer.dataset.deletePlayer));
 
   // team setup assistant wizard
-  document.querySelectorAll('[data-notif-toggle]').forEach(el=>{
-    el.addEventListener('click', ()=>{
-      const key = el.dataset.notifToggle;
-      DATA.notifications[key] = !DATA.notifications[key];
-      saveData();
-      render();
-    });
-  });
-  document.querySelectorAll('[data-notif-days]').forEach(el=>{
-    el.addEventListener('change', ()=>{
-      const key = el.dataset.notifDays;
-      DATA.notifications[key] = parseInt(el.value);
-      saveData();
-      render();
-    });
-  });
   const openWizardBtn = document.querySelector('[data-open-team-wizard]');
   if(openWizardBtn) openWizardBtn.addEventListener('click', ()=>{
     teamSetupWizard = { step:1, teamName:'', teamNickname:'', themeColor:'red', teamBadge:null, ageGroup:null, managerName:'', players:[], showValidation:false };
@@ -10406,7 +11045,17 @@ function attachHandlers(){
   });
   document.querySelectorAll('[data-enlarge-grid-pitch]').forEach(el=>{
     el.addEventListener('click', ()=>{
-      gridPitchEnlargedQuarter = parseInt(el.dataset.enlargeGridPitch);
+      setEnlargedQuarter(parseInt(el.dataset.enlargeGridPitch));
+      render();
+    });
+  });
+  document.querySelectorAll('[data-return-to-live-grid]').forEach(el=>{
+    el.addEventListener('click', (e)=>{
+      // Sits inside a not-yet-played quarter's own tappable cell - without stopping
+      // the event here, this would also enlarge that quarter instead of jumping to
+      // the live one.
+      e.stopPropagation();
+      setEnlargedQuarter(parseInt(el.dataset.returnToLiveGrid));
       render();
     });
   });
@@ -10495,7 +11144,53 @@ function attachHandlers(){
   setupPitchQuarterSwipe('fixture-editor-pitch-holder');
   setupPitchQuarterSwipe('result-pitch-holder');
   setupPitchQuarterSwipe('test-pitch-holder');
-  setupPitchQuarterSwipe('grid-pitch-enlarge-pitch', ()=>gridPitchEnlargedQuarter, (v)=>{ gridPitchEnlargedQuarter = v; });
+  setupPitchQuarterSwipe('grid-pitch-enlarge-pitch', ()=>gridPitchEnlargedQuarter, setEnlargedQuarter);
+  document.querySelectorAll('[data-enlarge-prev-quarter]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      if(gridPitchEnlargedQuarter > 1){
+        pitchQuarterTransitionDir = -1;
+        setEnlargedQuarter(gridPitchEnlargedQuarter - 1);
+        render();
+      }
+    });
+  });
+  document.querySelectorAll('[data-enlarge-next-quarter]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const f = DATA.fixtures.find(x=>x.id===VIEW.params.id);
+      if(!f) return;
+      const isThisQuarterLive = VIEW.screen==='live' && f.status!=='finished' && !!f.liveState && !(reviewMode && reviewFixtureId===f.id) && gridPitchEnlargedQuarter===f.liveState.quarter;
+      // Tapping Next while actually viewing the live quarter means "I'm done with
+      // this one" - jump into starting the next quarter rather than just browsing to
+      // it. Browsing Next from anywhere else (catching up toward live, or peeking
+      // ahead) stays pure navigation.
+      if(isThisQuarterLive){
+        if(gridPitchEnlargedQuarter < periodKeys(f).length){
+          openStartQuarterModal(f.id, gridPitchEnlargedQuarter + 1);
+        }
+        return;
+      }
+      if(gridPitchEnlargedQuarter < periodKeys(f).length){
+        pitchQuarterTransitionDir = 1;
+        setEnlargedQuarter(gridPitchEnlargedQuarter + 1);
+        render();
+      }
+    });
+  });
+  document.querySelectorAll('[data-enlarge-game-ended]').forEach(btn=>{
+    btn.addEventListener('click', ()=> openEndGameConfirm(VIEW.params.id));
+  });
+  document.querySelectorAll('[data-enlarge-return-to-live]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const f = DATA.fixtures.find(x=>x.id===VIEW.params.id);
+      if(!f || !f.liveState) return;
+      pitchQuarterTransitionDir = gridPitchEnlargedQuarter < f.liveState.quarter ? 1 : -1;
+      setEnlargedQuarter(f.liveState.quarter);
+      render();
+    });
+  });
+  document.querySelectorAll('[data-start-this-quarter]').forEach(btn=>{
+    btn.addEventListener('click', ()=> openStartQuarterModal(VIEW.params.id, parseInt(btn.dataset.startThisQuarter)));
+  });
   if(VIEW.screen==='matchSetup'){
     // Bound to its own touch-action:pan-y area rather than .content directly - the
     // browser's native scroll handling on a plain scrollable element can swallow a
@@ -10589,6 +11284,12 @@ function attachHandlers(){
   if(fixtureEditorLink) fixtureEditorLink.addEventListener('click', ()=> go(VIEW.tab,'fixtureEditor',{id:fixtureEditorLink.dataset.openFixtureEditorLink}));
   document.querySelectorAll('[data-view-player-mins]').forEach(btn=>{
     btn.addEventListener('click', ()=> openPlanMinutesReviewModal(btn.dataset.viewPlayerMins, btn.dataset.useActual==='true'));
+  });
+  document.querySelectorAll('[data-log-oppo-goal-marker]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const [fixtureId, quarterNum] = btn.dataset.logOppoGoalMarker.split('|');
+      openLogOppoGoalConfirm(fixtureId, parseInt(quarterNum));
+    });
   });
   document.querySelectorAll('[data-review-minutes-tab]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
@@ -10688,20 +11389,27 @@ function attachModalHandlers(){
 
 function startTimer(fixtureId){
   stopTimer();
+  timerFixtureId = fixtureId;
   timerInterval = setInterval(()=>{
     const f = DATA.fixtures.find(x=>x.id===fixtureId);
     if(!f || !f.liveState.running){ stopTimer(); return; }
     if(f.liveState.secondsLeft>0){
       f.liveState.secondsLeft--;
-      const t = document.querySelector('.scoreboard .timer');
-      if(t){ const m=Math.floor(f.liveState.secondsLeft/60), s=(f.liveState.secondsLeft%60).toString().padStart(2,'0'); t.textContent = `${m}:${s}`; }
+      // Updates every matching element, not just the first - the enlarged pitch view
+      // shows its own copy of this same clock, and both need to tick together.
+      const m=Math.floor(f.liveState.secondsLeft/60), s=(f.liveState.secondsLeft%60).toString().padStart(2,'0');
+      document.querySelectorAll('.scoreboard .timer').forEach(t=>{ t.textContent = `${m}m ${s}s`; t.classList.remove('stoppage'); });
       updateLiveMinutesTracker(f);
       if(f.liveState.secondsLeft % 10 === 0) saveData();
     } else {
-      f.liveState.running = false;
-      stopTimer();
-      saveData();
-      render();
+      // Regular time's up - count stoppage time upward instead of just stopping, so
+      // the clock (and anything logged against it) keeps reflecting what's actually
+      // happening until the coach ends the period themselves.
+      f.liveState.stoppageSeconds = (f.liveState.stoppageSeconds||0) + 1;
+      const sm=Math.floor(f.liveState.stoppageSeconds/60), ss=(f.liveState.stoppageSeconds%60).toString().padStart(2,'0');
+      document.querySelectorAll('.scoreboard .timer').forEach(t=>{ t.textContent = `+${sm}m ${ss}s`; t.classList.add('stoppage'); });
+      updateLiveMinutesTracker(f);
+      if(f.liveState.stoppageSeconds % 10 === 0) saveData();
     }
   }, 1000);
 }
@@ -10725,7 +11433,7 @@ function updateLiveMinutesTracker(f){
     }
   });
 }
-function stopTimer(){ clearInterval(timerInterval); timerInterval = null; }
+function stopTimer(){ clearInterval(timerInterval); timerInterval = null; timerFixtureId = null; }
 
 // Swipe right from the left edge to go back, mirroring iOS's edge-swipe gesture.
 // Reuses whatever .backbar is currently on screen rather than tracking its own
