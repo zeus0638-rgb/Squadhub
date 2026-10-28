@@ -3633,9 +3633,10 @@ function renderMatchSetup(id){
         </div>
       </div>`;
     };
+    const availablePlayerCount = sortedPlayers.filter(p=> (f.playerAvailability||{})[p.id]==='available').length;
     tabHtml = `
     <div class="row" style="margin-top:0; align-items:center;">
-      <div class="section-title" style="margin:0;">Players</div>
+      <div class="section-title" style="margin:0; display:flex; align-items:baseline; gap:8px;">Players${sortedPlayers.length>0 ? `<span class="small" style="color:var(--ink-soft); font-weight:500; text-transform:none; letter-spacing:normal;">${availablePlayerCount} selected</span>` : ''}</div>
       ${sortedPlayers.length>0 ? `<span data-select-all-availability="player" style="color:var(--pitch); font-weight:600; font-size:13px; text-decoration:underline; cursor:pointer;">Select all</span>` : ''}
     </div>
     <div class="card">
@@ -4115,7 +4116,13 @@ function renderCurrentQuarterGrid(f, squad, quarterNum){
 }
 function renderPitchFormation(f, quarterKey, opts){
   opts = opts || {};
-  const lineup = f.actualLineup || f.lineup;
+  // Must respect opts.useActual rather than just preferring whichever field
+  // happens to exist - a fixture can have both f.lineup (the plan) and
+  // f.actualLineup (what really happened) populated at once, and blindly
+  // picking actualLineup whenever it's present meant markers kept showing
+  // the old plan after auto-generate updated f.lineup, while the tap-to-edit
+  // popup correctly read the field the caller actually asked for.
+  const lineup = opts.useActual ? (f.actualLineup || f.lineup) : (f.lineup || f.actualLineup);
   // An award badge only means something next to the starter's own name - showing it
   // on a marker because the SUB happened to win it would read as if the starter did.
   // And a player who started every quarter shouldn't carry the trophy on every one of
