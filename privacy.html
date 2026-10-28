@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SquadHub Privacy Policy</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --ink: #1a1a1a;
+    --ink-soft: #5a5a5a;
+    --accent: #087E53;
+    --line: #e5e5e5;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f0f0f;
+      --ink: #f0f0f0;
+      --ink-soft: #a8a8a8;
+      --accent: #3FBF93;
+      --line: #2a2a2a;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f0f0f;
+    --ink: #f0f0f0;
+    --ink-soft: #a8a8a8;
+    --accent: #3FBF93;
+    --line: #2a2a2a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  }
+  .wrap {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 40px 20px 80px;
+  }
+  .icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 14px;
+    background: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 20px;
+  }
+  .icon svg { width: 30px; height: 30px; }
+  h1 {
+    font-size: 26px;
+    font-weight: 700;
+    margin: 0 0 4px;
+  }
+  .updated {
+    color: var(--ink-soft);
+    font-size: 14px;
+    margin-bottom: 32px;
+  }
+  h2 {
+    font-size: 18px;
+    font-weight: 700;
+    margin: 36px 0 10px;
+    color: var(--accent);
+  }
+  p { margin: 0 0 14px; }
+  ul { margin: 0 0 14px; padding-left: 22px; }
+  li { margin-bottom: 8px; }
+  strong { font-weight: 600; }
+  .contact-box {
+    margin-top: 10px;
+    padding: 16px 18px;
+    border: 1.5px solid var(--line);
+    border-radius: 10px;
+    font-weight: 600;
+  }
+  .footer-note {
+    margin-top: 48px;
+    padding-top: 20px;
+    border-top: 1px solid var(--line);
+    color: var(--ink-soft);
+    font-size: 13px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="icon">
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="12" cy="12" r="9" stroke="white" stroke-width="1.6"/>
+      <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" stroke="white" stroke-width="1.6" stroke-linecap="round"/>
+    </svg>
+  </div>
+
+  <h1>SquadHub Privacy Policy</h1>
+  <div class="updated">Last updated: 28 October 2026</div>
+
+  <p>SquadHub is a matchday and squad management app built for grassroots football coaches. This policy explains what information SquadHub collects, why, and how it's handled.</p>
+
+  <h2>Who this policy covers</h2>
+  <p>SquadHub is used by team coaches and administrators ("you") to manage a football team. It isn't designed to be used directly by children. Any player information in the app — including that of minors — is entered and managed by an adult coach or team administrator on the team's behalf, not by the players themselves.</p>
+
+  <h2>Information we collect</h2>
+  <p><strong>Account information.</strong> To use SquadHub, you create an account using an email address and password, or by signing in with Google. We receive your email address and, if you use Google sign-in, basic profile information (name, email) from Google.</p>
+  <p><strong>Team and squad data.</strong> The core purpose of the app is to store and manage:</p>
+  <ul>
+    <li>Player names, shirt numbers, positions, and availability</li>
+    <li>Match statistics tied to those names (goals, assists, cards, minutes played)</li>
+    <li>Coach and team administrator names, roles, and contact details</li>
+    <li>Coaching qualification records (e.g. First Aid, DBS, Safeguarding) — specifically the qualification type and obtained/expiry dates. SquadHub does not store or request copies of certificates, ID documents, or DBS certificate numbers.</li>
+    <li>Team identity details (team name, badge image, home ground, competition/league details)</li>
+    <li>Fixture and result data (opponents, scores, dates, venues)</li>
+  </ul>
+  <p><strong>Photos (optional).</strong> You may optionally upload a photo for a player, coach, or the team badge. This is entirely optional — the app is fully functional without it.</p>
+  <p><strong>We do not collect:</strong> payment information (the app is free with no in-app purchases), precise location data, device contacts, or any information directly from players, including minors. We do not use the app's content to serve ads — SquadHub does not show ads at all.</p>
+
+  <h2>How information is stored</h2>
+  <p>Your team's data is stored in two places:</p>
+  <ul>
+    <li><strong>On your device</strong>, so the app works offline and loads quickly.</li>
+    <li><strong>In the cloud</strong> (via Supabase, our database provider), once you're signed in — this lets your data sync across your own devices and be shared with other coaches you've invited to the same team.</li>
+  </ul>
+  <p>Data is only visible to coaches who have been explicitly invited to a team. Teams are kept separate from one another — coaches on one team cannot see another team's data.</p>
+
+  <h2>How information is used</h2>
+  <p>Information you enter is used solely to provide the app's functionality: building lineups, tracking matches, recording results and statistics, and managing your coaching staff's qualifications. We do not use your data for advertising, and we do not sell, rent, or share your data with third parties for marketing purposes.</p>
+
+  <h2>Children's information</h2>
+  <p>SquadHub is a tool for adults (coaches) to manage information about a youth team. While player records may include the names of minors, this information is entered and controlled entirely by the coach or team administrator — children do not create accounts, log in, or interact with the app directly. If you are a parent or guardian and have concerns about your child's information being recorded by a team using SquadHub, please contact the coach or club directly, as they control what is entered. You can also contact us using the details below and we will assist in removing specific records on request.</p>
+
+  <h2>Your control over your data</h2>
+  <ul>
+    <li><strong>Export:</strong> You can export a full backup of your team's data at any time from within the app.</li>
+    <li><strong>Deletion:</strong> You can delete individual records (players, coaches, fixtures) at any time within the app. To delete your account and all associated cloud data entirely, contact us using the details below.</li>
+    <li><strong>Switching teams:</strong> If you coach multiple teams, each is kept as a separate, independent set of data.</li>
+  </ul>
+
+  <h2>Third-party services</h2>
+  <p>SquadHub uses the following third-party services to operate:</p>
+  <ul>
+    <li><strong>Supabase</strong> — for account authentication and cloud data storage.</li>
+    <li><strong>Google Sign-In</strong> — as an optional way to log in, if you choose to use it.</li>
+  </ul>
+  <p>These providers may process data on our behalf as part of delivering the service, under their own privacy and security commitments. We do not use any third-party advertising or analytics services.</p>
+
+  <h2>Data security</h2>
+  <p>We take reasonable technical measures to protect your data, including access controls that ensure only invited coaches can view a given team's information. No method of storage or transmission is 100% secure, but we are not aware of any security incidents affecting SquadHub user data.</p>
+
+  <h2>Changes to this policy</h2>
+  <p>If this policy changes, we'll update the date at the top of this page. Continued use of the app after a change means you accept the updated policy.</p>
+
+  <h2>Contact us</h2>
+  <p>If you have questions about this policy or how your data is handled, contact:</p>
+  <div class="contact-box">[YOUR EMAIL ADDRESS]</div>
+
+  <div class="footer-note">SquadHub — grassroots football, enjoy it.</div>
+</div>
+</body>
+</html>
