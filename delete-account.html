@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Delete Your SquadHub Account</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --ink: #1a1a1a;
+    --ink-soft: #5a5a5a;
+    --accent: #087E53;
+    --line: #e5e5e5;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f0f0f;
+      --ink: #f0f0f0;
+      --ink-soft: #a8a8a8;
+      --accent: #3FBF93;
+      --line: #2a2a2a;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f0f0f;
+    --ink: #f0f0f0;
+    --ink-soft: #a8a8a8;
+    --accent: #3FBF93;
+    --line: #2a2a2a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  }
+  .wrap {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 40px 20px 80px;
+  }
+  .icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 14px;
+    background: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 20px;
+  }
+  .icon svg { width: 28px; height: 28px; }
+  h1 {
+    font-size: 26px;
+    font-weight: 700;
+    margin: 0 0 4px;
+  }
+  .updated {
+    color: var(--ink-soft);
+    font-size: 14px;
+    margin-bottom: 32px;
+  }
+  h2 {
+    font-size: 18px;
+    font-weight: 700;
+    margin: 36px 0 10px;
+    color: var(--accent);
+  }
+  p { margin: 0 0 14px; }
+  ul, ol { margin: 0 0 14px; padding-left: 22px; }
+  li { margin-bottom: 8px; }
+  strong { font-weight: 600; }
+  .steps {
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
+    border: 1.5px solid var(--accent);
+    border-radius: 12px;
+    padding: 20px 20px 4px;
+    margin: 16px 0 28px;
+  }
+  .steps ol { padding-left: 20px; }
+  .steps li { margin-bottom: 14px; }
+  .contact-box {
+    margin-top: 10px;
+    padding: 16px 18px;
+    border: 1.5px solid var(--line);
+    border-radius: 10px;
+    font-weight: 600;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 20px;
+    font-size: 14.5px;
+  }
+  th, td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  th {
+    color: var(--ink-soft);
+    font-weight: 600;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+  .footer-note {
+    margin-top: 48px;
+    padding-top: 20px;
+    border-top: 1px solid var(--line);
+    color: var(--ink-soft);
+    font-size: 13px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="icon">
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </div>
+
+  <h1>Delete Your SquadHub Account</h1>
+  <div class="updated">Last updated: 28 October 2026</div>
+
+  <p>If you no longer want to use SquadHub, you can request that your account and the data associated with it be deleted. This page explains how to do that, and exactly what happens to your data when you do.</p>
+
+  <h2>How to request deletion</h2>
+  <div class="steps">
+    <ol>
+      <li>Email <strong>squadhubapp@gmail.com</strong> from the same email address you use to sign in to SquadHub.</li>
+      <li>Use the subject line <strong>"Delete my account"</strong>, and let us know the name of your team(s) in the app so we can locate the right records.</li>
+      <li>We'll confirm your identity against the account email and process the deletion within <strong>14 days</strong>, then send you confirmation once it's done.</li>
+    </ol>
+  </div>
+
+  <p>If you coach more than one team under the same account, let us know in your email whether you want all teams deleted, or only specific ones.</p>
+
+  <h2>What gets deleted</h2>
+  <p>Once a deletion request is completed, the following are permanently removed from our systems:</p>
+  <ul>
+    <li>Your account (login credentials, email address)</li>
+    <li>All player records for your team(s) — names, shirt numbers, positions, availability, and stats</li>
+    <li>Coach and team administrator records, including qualification data</li>
+    <li>Fixture, result, and match event history</li>
+    <li>Any photos you uploaded (player photos, team badge)</li>
+  </ul>
+
+  <h2>What's retained, and for how long</h2>
+  <table>
+    <tr><th>Data</th><th>Retention after deletion</th></tr>
+    <tr><td>Account and team data</td><td>Removed within 14 days of request</td></tr>
+    <tr><td>Backup copies</td><td>Automatically purged from backups within 30 days</td></tr>
+    <tr><td>Anonymised usage logs</td><td>May be retained indefinitely, but contain no information that identifies you or your players</td></tr>
+  </table>
+  <p>We don't retain any personal data beyond what's described above. If you've exported a backup file from within the app before deleting your account, that copy remains on your own device — deleting your account does not reach backups you've downloaded yourself.</p>
+
+  <h2>Prefer to delete things yourself first?</h2>
+  <p>You don't need to request full account deletion just to remove specific records. Within the app itself, you can at any time:</p>
+  <ul>
+    <li>Delete individual players, coaches, or fixtures</li>
+    <li>Remove a photo from a player, coach, or team badge</li>
+    <li>Export a full backup before making any changes, so you always have your own copy</li>
+  </ul>
+
+  <h2>Questions</h2>
+  <p>If you have any questions about this process or what happens to your data, contact:</p>
+  <div class="contact-box">squadhubapp@gmail.com</div>
+
+  <div class="footer-note">SquadHub — grassroots football, enjoy it.</div>
+</div>
+</body>
+</html>
