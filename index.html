@@ -1589,6 +1589,14 @@ function shortDate(iso){
   const d = new Date(iso);
   return d.toLocaleDateString(undefined,{day:'numeric', month:'short'});
 }
+function shortDateWithYear(iso){
+  // Same format as shortDate, with a 2-digit year appended - used specifically for
+  // qualification obtained/expiry dates, where a multi-year validity period makes
+  // the year genuinely necessary to read correctly (shortDate alone is ambiguous
+  // once a date spans into a different year than the current one).
+  const d = new Date(iso);
+  return d.toLocaleDateString(undefined,{day:'numeric', month:'short'}) + ' \u2019' + String(d.getFullYear()).slice(-2);
+}
 function getPlayer(id){ return DATA.players.find(p=>p.id===id); }
 function shirtHtml(p, extraStyle){
   extraStyle = extraStyle || '';
@@ -3280,7 +3288,7 @@ function renderHomeTab(){
           const player = pid ? getPlayer(pid) : null;
           return player ? `${esc(a.acronym||a.name)}: ${esc(player.name)}` : null;
         }).filter(Boolean);
-        return `<div class="card tap fixture-card" data-open-result="${f.id}">
+        return `<div class="card tap fixture-card ${highlightFixtureId===f.id?'new-fixture-pulse':''}" data-open-result="${f.id}">
           <div class="row">
             <div>
               <div class="opp">vs ${esc(f.opponent||'TBC')}${venueBadge(f)}</div>
@@ -5156,7 +5164,7 @@ function renderCoachQualsSection(c, showAddButton){
           return `<div class="row" style="padding:7px 0; border-bottom:1px solid var(--line); align-items:flex-start;">
             <div>
               <div style="font-weight:600; font-size:13.5px;">${esc(qDef?qDef.name:'Unknown qualification')}${qDef&&qDef.mandatory?' <span style="color:var(--loss);">*</span>':''}</div>
-              <div class="small" style="color:var(--ink-soft);">${isPlaceholder ? 'Not yet recorded' : `Obtained ${shortDate(link.dateObtained)} · Expires ${shortDate(link.expiryDate)}`}</div>
+              <div class="small" style="color:var(--ink-soft);">${isPlaceholder ? 'Not yet recorded' : `Obtained ${shortDateWithYear(link.dateObtained)} · Expires ${shortDateWithYear(link.expiryDate)}`}</div>
             </div>
             <div style="display:flex; align-items:center; gap:4px; flex-shrink:0;">
               <span class="pill ${pillClass}">${statusLabel}</span>
@@ -5219,7 +5227,7 @@ function renderCoachesTab(){
         activity.slice(0,15).map(x=>`
           <div style="padding:8px 0; border-bottom:1px solid var(--line);">
             <div style="font-weight:600; font-size:13.5px; color:var(--ink);">${esc(x.qualName)} <span style="font-weight:600; color:${x.type==='expired'?'var(--loss)':'var(--win)'};">${x.type==='expired'?'expired':'obtained'}</span></div>
-            <div class="small" style="color:var(--ink-soft); margin-top:2px;">${esc(x.coachName)} · ${shortDate(x.date)}</div>
+            <div class="small" style="color:var(--ink-soft); margin-top:2px;">${esc(x.coachName)} · ${shortDateWithYear(x.date)}</div>
           </div>`).join('')}
     </div>`;
   }
@@ -7076,17 +7084,22 @@ function openEndGameConfirm(fixtureId){
   openModal(body, {floating:true});
   attachModalHandlers();
   const confirmBtn = document.querySelector('[data-confirm-end-game]');
-  if(confirmBtn) confirmBtn.onclick = ()=> openFinishMatchConfirm(fixtureId);
+  // Goes straight to awards now rather than committing the match as finished first -
+  // that commit now happens from inside the awards step itself (Save or Later),
+  // so Cancel from there can genuinely return here with nothing changed yet.
+  if(confirmBtn) confirmBtn.onclick = ()=> openDynamicAwardsModal(fixtureId, true);
 }
-function openFinishMatchConfirm(fixtureId){
+function commitMatchFinished(fixtureId){
   const f = DATA.fixtures.find(x=>x.id===fixtureId);
   if(!f) return;
   f.status = 'finished';
   f.liveState.running = false;
   stopTimer();
   saveData();
-  go('results','resultDetail',{id:f.id});
-  setTimeout(()=> openDynamicAwardsModal(f.id, true), 50);
+}
+function openFinishMatchConfirm(fixtureId){
+  commitMatchFinished(fixtureId);
+  go('results','resultDetail',{id:fixtureId});
 }
 function openLogOppoGoalConfirm(fixtureId, quarterNum){
   const f = DATA.fixtures.find(x=>x.id===fixtureId);
@@ -7370,7 +7383,7 @@ function openAddSeasonModal(seasonId){
     <div class="small" style="color:var(--ink-soft); margin-top:-10px; margin-bottom:16px;">Used wherever a League fixture is shown while this is the current season.</div>
     <button class="btn amber" data-confirm-add-season="${seasonId||''}">${editing ? 'Save' : 'Add'}</button>
   `;
-  openModal(body);
+  openModal(body, {floating:true});
   attachModalHandlers();
   const confirmBtn = document.querySelector('[data-confirm-add-season]');
   if(confirmBtn) confirmBtn.onclick = ()=>{
@@ -7438,7 +7451,7 @@ function openQualificationModal(qualId){
     </label>
     <button class="btn amber" data-save-qualification="${q.id}">Save</button>
   `;
-  openModal(body);
+  openModal(body, {floating:true});
   attachModalHandlers();
   const saveBtn = document.querySelector('[data-save-qualification]');
   if(saveBtn) saveBtn.onclick = ()=>{
@@ -7492,7 +7505,7 @@ function openAwardTypeModal(awardId){
     </label>
     <button class="btn amber" data-save-award-type="${a.id}">Save</button>
   `;
-  openModal(body);
+  openModal(body, {floating:true});
   attachModalHandlers();
   const saveBtn = document.querySelector('[data-save-award-type]');
   if(saveBtn) saveBtn.onclick = ()=>{
@@ -9749,6 +9762,12 @@ function openDynamicAwardsModal(fixtureId, isEndOfMatch){
       </div>`;
     }).join('')}
     <button class="btn primary" data-save-dynamic-awards="${fixtureId}">${activeAwards.length===0 ? 'Close' : 'Save'}</button>
+    ${isEndOfMatch ? `
+    <div style="height:10px;"></div>
+    <button class="btn ghost" data-dynamic-awards-later="${fixtureId}">Fill in later</button>
+    <div style="height:10px;"></div>
+    <button class="btn ghost" data-dynamic-awards-cancel="${fixtureId}" style="border-color:transparent; color:var(--ink-soft);">Cancel</button>
+    ` : ''}
   `;
   const captureDescriptions = ()=>{
     activeAwards.forEach(a=>{
@@ -9795,11 +9814,37 @@ function openDynamicAwardsModal(fixtureId, isEndOfMatch){
       saveData();
       showSavedToast();
       if(isEndOfMatch){
-        openMatchSummaryPrompt(fixtureId);
+        // The match only actually gets marked finished once awards are dealt with
+        // one way or another (saved here, or skipped via "Fill in later") - that's
+        // what makes Cancel further down a genuine, nothing-committed cancel.
+        commitMatchFinished(fixtureId);
+        go('results','resultDetail',{id:fixtureId});
+        setTimeout(()=> openMatchSummaryPrompt(fixtureId), 50);
       } else {
         closeModal();
         render();
       }
+    };
+    const laterBtn = document.querySelector('[data-dynamic-awards-later]');
+    if(laterBtn) laterBtn.onclick = ()=>{
+      closeModal();
+      commitMatchFinished(fixtureId);
+      // Land on the results list itself (not the detail screen) with the new result
+      // pulsing, so it's easy to spot - same highlight treatment a newly added
+      // fixture gets elsewhere in the app.
+      homeTab = 'results';
+      highlightFixtureId = fixtureId;
+      go('home', null, {});
+      setTimeout(()=>{
+        const card = document.querySelector(`[data-open-result="${fixtureId}"]`);
+        if(card) card.scrollIntoView({behavior:'smooth', block:'center'});
+      }, 50);
+      setTimeout(()=>{ highlightFixtureId = null; render(); }, 2600);
+    };
+    const cancelBtn = document.querySelector('[data-dynamic-awards-cancel]');
+    if(cancelBtn) cancelBtn.onclick = ()=>{
+      closeModal();
+      openEndGameConfirm(fixtureId);
     };
   }
   rerender();
