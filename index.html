@@ -1304,6 +1304,16 @@ async function pushTeamToCloud(team){
     LAST_CLOUD_ERROR = 'Network: ' + describeCloudError(e);
   }
 }
+// Pushes teams that exist only on this device (a failed sync, or built offline) up to the
+// cloud. Callers set DATA themselves afterwards - normalising each team here reassigns it.
+async function pushLocalOnlyTeams(teams){
+  for(const team of teams){
+    DATA = team.data;
+    applyDataSafetyDefaults();
+    team.data = DATA;
+    await pushTeamToCloud(team);
+  }
+}
 async function loadTeamsFromCloud(){
   if(!supabaseClient || !currentUser) return;
   const { data: memberships, error } = await supabaseClient
@@ -1315,14 +1325,24 @@ async function loadTeamsFromCloud(){
   const hasOnboardedBefore = !!(currentUser.user_metadata && currentUser.user_metadata.has_onboarded);
   const isFirstEverLogin = (!memberships || memberships.length === 0) && !hasOnboardedBefore;
 
-  if(memberships && memberships.length > 0){
-    // This account already has teams in the cloud - they're the source of truth from here on.
-    TEAMS_STORE.teams = memberships.filter(m=>m.teams).map(m=>({
-      id: m.teams.id, name: m.teams.name, badge: null, data: m.teams.data, cloudSynced: true, myPermission: m.permission_level, updatedAt: m.teams.updated_at
-    }));
-    const sorted = [...TEAMS_STORE.teams].sort((a,b)=> new Date(b.updatedAt) - new Date(a.updatedAt));
-    TEAMS_STORE.activeTeamId = sorted[0].id;
-    DATA = sorted[0].data;
+  const cloudTeams = (memberships || []).filter(m=>m.teams).map(m=>({
+    id: m.teams.id, name: m.teams.name, badge: null, data: m.teams.data, cloudSynced: true, myPermission: m.permission_level, updatedAt: m.teams.updated_at
+  }));
+  const cloudIds = new Set(cloudTeams.map(t=>t.id));
+  const previousActiveId = TEAMS_STORE.activeTeamId;
+  // Teams that never made it to the cloud live only on this device. A cloud answer must
+  // never replace or wipe them - they're kept, and pushed up instead. (Without this, the
+  // first successful cloud load after a period of failed syncs silently erased them.)
+  const localOnly = (TEAMS_STORE.teams || []).filter(t=> !t.cloudSynced && !cloudIds.has(t.id));
+
+  if(cloudTeams.length > 0){
+    // Whatever is in the cloud is the source of truth for those teams from here on.
+    TEAMS_STORE.teams = [...cloudTeams, ...localOnly];
+    const newestCloud = [...cloudTeams].sort((a,b)=> new Date(b.updatedAt) - new Date(a.updatedAt))[0];
+    const active = localOnly.find(t=>t.id===previousActiveId) || newestCloud;
+    TEAMS_STORE.activeTeamId = active.id;
+    if(localOnly.length > 0) await pushLocalOnlyTeams(localOnly);
+    DATA = active.data;
     applyDataSafetyDefaults();
   } else if(!hasOnboardedBefore){
     // Genuinely brand new account that's never had a team - push whatever's local (even if it's
@@ -1345,6 +1365,15 @@ async function loadTeamsFromCloud(){
       const { data: updated } = await supabaseClient.auth.updateUser({ data: { has_onboarded: true } });
       if(updated && updated.user) currentUser = updated.user;
     }catch(e){ /* not critical to this session */ }
+  } else if(localOnly.length > 0){
+    // Nothing in the cloud for this account, but there are teams on this device that never
+    // synced - keep them and try again rather than treating the account as emptied.
+    TEAMS_STORE.teams = localOnly;
+    const active = localOnly.find(t=>t.id===previousActiveId) || localOnly[0];
+    TEAMS_STORE.activeTeamId = active.id;
+    await pushLocalOnlyTeams(localOnly);
+    DATA = active.data;
+    applyDataSafetyDefaults();
   } else {
     // Has used the app before but currently belongs to zero teams - most likely they deliberately
     // deleted their last one. Leave them with none rather than silently creating a new one for them.
