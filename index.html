@@ -1539,43 +1539,45 @@ function openRedeemInviteModal(){
 }
 async function redeemTeamInvite(code){
   if(!supabaseClient || !currentUser) return false;
-  const { data: invite, error } = await supabaseClient.from('team_invites')
-    .select('id, team_id, expires_at, used_by, coach_id, permission_level')
-    .eq('code', code)
-    .maybeSingle();
-  if(error || !invite){
-    alert("That code doesn't look right. Double-check it with the coach who sent it.");
+  // The code is checked on the server by a single function (it validates the code, marks it used
+  // and adds the membership in one step, and slows down guessing). The browser never reads the
+  // invites table to join, so the list of invites isn't exposed to anyone who isn't an editor.
+  const { data: result, error } = await supabaseClient.rpc('redeem_team_invite', { p_code: code });
+  if(error || !result){
+    console.error('redeem failed', error);
+    alert("Couldn't join that team right now. Please check your connection and try again."
+      + (error && error.message ? "\n\nDetails: " + error.message : ''));
     return false;
   }
-  if(invite.used_by){
-    alert('This invite has already been used. Ask for a fresh one.');
+  if(result.status === 'already_member'){
+    alert("You're already part of that team.");
+    closeModal();
+    await loadTeamsFromCloud();
+    return true;
+  }
+  if(result.status !== 'ok'){
+    const messages = {
+      invalid: "That code doesn't look right. Double-check it with the coach who sent it.",
+      used: 'This invite has already been used. Ask for a fresh one.',
+      expired: 'This invite has expired. Ask for a fresh one.',
+      throttled: 'Too many wrong codes in a row. Please wait a few minutes and try again.',
+      not_signed_in: 'Please log in first, then enter the code.'
+    };
+    alert(messages[result.status] || "Couldn't join that team right now. Please try again.");
     return false;
   }
-  if(new Date(invite.expires_at) < new Date()){
-    alert('This invite has expired. Ask for a fresh one.');
-    return false;
-  }
-  const { error: joinErr } = await supabaseClient.from('team_members').insert({
-    team_id: invite.team_id, user_id: currentUser.id, permission_level: invite.permission_level || 'level2'
-  });
-  if(joinErr){
-    console.error('join failed', joinErr);
-    alert("Couldn't join that team right now. Please check your connection and try again.");
-    return false;
-  }
-  await supabaseClient.from('team_invites').update({ used_by: currentUser.id, used_at: new Date().toISOString() }).eq('id', invite.id);
   closeModal();
   await loadTeamsFromCloud();
   // This invite was generated from a specific coach's own record - now that this
   // account has joined, link the two so that coach's profile shows they actually have
   // app access, instead of just a name with no connection to who's really logged in.
-  if(invite.coach_id){
-    const matchedCoach = (DATA.coaches||[]).find(c=>c.id===invite.coach_id);
+  if(result.coach_id){
+    const matchedCoach = (DATA.coaches||[]).find(c=>c.id===result.coach_id);
     if(matchedCoach && !matchedCoach.authUserId){
       matchedCoach.authUserId = currentUser.id;
       // Keep the profile's own level in sync with what was actually granted, in case
       // it was changed again after the invite was sent but before it got redeemed.
-      matchedCoach.permissionLevel = invite.permission_level || matchedCoach.permissionLevel;
+      matchedCoach.permissionLevel = result.permission_level || matchedCoach.permissionLevel;
       saveData();
     }
   }
