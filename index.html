@@ -552,6 +552,10 @@
      page as normal; our own JS still measures horizontal swipes via pointer events. */
   .pitch-holder, .pitch-svg{ touch-action:pan-y; -webkit-user-select:none; user-select:none; }
   .pitch-svg [data-pitch-token], .pitch-svg [data-pitch-token] *{ touch-action:none; -webkit-user-select:none; user-select:none; }
+  /* Plain holding screen while the cloud answers after logging in (sits under the hello greeting) */
+  #signin-hold{ position:fixed; inset:0; z-index:1150; display:flex; align-items:center; justify-content:center; background:#0d1117; opacity:1; transition:opacity 0.15s ease; }
+  #signin-hold.leaving{ opacity:0; pointer-events:none; }
+  #signin-hold img{ width:84px; height:84px; border-radius:21px; display:block; }
   /* Brief branded greeting straight after logging in */
   .hello-intro{
     position:fixed; inset:0; z-index:1200; display:flex; flex-direction:column; align-items:center; justify-content:center;
@@ -1083,7 +1087,7 @@ function applyDataSafetyDefaults(){
   if(typeof DATA.notifications.incompleteTeamsheetDays !== 'number') DATA.notifications.incompleteTeamsheetDays = 3;
   if(typeof DATA.teamSetupCompleted !== 'boolean') DATA.teamSetupCompleted = false;
 }
-async function loadData(){
+async function loadData(opts){
   let migrated = false;
   try{
     const val = await storageGet(STORE_KEY);
@@ -1186,7 +1190,8 @@ async function loadData(){
   syncActiveTeamData();
   if(migrated) await storageSet(STORE_KEY, JSON.stringify(TEAMS_STORE));
   applyTheme();
-  goHomeOrWizard();
+  // After a login the caller holds the screen until the cloud load is done, so it passes render:false.
+  if(!(opts && opts.render === false)) goHomeOrWizard();
 }
 function normalizeFixtureLineup(f){
   if(!f.positions || !Array.isArray(f.positions) || f.positions.length===0){
@@ -1356,12 +1361,12 @@ async function pushLocalOnlyTeams(teams){
   }
 }
 async function loadTeamsFromCloud(){
-  if(!supabaseClient || !currentUser) return;
+  if(!supabaseClient || !currentUser) return false;
   const { data: memberships, error } = await supabaseClient
     .from('team_members')
     .select('team_id, permission_level, teams(id, name, data, updated_at)')
     .eq('user_id', currentUser.id);
-  if(error){ console.error('failed to load teams from cloud', error); return; }
+  if(error){ console.error('failed to load teams from cloud', error); return false; }
 
   const hasOnboardedBefore = !!(currentUser.user_metadata && currentUser.user_metadata.has_onboarded);
   const isFirstEverLogin = (!memberships || memberships.length === 0) && !hasOnboardedBefore;
@@ -1431,6 +1436,38 @@ async function loadTeamsFromCloud(){
   await storageSet(STORE_KEY, JSON.stringify(TEAMS_STORE));
   applyTheme();
   if(isFirstEverLogin) renderWelcomeScreen(); else goHomeOrWizard();
+  return true;
+}
+// After logging in, nothing is drawn until the cloud has answered. Drawing from this device's copy first
+// flashed the "no team" / setup screen for a moment on slower connections. A plain holding screen covers
+// the wait, and after 4 seconds (slow or offline) we fall back to what's on the device.
+let signInHoldTimer = null;
+function showSignInHold(){
+  if(document.getElementById('signin-hold')) return;
+  const el = document.createElement('div');
+  el.id = 'signin-hold';
+  el.innerHTML = '<img alt="" src="icon-192.png">';
+  document.body.appendChild(el);
+}
+function hideSignInHold(){
+  const el = document.getElementById('signin-hold');
+  if(!el) return;
+  el.classList.add('leaving');
+  setTimeout(()=> el.remove(), 200);
+}
+async function loadAfterSignIn(){
+  showSignInHold();
+  try{
+    await loadData({ render:false });
+    let timer;
+    const timeout = new Promise(resolve=>{ timer = setTimeout(()=>resolve(false), 4000); });
+    const drewScreen = await Promise.race([loadTeamsFromCloud(), timeout]);
+    clearTimeout(timer);
+    // Timed out, or the cloud couldn't be reached: show this device's copy, as before.
+    if(!drewScreen) goHomeOrWizard();
+  } finally {
+    hideSignInHold();
+  }
 }
 let inviteAccess = { teamId: null, coachIds: new Set() };
 function coachHasAppAccess(c){
@@ -5728,8 +5765,7 @@ async function handleAuthSubmit(){
       if(data.session){
         currentUser = data.user;
         authBusy = false;
-        await loadData();
-        await loadTeamsFromCloud();
+        await loadAfterSignIn();
       } else {
         authBusy = false;
         authMode = 'login';
@@ -5741,8 +5777,7 @@ async function handleAuthSubmit(){
       if(error){ authError = error.message; authBusy = false; renderAuthGate(); return; }
       currentUser = data.user;
       authBusy = false;
-      await loadData();
-      await loadTeamsFromCloud();
+      await loadAfterSignIn();
       playHelloIntroIfHome();
     }
   }catch(e){
@@ -5824,8 +5859,7 @@ async function handleNewPasswordSubmit(){
     // password they just set.
     currentUser = data.user;
     authMode = 'login';
-    await loadData();
-    await loadTeamsFromCloud();
+    await loadAfterSignIn();
     playHelloIntroIfHome();
   }catch(e){
     authBusy = false;
@@ -11993,8 +12027,7 @@ async function initApp(){
     if(passwordRecoveryInProgress) return;
     if(session && session.user){
       currentUser = session.user;
-      await loadData();
-      await loadTeamsFromCloud();
+      await loadAfterSignIn();
     } else {
       // No one's logged in yet, so there's no team data to pull a theme colour
       // from - applyTheme() falls back to DATA's own default (the brand
