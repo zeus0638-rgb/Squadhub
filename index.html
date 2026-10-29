@@ -552,6 +552,11 @@
      page as normal; our own JS still measures horizontal swipes via pointer events. */
   .pitch-holder, .pitch-svg{ touch-action:pan-y; -webkit-user-select:none; user-select:none; }
   .pitch-svg [data-pitch-token], .pitch-svg [data-pitch-token] *{ touch-action:none; -webkit-user-select:none; user-select:none; }
+  @keyframes swipeNavInFromRight{ from{ transform:translateX(26px); opacity:0.25; } to{ transform:translateX(0); opacity:1; } }
+  @keyframes swipeNavInFromLeft{ from{ transform:translateX(-26px); opacity:0.25; } to{ transform:translateX(0); opacity:1; } }
+  .swipe-nav-fwd{ animation:swipeNavInFromRight 0.2s ease-out; }
+  .swipe-nav-back{ animation:swipeNavInFromLeft 0.2s ease-out; }
+  @media (prefers-reduced-motion: reduce){ .swipe-nav-fwd, .swipe-nav-back{ animation:none; } }
   @keyframes pitchQuarterSlideFromRight{ from{ transform:translateX(26px); opacity:0.25; } to{ transform:translateX(0); opacity:1; } }
   @keyframes pitchQuarterSlideFromLeft{ from{ transform:translateX(-26px); opacity:0.25; } to{ transform:translateX(0); opacity:1; } }
   .pitch-quarter-fwd{ animation:pitchQuarterSlideFromRight 0.22s ease-out; }
@@ -1261,29 +1266,42 @@ function addNewTeam(){
   if(currentUser) pushTeamToCloud(newTeam);
   switchTeam(teamId);
 }
+let LAST_CLOUD_ERROR = '';
+function describeCloudError(err){
+  if(!err) return '';
+  const msg = err.message || String(err);
+  return err.code ? `${msg} [${err.code}]` : msg;
+}
 async function pushTeamToCloud(team){
   if(!supabaseClient || !currentUser || !team) return;
-  if(!team.cloudSynced){
-    // Upsert rather than insert - if a previous sync attempt partially succeeded (e.g.
-    // got interrupted by an outage after creating the team row but before the
-    // membership row), a plain insert would fail on the duplicate id and leave this
-    // team stuck un-synced forever. Upserting by id recovers from that instead.
-    const { error: insertErr } = await supabaseClient.from('teams').upsert({
-      id: team.id, name: team.name || 'My team', data: team.data
-    });
-    if(insertErr){ console.error('cloud team create failed', insertErr); return; }
-    const { error: memberErr } = await supabaseClient.from('team_members').insert({
-      team_id: team.id, user_id: currentUser.id, permission_level: 'admin'
-    });
-    // A duplicate-key error here just means this exact membership row already exists
-    // from an earlier attempt - that's success, not failure.
-    if(memberErr && memberErr.code !== '23505'){ console.error('cloud membership create failed', memberErr); return; }
-    team.cloudSynced = true;
-  } else {
-    const { error } = await supabaseClient.from('teams')
-      .update({ name: team.name || 'My team', data: team.data, updated_at: new Date().toISOString() })
-      .eq('id', team.id);
-    if(error) console.error('cloud team save failed', error);
+  LAST_CLOUD_ERROR = '';
+  try{
+    if(!team.cloudSynced){
+      // Upsert rather than insert - if a previous sync attempt partially succeeded (e.g.
+      // got interrupted by an outage after creating the team row but before the
+      // membership row), a plain insert would fail on the duplicate id and leave this
+      // team stuck un-synced forever. Upserting by id recovers from that instead.
+      const { error: insertErr } = await supabaseClient.from('teams').upsert({
+        id: team.id, name: team.name || 'My team', data: team.data
+      });
+      if(insertErr){ console.error('cloud team create failed', insertErr); LAST_CLOUD_ERROR = 'Team: ' + describeCloudError(insertErr); return; }
+      const { error: memberErr } = await supabaseClient.from('team_members').insert({
+        team_id: team.id, user_id: currentUser.id, permission_level: 'admin'
+      });
+      // A duplicate-key error here just means this exact membership row already exists
+      // from an earlier attempt - that's success, not failure.
+      if(memberErr && memberErr.code !== '23505'){ console.error('cloud membership create failed', memberErr); LAST_CLOUD_ERROR = 'Membership: ' + describeCloudError(memberErr); return; }
+      team.cloudSynced = true;
+    } else {
+      const { error } = await supabaseClient.from('teams')
+        .update({ name: team.name || 'My team', data: team.data, updated_at: new Date().toISOString() })
+        .eq('id', team.id);
+      if(error){ console.error('cloud team save failed', error); LAST_CLOUD_ERROR = 'Save: ' + describeCloudError(error); }
+    }
+  }catch(e){
+    // A dropped connection can throw rather than return an error object.
+    console.error('cloud push threw', e);
+    LAST_CLOUD_ERROR = 'Network: ' + describeCloudError(e);
   }
 }
 async function loadTeamsFromCloud(){
@@ -1355,7 +1373,7 @@ async function createTeamInvite(coachId, level, triggerBtn){
     // trying again right now rather than immediately telling the person to wait.
     await pushTeamToCloud(active);
     if(!active.cloudSynced){
-      alert("This team couldn't be synced to the cloud just now. Please check your connection and try again in a moment.");
+      alert("This team couldn't be synced to the cloud just now. Please check your connection and try again in a moment." + (LAST_CLOUD_ERROR ? "\n\nDetails: " + LAST_CLOUD_ERROR : ""));
       return;
     }
   }
@@ -3106,8 +3124,8 @@ function setupPitchDragHandlers(){
 
 const TAB_DEFS = [
   {id:'home', label:'Home', icon:'<path d="M4 11l8-7 8 7" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M6 10v9h4v-5h4v5h4v-9" fill="none" stroke="currentColor" stroke-width="1.6"/>'},
-  {id:'matchday', label:'Live', bold:true, icon:'<circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M10 8.3l6.2 3.7-6.2 3.7z" fill="currentColor"/>'},
   {id:'players', label:'Players', icon:'<circle cx="12" cy="8" r="3.4" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M5 20c1-3.8 4-5.6 7-5.6s6 1.8 7 5.6" fill="none" stroke="currentColor" stroke-width="1.6"/>'},
+  {id:'matchday', label:'Live', bold:true, icon:'<circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M10 8.3l6.2 3.7-6.2 3.7z" fill="currentColor"/>'},
   {id:'coaches', label:'Coaches', icon:'<circle cx="12" cy="9" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M9 13l-2 7 5-3 5 3-2-7" fill="none" stroke="currentColor" stroke-width="1.6"/>'},
   {id:'team', label:'Settings', icon:'<circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M19.4 13a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V19a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H4a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H10a1.65 1.65 0 001-1.51V4a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V10a1.65 1.65 0 001.51 1H20a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z" fill="none" stroke="currentColor" stroke-width="1.6"/>'}
 ];
@@ -4680,11 +4698,19 @@ function renderPlayerStatsContent(seasonFixtures){
       }).join('')}
     </div>`}`;
 }
+function byShirtNumber(a,b){ return (a.shirtNumber||99)-(b.shirtNumber||99); }
+// The players shown in the Players tab, in the order shown there. Also what swiping
+// between player profiles follows, so the two can never disagree.
+function squadListPlayers(){
+  const resolvedSeason = resolveSeasonFilter(playersSeasonFilter);
+  let players = [...DATA.players].sort(byShirtNumber);
+  if(resolvedSeason) players = players.filter(p=> (p.registeredSeasons||[]).includes(resolvedSeason));
+  return players;
+}
 function renderPlayersTab(){
   const resolvedSeason = resolveSeasonFilter(playersSeasonFilter);
   const seasonFixtures = fixturesForSeason(playersSeasonFilter);
-  let players = [...DATA.players].sort((a,b)=> (a.shirtNumber||99)-(b.shirtNumber||99));
-  if(resolvedSeason) players = players.filter(p=> (p.registeredSeasons||[]).includes(resolvedSeason));
+  const players = squadListPlayers();
   const tabHtml = players.length===0 ? `
       <div class="empty"><div class="big">No players${resolvedSeason?' registered for '+esc(resolvedSeason):''}</div><div class="small">${resolvedSeason ? 'Try a different season, or register players for this one' : 'Tap + to add your first player'}</div></div>` :
       `<div class="card">${players.map(p=>{
@@ -5347,10 +5373,16 @@ function renderNoTeamScreen(){
   const hasIncompleteTeam = TEAMS_STORE.teams.length > 0 && !DATA.teamSetupCompleted;
   app.innerHTML = `
   <div style="min-height:100%; display:flex; flex-direction:column; justify-content:center; padding:36px 22px; position:relative; background:linear-gradient(160deg, var(--pitch) 0%, color-mix(in srgb, var(--pitch) 75%, #000) 100%);">
-    <button type="button" data-no-team-log-out style="position:absolute; top:16px; right:16px; background:none; border:none; color:rgba(255,255,255,0.75); font-size:13px; text-decoration:underline; cursor:pointer; display:flex; align-items:center; gap:5px;">
-      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" style="flex-shrink:0;"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 17l5-5-5-5M21 12H9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      Log out
-    </button>
+    <div style="position:absolute; top:16px; right:16px; display:flex; align-items:center; gap:14px;">
+      <button type="button" data-no-team-switch style="background:none; border:none; color:rgba(255,255,255,0.75); font-size:13px; text-decoration:underline; cursor:pointer; display:flex; align-items:center; gap:5px;">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" style="flex-shrink:0;"><path d="M7 16V4M7 4L3 8M7 4l4 4M17 8v12M17 20l4-4M17 20l-4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Switch team
+      </button>
+      <button type="button" data-no-team-log-out style="background:none; border:none; color:rgba(255,255,255,0.75); font-size:13px; text-decoration:underline; cursor:pointer; display:flex; align-items:center; gap:5px;">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" style="flex-shrink:0;"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 17l5-5-5-5M21 12H9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Log out
+      </button>
+    </div>
     <div style="text-align:center; margin-bottom:26px;">
       <div style="width:76px; height:76px; margin:0 auto 14px; border-radius:20px; overflow:hidden; box-shadow:0 10px 24px rgba(0,0,0,0.3);"><img src="icon-192.png" alt="" style="width:100%; height:100%; object-fit:cover; display:block;"></div>
       <div style="font-family:'Oswald',sans-serif; font-weight:700; font-size:28px; color:#fff; letter-spacing:.02em;">${hasIncompleteTeam ? 'Setup unfinished' : 'No team yet'}</div>
@@ -5366,6 +5398,8 @@ function renderNoTeamScreen(){
   if(importBtn) importBtn.addEventListener('click', startImportAsNewTeam);
   const joinBtn = document.querySelector('[data-no-team-join]');
   if(joinBtn) joinBtn.addEventListener('click', openRedeemInviteModal);
+  const switchBtn = document.querySelector('[data-no-team-switch]');
+  if(switchBtn) switchBtn.addEventListener('click', openTeamSwitcherModal);
   const logOutBtn = document.querySelector('[data-no-team-log-out]');
   if(logOutBtn) logOutBtn.addEventListener('click', logOut);
 }
@@ -11639,6 +11673,97 @@ function stopTimer(){ clearInterval(timerInterval); timerInterval = null; timerF
       if(backEl) backEl.click();
     }
   }, {passive:true});
+})();
+
+// Left/right swipes between sibling views, alongside the edge-swipe-back above:
+//   - Home sub-tabs: Home / Fixtures / Results / Player stats
+//   - A player's profile: previous / next player, in the same order as the Players list
+// Swipe left = next, swipe right = previous (the content follows the finger).
+(function setupSwipeNav(){
+  // Wider than the back gesture's 24px, and mirrored on the right edge where Android's
+  // own system back gesture also lives - a swipe starting in either zone is never ours.
+  const EDGE_ZONE = 32;
+  const MIN_DISTANCE = 60;   // minimum horizontal travel to count as a swipe
+  const DOMINANCE = 0.6;     // vertical travel must stay under this fraction of horizontal
+  const IGNORE = 'input, select, textarea, [contenteditable="true"], .wheel-wrap, .pitch-holder, .pitch-svg, [data-pitch-token]';
+  let startX = 0, startY = 0, tracking = false, ctx = null;
+
+  function swipeContext(){
+    if(document.getElementById('modal-root')) return null; // a modal owns every gesture while it's open
+    if(VIEW.screen === 'playerProfile') return 'player';
+    if(!VIEW.screen && document.querySelector('[data-home-tab]')) return 'hometabs';
+    return null;
+  }
+  // A swipe that starts on something that scrolls sideways (a wide table, the metric
+  // toggle bar) belongs to that scroller, not to us. Stops at .content itself, which
+  // always computes as overflow-x:auto purely because it scrolls vertically.
+  function insideSideScroller(el){
+    const stopAt = el.closest ? el.closest('.content') : null;
+    for(let n = el; n && n !== stopAt && n !== document.body; n = n.parentElement){
+      const cs = getComputedStyle(n);
+      if((cs.overflowX === 'auto' || cs.overflowX === 'scroll') && n.scrollWidth > n.clientWidth + 1) return true;
+    }
+    return false;
+  }
+  function animateSwipeIn(step){
+    const el = document.querySelector('.content');
+    if(!el) return;
+    const cls = step > 0 ? 'swipe-nav-fwd' : 'swipe-nav-back';
+    el.classList.add(cls);
+    const done = (e)=>{ if(e && e.target !== el) return; el.classList.remove(cls); el.removeEventListener('animationend', done); };
+    el.addEventListener('animationend', done);
+    setTimeout(()=> done(null), 400); // safety net if animationend never fires
+  }
+  function swipeHomeTab(step){
+    // Reads the order from the buttons on screen so it always matches what's displayed.
+    const ids = Array.from(document.querySelectorAll('[data-home-tab]')).map(b=>b.dataset.homeTab);
+    const i = ids.indexOf(homeTab);
+    const next = ids[i + step];
+    if(i === -1 || next === undefined) return;
+    document.querySelector('[data-home-tab="' + next + '"]').click();
+    animateSwipeIn(step);
+  }
+  function swipePlayer(step){
+    const id = VIEW.params && VIEW.params.id;
+    let order = squadListPlayers();
+    let i = order.findIndex(p=>p.id===id);
+    if(i === -1){
+      // Opened from somewhere that isn't in this season's list (e.g. a chart) - fall back
+      // to the whole squad rather than leaving the swipe dead.
+      order = [...DATA.players].sort(byShirtNumber);
+      i = order.findIndex(p=>p.id===id);
+    }
+    const target = i === -1 ? null : order[i + step];
+    if(!target) return; // already at the first/last player - no wrap-around
+    go(VIEW.tab, 'playerProfile', {id: target.id});
+    animateSwipeIn(step);
+  }
+
+  document.addEventListener('touchstart', (e)=>{
+    tracking = false;
+    if(e.touches.length !== 1) return;
+    const t = e.touches[0];
+    if(t.clientX <= EDGE_ZONE || t.clientX >= window.innerWidth - EDGE_ZONE) return;
+    ctx = swipeContext();
+    if(!ctx) return;
+    const target = e.target;
+    if(!target || !target.closest) return;
+    if(target.closest(IGNORE) || insideSideScroller(target)) return;
+    startX = t.clientX; startY = t.clientY; tracking = true;
+  }, {passive:true});
+
+  document.addEventListener('touchend', (e)=>{
+    if(!tracking) return;
+    tracking = false;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - startX;
+    const dy = t.clientY - startY;
+    if(Math.abs(dx) < MIN_DISTANCE || Math.abs(dy) > Math.abs(dx) * DOMINANCE) return;
+    if(swipeContext() !== ctx) return; // the screen changed mid-gesture
+    const step = dx < 0 ? 1 : -1;
+    if(ctx === 'hometabs') swipeHomeTab(step); else swipePlayer(step);
+  }, {passive:true});
+  document.addEventListener('touchcancel', ()=>{ tracking = false; }, {passive:true});
 })();
 
 let passwordRecoveryInProgress = false;
