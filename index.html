@@ -552,6 +552,24 @@
      page as normal; our own JS still measures horizontal swipes via pointer events. */
   .pitch-holder, .pitch-svg{ touch-action:pan-y; -webkit-user-select:none; user-select:none; }
   .pitch-svg [data-pitch-token], .pitch-svg [data-pitch-token] *{ touch-action:none; -webkit-user-select:none; user-select:none; }
+  /* Brief branded greeting straight after logging in */
+  .hello-intro{
+    position:fixed; inset:0; z-index:1200; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    background:linear-gradient(160deg, var(--pitch) 0%, color-mix(in srgb, var(--pitch) 75%, #000) 100%);
+    opacity:1; transition:opacity 0.25s ease; cursor:pointer; -webkit-tap-highlight-color:transparent;
+  }
+  .hello-intro.leaving{ opacity:0; pointer-events:none; }
+  .hello-intro .hi-icon{
+    width:96px; height:96px; border-radius:24px; overflow:hidden; box-shadow:0 14px 32px rgba(0,0,0,0.32);
+    animation:helloIconIn 0.65s cubic-bezier(0.2, 0.9, 0.3, 1.15) both;
+  }
+  .hello-intro .hi-icon img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .hello-intro .hi-text{
+    margin-top:24px; padding:0 24px; text-align:center; color:#fff; font-family:'Oswald',sans-serif; font-weight:700;
+    font-size:30px; letter-spacing:.02em; animation:helloTextIn 0.5s ease-out 0.45s both;
+  }
+  @keyframes helloIconIn{ 0%{ transform:scale(0.55); opacity:0; } 60%{ transform:scale(1.08); opacity:1; } 100%{ transform:scale(1); opacity:1; } }
+  @keyframes helloTextIn{ from{ transform:translateY(12px); opacity:0; } to{ transform:translateY(0); opacity:1; } }
   @keyframes swipeNavInFromRight{ from{ transform:translateX(26px); opacity:0.25; } to{ transform:translateX(0); opacity:1; } }
   @keyframes swipeNavInFromLeft{ from{ transform:translateX(-26px); opacity:0.25; } to{ transform:translateX(0); opacity:1; } }
   .swipe-nav-fwd{ animation:swipeNavInFromRight 0.2s ease-out; }
@@ -645,6 +663,7 @@ let authMode = 'login'; // 'login' or 'signup'
 let authError = '';
 let authBusy = false;
 let authMessage = '';
+let authNameDraft = ''; // optional first name typed on the sign-up form; survives re-renders after an error
 let authEmailDraft = ''; // keeps whatever's typed in the email field across re-renders (e.g. after a validation error)
 let DATA = { players: [], fixtures: [], coaches: [], config: null, teamName: '', teamNickname: '', teamBadge: null, homeLocation: '', qualifications: [], themeColor: 'green', opponents: [], awardTypes: [], locations: [], seasons: [] };
 // TEAMS_STORE holds every team this device knows about. DATA (above) always reflects
@@ -1304,6 +1323,18 @@ async function pushTeamToCloud(team){
     LAST_CLOUD_ERROR = 'Network: ' + describeCloudError(e);
   }
 }
+// A team that has never been set up and holds nothing: the empty shell the app creates on a
+// brand-new browser. It's never worth uploading, and never worth keeping once the account
+// already has real teams in the cloud (uploading it added a stray "My team" on every login
+// from a fresh browser, and could even become the one the app opened on).
+function isBlankTeam(t){
+  const d = t && t.data;
+  if(!d) return true;
+  return !d.teamSetupCompleted
+    && !(d.players && d.players.length)
+    && !(d.fixtures && d.fixtures.length)
+    && !(d.coaches && d.coaches.length);
+}
 // Pushes teams that exist only on this device (a failed sync, or built offline) up to the
 // cloud. Callers set DATA themselves afterwards - normalising each team here reassigns it.
 async function pushLocalOnlyTeams(teams){
@@ -1333,13 +1364,16 @@ async function loadTeamsFromCloud(){
   // Teams that never made it to the cloud live only on this device. A cloud answer must
   // never replace or wipe them - they're kept, and pushed up instead. (Without this, the
   // first successful cloud load after a period of failed syncs silently erased them.)
-  const localOnly = (TEAMS_STORE.teams || []).filter(t=> !t.cloudSynced && !cloudIds.has(t.id));
+  const localOnly = (TEAMS_STORE.teams || []).filter(t=> !t.cloudSynced && !cloudIds.has(t.id) && !isBlankTeam(t));
 
   if(cloudTeams.length > 0){
     // Whatever is in the cloud is the source of truth for those teams from here on.
     TEAMS_STORE.teams = [...cloudTeams, ...localOnly];
-    const newestCloud = [...cloudTeams].sort((a,b)=> new Date(b.updatedAt) - new Date(a.updatedAt))[0];
-    const active = localOnly.find(t=>t.id===previousActiveId) || newestCloud;
+    // Open on a team that's actually set up. "Most recently updated" alone could land on a
+    // blank team that was simply created later than the real one.
+    const byNewest = (a,b)=> new Date(b.updatedAt) - new Date(a.updatedAt);
+    const setUpCloud = cloudTeams.filter(t=> t.data && t.data.teamSetupCompleted).sort(byNewest);
+    const active = localOnly.find(t=>t.id===previousActiveId) || setUpCloud[0] || [...cloudTeams].sort(byNewest)[0];
     TEAMS_STORE.activeTeamId = active.id;
     if(localOnly.length > 0) await pushLocalOnlyTeams(localOnly);
     DATA = active.data;
@@ -1356,7 +1390,10 @@ async function loadTeamsFromCloud(){
       DATA = team.data;
       applyDataSafetyDefaults();
       team.data = DATA;
-      await pushTeamToCloud(team);
+      // An empty default team stays on the device until it's actually set up (saving it
+      // then uploads it). Uploading it now left a stray blank team in the account of
+      // anyone who signed up only to join someone else's team by invite code.
+      if(!isBlankTeam(team)) await pushTeamToCloud(team);
     }
     const active = TEAMS_STORE.teams.find(t=>t.id===TEAMS_STORE.activeTeamId) || TEAMS_STORE.teams[0];
     TEAMS_STORE.activeTeamId = active.id;
@@ -1384,6 +1421,32 @@ async function loadTeamsFromCloud(){
   await storageSet(STORE_KEY, JSON.stringify(TEAMS_STORE));
   applyTheme();
   if(isFirstEverLogin) renderWelcomeScreen(); else goHomeOrWizard();
+}
+let inviteAccess = { teamId: null, coachIds: new Set() };
+function coachHasAppAccess(c){
+  if(c.authUserId) return true;
+  return inviteAccess.teamId === TEAMS_STORE.activeTeamId && inviteAccess.coachIds.has(c.id);
+}
+// Which coaches have joined, read from the invites themselves. The link written into the team
+// data only exists when the person joining is allowed to save (never for view-only), so on its
+// own it left the owner seeing "Not yet invited" for coaches who had long since joined.
+// Resolves true only if what's known actually changed, so callers can skip a pointless re-render.
+async function refreshInviteAccess(){
+  const active = TEAMS_STORE.teams.find(t=>t.id===TEAMS_STORE.activeTeamId);
+  if(!supabaseClient || !currentUser || !active || !active.cloudSynced) return false;
+  try{
+    const { data, error } = await supabaseClient.from('team_invites')
+      .select('coach_id, used_by').eq('team_id', active.id).not('used_by', 'is', null);
+    if(error){ console.error("couldn't read invite status", error); return false; }
+    const next = new Set((data || []).filter(r=>r.coach_id).map(r=>r.coach_id));
+    const prev = inviteAccess.teamId === active.id ? inviteAccess.coachIds : new Set();
+    const changed = next.size !== prev.size || Array.from(next).some(id=>!prev.has(id));
+    inviteAccess = { teamId: active.id, coachIds: next };
+    return changed;
+  }catch(e){
+    console.error("couldn't read invite status", e);
+    return false;
+  }
 }
 function generateInviteCode(){
   // No 0/O/1/I - easy to misread when someone's reading it aloud to a teammate.
@@ -4902,7 +4965,7 @@ function renderCoachEditor(id){
     ${(supabaseClient && currentUser) ? `
     <label>App access</label>
     <div class="card" style="margin-bottom:16px;">
-      ${c.authUserId ? `
+      ${coachHasAppAccess(c) ? `
       <div style="display:flex; align-items:center; gap:10px;">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" style="flex-shrink:0; color:var(--win);"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.8"/><path d="M8 12l2.5 2.5L16 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <div>
@@ -5463,6 +5526,7 @@ function renderWelcomeScreen(){
     </div>
 
     <button type="button" class="btn amber" data-welcome-continue style="max-width:360px; width:100%; margin:22px auto 0;">Let's set up your team &rarr;</button>
+    <button type="button" data-welcome-join style="background:none; border:none; color:rgba(255,255,255,0.9); font-size:14px; text-decoration:underline; cursor:pointer; margin:18px auto 0; display:block; max-width:300px; line-height:1.35;">Have an invite code from a coach? Join their team</button>
     <button type="button" data-welcome-skip style="background:none; border:none; color:rgba(255,255,255,0.65); font-size:13px; text-decoration:underline; cursor:pointer; margin:14px auto 0; display:block;">Skip</button>
   </div>`;
   const goNext = ()=> goHomeOrWizard();
@@ -5470,6 +5534,8 @@ function renderWelcomeScreen(){
   if(continueBtn) continueBtn.addEventListener('click', goNext);
   const skipBtn = document.querySelector('[data-welcome-skip]');
   if(skipBtn) skipBtn.addEventListener('click', goNext);
+  const joinBtn = document.querySelector('[data-welcome-join]');
+  if(joinBtn) joinBtn.addEventListener('click', openRedeemInviteModal);
 }
 function renderAuthGate(){
   const app = document.getElementById('app');
@@ -5517,6 +5583,10 @@ function renderAuthGate(){
         <span style="font-size:12px; color:var(--ink-soft);">or</span>
         <div style="flex:1; height:1px; background:var(--line);"></div>
       </div>
+      ${isSignup ? `
+      <label>First name <span style="font-weight:400; color:var(--ink-soft);">(optional, so we can say hello)</span></label>
+      <input type="text" id="auth-first-name" autocomplete="given-name" maxlength="40" placeholder="e.g. Sam" value="${esc(authNameDraft)}">
+      ` : ''}
       <label>Email</label>
       <input type="email" id="auth-email" autocomplete="email" placeholder="you@example.com" value="${esc(authEmailDraft)}">
       <label>Password</label>
@@ -5610,6 +5680,8 @@ async function handleAuthSubmit(){
   if(authBusy) return;
   const email = (document.getElementById('auth-email').value || '').trim();
   authEmailDraft = email;
+  const nameEl = document.getElementById('auth-first-name');
+  if(nameEl) authNameDraft = (nameEl.value || '').trim().slice(0, 40);
   const password = document.getElementById('auth-password').value || '';
   authError = '';
   authMessage = '';
@@ -5636,8 +5708,11 @@ async function handleAuthSubmit(){
   renderAuthGate();
   try{
     if(authMode === 'signup'){
-      const { data, error } = await supabaseClient.auth.signUp({ email, password, options: { emailRedirectTo: window.location.href } });
+      const signUpOptions = { emailRedirectTo: window.location.href };
+      if(authNameDraft) signUpOptions.data = { first_name: authNameDraft };
+      const { data, error } = await supabaseClient.auth.signUp({ email, password, options: signUpOptions });
       if(error){ authError = error.message; authBusy = false; renderAuthGate(); return; }
+      authNameDraft = '';
       if(data.session){
         currentUser = data.user;
         authBusy = false;
@@ -5656,6 +5731,7 @@ async function handleAuthSubmit(){
       authBusy = false;
       await loadData();
       await loadTeamsFromCloud();
+      playHelloIntroIfHome();
     }
   }catch(e){
     authError = 'Something went wrong. Please try again.';
@@ -5738,6 +5814,7 @@ async function handleNewPasswordSubmit(){
     authMode = 'login';
     await loadData();
     await loadTeamsFromCloud();
+    playHelloIntroIfHome();
   }catch(e){
     authBusy = false;
     authError = 'Something went wrong. Please try again.';
@@ -11542,6 +11619,17 @@ function attachHandlers(){
       render();
       const content = document.querySelector('.content');
       if(content) content.scrollTop = 0;
+      if(coachEditorTab === 'access'){
+        // Only redraw if the coach on screen actually changed status - a redraw wipes anything
+        // already typed into the form, so it must not happen because of some OTHER coach.
+        const shownId = VIEW.params && VIEW.params.id;
+        const shownCoach = ()=> (DATA.coaches || []).find(c=>c.id===shownId);
+        const hadAccess = shownCoach() ? coachHasAppAccess(shownCoach()) : false;
+        refreshInviteAccess().then(()=>{
+          const c = shownCoach();
+          if(c && coachHasAppAccess(c) !== hadAccess && coachEditorTab === 'access') render();
+        });
+      }
     });
   });
   document.querySelectorAll('[data-edit-qual]').forEach(el=>{
@@ -11794,6 +11882,56 @@ function stopTimer(){ clearInterval(timerInterval); timerInterval = null; timerF
   }, {passive:true});
   document.addEventListener('touchcancel', ()=>{ tracking = false; }, {passive:true});
 })();
+
+// ---------- Hello intro: a brief greeting straight after the person actively logs in ----------
+// Only ever called from the sign-in and password-reset paths - never when a saved session
+// simply reopens, which happens many times a day (and on match day speed matters).
+function helloNameForCurrentUser(){
+  if(!currentUser) return '';
+  const coaches = DATA.coaches || [];
+  const firstName = (full)=> String(full || '').trim().split(/\s+/)[0] || '';
+  // 0. A name the person gave when signing up, or that Google supplied. Always wins.
+  const meta = currentUser.user_metadata || {};
+  const accountName = firstName(meta.first_name || meta.given_name || meta.full_name || meta.name);
+  if(accountName) return accountName;
+  // 1. A coach record linked to this exact login (invited coaches get this when they join).
+  let coach = coaches.find(c=> c.authUserId && c.authUserId === currentUser.id);
+  // 2. A coach whose email is the one they logged in with.
+  const email = String(currentUser.email || '').trim().toLowerCase();
+  if(!coach && email) coach = coaches.find(c=> String(c.email || '').trim().toLowerCase() === email);
+  // 3. An admin's own team: the setup wizard records exactly one "Team Manager".
+  if(!coach && myEffectivePermission() === 'admin'){
+    const managers = coaches.filter(c=> c.role === 'Team Manager');
+    if(managers.length === 1) coach = managers[0];
+  }
+  return coach ? firstName(coach.name) : '';
+}
+function showHelloIntro(){
+  if(document.getElementById('hello-intro')) return;
+  if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const name = helloNameForCurrentUser();
+  const el = document.createElement('div');
+  el.id = 'hello-intro';
+  el.className = 'hello-intro';
+  el.innerHTML = `<div class="hi-icon"><img src="icon-192.png" alt=""></div><div class="hi-text">Hello, ${name ? esc(name) : 'coach'}</div>`;
+  document.body.appendChild(el);
+  let closed = false;
+  const close = ()=>{
+    if(closed) return;
+    closed = true;
+    el.classList.add('leaving');
+    setTimeout(()=> el.remove(), 300);
+  };
+  el.addEventListener('click', close);   // tap anywhere to skip
+  setTimeout(close, 2000);
+}
+function playHelloIntroIfHome(){
+  // Only when the login actually landed on the home screen - not on the welcome tour or the
+  // no-team / unfinished-setup screens.
+  if(!DATA || !DATA.teamSetupCompleted || !TEAMS_STORE.teams || TEAMS_STORE.teams.length === 0) return;
+  if(!document.querySelector('[data-home-tab]')) return;
+  showHelloIntro();
+}
 
 let passwordRecoveryInProgress = false;
 async function initApp(){
