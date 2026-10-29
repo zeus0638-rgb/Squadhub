@@ -564,6 +564,13 @@
     animation:helloIconIn 0.65s cubic-bezier(0.2, 0.9, 0.3, 1.15) both;
   }
   .hello-intro .hi-icon img{ width:100%; height:100%; object-fit:cover; display:block; }
+  /* A team badge: round (like everywhere else in the app) with a white ring so it holds up on any team colour */
+  .hello-intro .hi-icon.hi-badge{ border-radius:50%; border:4px solid rgba(255,255,255,0.92); box-sizing:border-box; background:#fff; }
+  .hello-intro .hi-team{
+    margin-top:8px; padding:0 28px; max-width:100%; box-sizing:border-box; text-align:center; overflow-wrap:anywhere;
+    color:rgba(255,255,255,0.82); font-family:'Oswald',sans-serif; font-weight:500; font-size:15px;
+    letter-spacing:.16em; text-transform:uppercase; animation:helloTextIn 0.5s ease-out 0.7s both;
+  }
   .hello-intro .hi-text{
     margin-top:24px; padding:0 24px; text-align:center; color:#fff; font-family:'Oswald',sans-serif; font-weight:700;
     font-size:30px; letter-spacing:.02em; animation:helloTextIn 0.5s ease-out 0.45s both;
@@ -1059,6 +1066,7 @@ function defaultAwardTypes(){
   ];
 }
 function applyDataSafetyDefaults(){
+  DATA.teamBadge = safeBadgeSrc(DATA.teamBadge) || null;
   if(!DATA.config) DATA.config = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
   if(typeof DATA.config.ageGroup === 'undefined') DATA.config.ageGroup = null;
   if(!Array.isArray(DATA.config.gameTypes) || DATA.config.gameTypes.length===0) DATA.config.gameTypes = ['development'];
@@ -1084,6 +1092,7 @@ async function loadData(){
       if(parsed && Array.isArray(parsed.teams)){
         // Already in the multi-team wrapper format.
         TEAMS_STORE = parsed;
+        TEAMS_STORE.teams.forEach(t=>{ t.badge = safeBadgeSrc(t.badge) || null; });
         const active = TEAMS_STORE.teams.find(t=>t.id===TEAMS_STORE.activeTeamId) || TEAMS_STORE.teams[0];
         DATA = active ? active.data : DATA;
         if(active && !TEAMS_STORE.activeTeamId) TEAMS_STORE.activeTeamId = active.id;
@@ -1245,6 +1254,7 @@ function switchTeam(teamId){
   saveData();
   applyTheme();
   goHomeOrWizard();
+  playHelloIntroIfHome();   // the new team's colours, badge and name make it obvious a switch happened
 }
 async function deleteTeamById(teamId){
   const idx = TEAMS_STORE.teams.findIndex(t=>t.id===teamId);
@@ -1577,7 +1587,7 @@ function syncActiveTeamData(){
   if(!active) return;
   active.data = DATA;
   active.name = DATA.teamNickname || DATA.teamName || 'My team';
-  active.badge = DATA.teamBadge || null;
+  active.badge = safeBadgeSrc(DATA.teamBadge) || null;
 }
 function applyViewOnlyLock(root){
   // Basic/View Only access: every form control is disabled, and every button is
@@ -3321,7 +3331,7 @@ function renderMatchdayTab(){
   return `
   <div class="topbar">
     ${teamLogoWatermarkHtml()}
-    <div style="display:flex; align-items:center; justify-content:center; gap:5px; cursor:pointer; margin-bottom:8px;" data-open-team-switcher>${DATA.teamBadge ? `<img src="${DATA.teamBadge}" style="width:16px;height:16px;border-radius:50%;object-fit:cover;">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <div style="display:flex; align-items:center; justify-content:center; gap:5px; cursor:pointer; margin-bottom:8px;" data-open-team-switcher>${safeBadgeSrc(DATA.teamBadge) ? `<img src="${safeBadgeSrc(DATA.teamBadge)}" style="width:16px;height:16px;border-radius:50%;object-fit:cover;">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     <h1>Live</h1>
     <div class="sub">${new Date().toLocaleDateString(undefined,{weekday:'long', day:'numeric', month:'long'})}</div>
   </div>
@@ -3344,8 +3354,8 @@ function teamLogoWatermarkHtml(){
   // stretched top-to-bottom - an <img> is a replaced element, so sizing it directly
   // with top:0/bottom:0 but no explicit height falls back to its own aspect ratio
   // instead of actually filling the gap.
-  if(!DATA.teamBadge) return '';
-  return `<div class="topbar-watermark-wrap"><img class="topbar-watermark" src="${DATA.teamBadge}" alt=""></div>`;
+  if(!safeBadgeSrc(DATA.teamBadge)) return '';
+  return `<div class="topbar-watermark-wrap"><img class="topbar-watermark" src="${safeBadgeSrc(DATA.teamBadge)}" alt=""></div>`;
 }
 function renderHomeTab(){
   const seasonFixtures = fixturesForSeason(homeSeasonFilter);
@@ -3442,7 +3452,7 @@ function renderHomeTab(){
   return `
   <div class="topbar" style="position:relative;">
     ${teamLogoWatermarkHtml()}
-    <div style="display:flex; align-items:center; justify-content:center; gap:5px; cursor:pointer; margin-bottom:8px;" data-open-team-switcher>${DATA.teamBadge ? `<img src="${DATA.teamBadge}" style="width:16px;height:16px;border-radius:50%;object-fit:cover;">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <div style="display:flex; align-items:center; justify-content:center; gap:5px; cursor:pointer; margin-bottom:8px;" data-open-team-switcher>${safeBadgeSrc(DATA.teamBadge) ? `<img src="${safeBadgeSrc(DATA.teamBadge)}" style="width:16px;height:16px;border-radius:50%;object-fit:cover;">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     <h1>Home</h1>
     <div class="sub">Welcome back</div>
     ${nextMatch ? `<div class="tap" data-open-fixture="${nextMatch.id}" style="position:absolute; top:16px; right:20px; text-align:right; cursor:pointer; max-width:46%;">
@@ -4821,7 +4831,7 @@ function renderPlayersTab(){
   return `
   <div class="topbar">
     ${teamLogoWatermarkHtml()}
-    <div style="display:flex; align-items:center; justify-content:center; gap:5px; cursor:pointer; margin-bottom:8px;" data-open-team-switcher>${DATA.teamBadge ? `<img src="${DATA.teamBadge}" style="width:16px;height:16px;border-radius:50%;object-fit:cover;">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <div style="display:flex; align-items:center; justify-content:center; gap:5px; cursor:pointer; margin-bottom:8px;" data-open-team-switcher>${safeBadgeSrc(DATA.teamBadge) ? `<img src="${safeBadgeSrc(DATA.teamBadge)}" style="width:16px;height:16px;border-radius:50%;object-fit:cover;">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     <h1>Players</h1>
     <div class="sub">${players.length} in the squad pool</div>
   </div>
@@ -4844,7 +4854,7 @@ function renderPlayerEditor(id){
       ${DATA.seasons.length===0 ? `<div class="small" style="color:var(--ink-soft);">No seasons set up yet — add one in Settings &rarr; Seasons.</div>` :
         DATA.seasons.map(s=>`
         <label style="display:flex; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid var(--line); cursor:pointer; margin-bottom:0;">
-          <input type="checkbox" data-p-reg-season="${s.label}" ${(p.registeredSeasons||[]).includes(s.label)?'checked':''} style="width:auto; margin:0;">
+          <input type="checkbox" data-p-reg-season="${esc(s.label)}" ${(p.registeredSeasons||[]).includes(s.label)?'checked':''} style="width:auto; margin:0;">
           <span style="font-weight:500; font-size:14px; color:var(--ink); text-transform:none;">${esc(s.label)}${s.current?' (current)':''}</span>
         </label>`).join('')}
     </div>
@@ -4956,7 +4966,7 @@ function renderCoachEditor(id){
       ${DATA.seasons.length===0 ? `<div class="small" style="color:var(--ink-soft);">No seasons set up yet — add one in Settings &rarr; Seasons.</div>` :
         DATA.seasons.map(s=>`
         <label style="display:flex; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid var(--line); cursor:pointer; margin-bottom:0;">
-          <input type="checkbox" data-c-reg-season="${s.label}" ${(c.registeredSeasons||[]).includes(s.label)?'checked':''} style="width:auto; margin:0;">
+          <input type="checkbox" data-c-reg-season="${esc(s.label)}" ${(c.registeredSeasons||[]).includes(s.label)?'checked':''} style="width:auto; margin:0;">
           <span style="font-weight:500; font-size:14px; color:var(--ink); text-transform:none;">${esc(s.label)}${s.current?' (current)':''}</span>
         </label>`).join('')}
     </div>
@@ -5352,7 +5362,7 @@ function renderCoachesTab(){
   return `
   <div class="topbar" style="position:relative;">
     ${teamLogoWatermarkHtml()}
-    <div style="display:flex; align-items:center; justify-content:center; gap:5px; cursor:pointer; margin:0 auto 8px; width:fit-content;" data-open-team-switcher>${DATA.teamBadge ? `<img src="${DATA.teamBadge}" style="width:16px;height:16px;border-radius:50%;object-fit:cover;">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <div style="display:flex; align-items:center; justify-content:center; gap:5px; cursor:pointer; margin:0 auto 8px; width:fit-content;" data-open-team-switcher>${safeBadgeSrc(DATA.teamBadge) ? `<img src="${safeBadgeSrc(DATA.teamBadge)}" style="width:16px;height:16px;border-radius:50%;object-fit:cover;">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     <h1>Coaches</h1>
     <div class="sub">${DATA.coaches.length} coach${DATA.coaches.length===1?'':'es'} · qualifications &amp; certifications</div>
   </div>
@@ -5404,7 +5414,7 @@ function openTeamSwitcherModal(){
         const ageGroup = t.data && t.data.config ? t.data.config.ageGroup : null;
         return `<div class="player-row tap" data-switch-team="${t.id}" style="padding:11px 10px; border-radius:8px; ${isActive?'background:color-mix(in srgb, var(--win) 18%, transparent);':''}">
           <div style="width:32px; height:32px; border-radius:50%; overflow:hidden; background:var(--pitch); display:flex; align-items:center; justify-content:center; color:#fff; font-weight:600; font-size:13px; flex-shrink:0;">
-            ${t.badge ? `<img src="${t.badge}" style="width:100%; height:100%; object-fit:cover;">` : esc(((t.name||'?')[0]||'?').toUpperCase())}
+            ${safeBadgeSrc(t.badge) ? `<img src="${safeBadgeSrc(t.badge)}" style="width:100%; height:100%; object-fit:cover;">` : esc(((t.name||'?')[0]||'?').toUpperCase())}
           </div>
           <div style="flex:1; font-weight:600; color:var(--ink);">${esc(t.name || 'Unnamed team')}${ageGroup ? ` <span style="font-weight:400; color:var(--ink-soft);">(${esc(ageGroup)})</span>` : ''}</div>
           ${isActive ? `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" style="flex-shrink:0;"><path d="M5 13l4 4L19 7" stroke="var(--win)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>` : ''}
@@ -5889,7 +5899,7 @@ function renderTeamSetupWizard(){
       <label>Team badge <span style="font-weight:400; color:var(--ink-soft);">— optional</span></label>
       <div style="display:flex; align-items:center; gap:14px;">
         <div style="width:64px; height:64px; border-radius:50%; overflow:hidden; background:var(--pitch); display:flex; align-items:center; justify-content:center; color:#fff; font-family:'Oswald',sans-serif; font-weight:600; font-size:22px; flex-shrink:0;">
-          ${w.teamBadge ? `<img src="${w.teamBadge}" style="width:100%; height:100%; object-fit:cover;">` : esc((w.teamName[0]||'?').toUpperCase())}
+          ${safeBadgeSrc(w.teamBadge) ? `<img src="${safeBadgeSrc(w.teamBadge)}" style="width:100%; height:100%; object-fit:cover;">` : esc((w.teamName[0]||'?').toUpperCase())}
         </div>
         <label class="btn ghost small" style="display:inline-block; cursor:pointer; margin-bottom:0;">
           ${w.teamBadge ? 'Change badge' : 'Upload badge'}
@@ -5986,7 +5996,7 @@ function renderTeamTab(){
       <div class="card">
         <div style="display:flex; align-items:center; gap:14px; margin-bottom:14px;">
           <div id="team-badge-preview" style="width:64px; height:64px; border-radius:50%; overflow:hidden; background:var(--pitch); display:flex; align-items:center; justify-content:center; color:#fff; font-family:'Oswald',sans-serif; font-weight:600; font-size:22px; flex-shrink:0;">
-            ${DATA.teamBadge ? `<img src="${DATA.teamBadge}" style="width:100%; height:100%; object-fit:cover;">` : esc((teamShort()[0]||'?').toUpperCase())}
+            ${safeBadgeSrc(DATA.teamBadge) ? `<img src="${safeBadgeSrc(DATA.teamBadge)}" style="width:100%; height:100%; object-fit:cover;">` : esc((teamShort()[0]||'?').toUpperCase())}
           </div>
           <div style="flex:1;">
             <label class="btn ghost small" style="display:inline-block; cursor:pointer; margin-bottom:0;">
@@ -6021,7 +6031,7 @@ function renderTeamTab(){
       <div class="card">
         <div style="display:flex; align-items:center; gap:14px;">
           <div style="width:64px; height:64px; border-radius:50%; overflow:hidden; background:var(--pitch); display:flex; align-items:center; justify-content:center; color:#fff; font-family:'Oswald',sans-serif; font-weight:600; font-size:22px; flex-shrink:0;">
-            ${DATA.teamBadge ? `<img src="${DATA.teamBadge}" style="width:100%; height:100%; object-fit:cover;">` : esc((teamShort()[0]||'?').toUpperCase())}
+            ${safeBadgeSrc(DATA.teamBadge) ? `<img src="${safeBadgeSrc(DATA.teamBadge)}" style="width:100%; height:100%; object-fit:cover;">` : esc((teamShort()[0]||'?').toUpperCase())}
           </div>
           <div style="flex:1;">
             <div class="small" style="color:var(--ink-soft);">Full team name</div>
@@ -6267,7 +6277,7 @@ function renderTeamTab(){
   return `
   <div class="topbar" style="position:relative;">
     ${teamLogoWatermarkHtml()}
-    <div style="display:flex; align-items:center; justify-content:center; gap:5px; cursor:pointer; margin-bottom:8px;" data-open-team-switcher>${DATA.teamBadge ? `<img src="${DATA.teamBadge}" style="width:16px;height:16px;border-radius:50%;object-fit:cover;">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <div style="display:flex; align-items:center; justify-content:center; gap:5px; cursor:pointer; margin-bottom:8px;" data-open-team-switcher>${safeBadgeSrc(DATA.teamBadge) ? `<img src="${safeBadgeSrc(DATA.teamBadge)}" style="width:16px;height:16px;border-radius:50%;object-fit:cover;">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     <h1>Settings</h1>
     <div class="sub">Format, identity &amp; backup</div>
     ${!DATA.teamSetupCompleted ? `<button type="button" data-open-team-wizard title="Team setup assistant" style="position:absolute; top:12px; right:14px; background:rgba(255,255,255,0.18); border:1.5px solid rgba(255,255,255,0.4); border-radius:20px; padding:7px 13px; display:flex; align-items:center; gap:6px; color:#fff; cursor:pointer; font-weight:700; font-size:12.5px; white-space:nowrap;">
@@ -6446,6 +6456,9 @@ function resizeImageFile(file, maxSize, quality){
         const canvas = document.createElement('canvas');
         canvas.width = maxSize; canvas.height = maxSize;
         const ctx = canvas.getContext('2d');
+        // JPEG has no transparency: without this, the see-through parts of a PNG logo are saved as black.
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, maxSize, maxSize);
         ctx.drawImage(img, sx, sy, side, side, 0, 0, maxSize, maxSize);
         resolve(canvas.toDataURL('image/jpeg', quality));
       };
@@ -6458,6 +6471,11 @@ function resizeImageFile(file, maxSize, quality){
 }
 function sortByName(players){
   return [...players].sort((a,b)=> a.name.localeCompare(b.name));
+}
+// A team badge is shared between coaches through the cloud, so it can never be trusted as
+// markup. Only a real base64 image data-URL is accepted; anything else is treated as "no badge".
+function safeBadgeSrc(b){
+  return (typeof b === 'string' && /^data:image\/(?:png|jpe?g|webp|gif);base64,[A-Za-z0-9+\/=]+$/.test(b)) ? b : '';
 }
 function esc(s){
   return (s||'').toString().replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -11910,10 +11928,19 @@ function showHelloIntro(){
   if(document.getElementById('hello-intro')) return;
   if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const name = helloNameForCurrentUser();
+  const active = TEAMS_STORE.teams.find(t=>t.id===TEAMS_STORE.activeTeamId);
+  const teamName = active ? (active.name || '') : '';
+  const badge = safeBadgeSrc(DATA && DATA.teamBadge);   // this team's own badge, if it has a usable one
   const el = document.createElement('div');
   el.id = 'hello-intro';
   el.className = 'hello-intro';
-  el.innerHTML = `<div class="hi-icon"><img src="icon-192.png" alt=""></div><div class="hi-text">Hello, ${name ? esc(name) : 'coach'}</div>`;
+  el.innerHTML = `<div class="hi-icon${badge ? ' hi-badge' : ''}"><img alt=""></div>`
+    + `<div class="hi-text">Hello, ${name ? esc(name) : 'coach'}</div>`
+    + (teamName ? `<div class="hi-team">${esc(teamName)}</div>` : '');
+  const img = el.querySelector('img');
+  // No badge, or one that won't load: fall back to the SquadHub icon rather than show a broken image.
+  img.onerror = ()=>{ img.onerror = null; el.querySelector('.hi-icon').classList.remove('hi-badge'); img.src = 'icon-192.png'; };
+  img.src = badge || 'icon-192.png';
   document.body.appendChild(el);
   let closed = false;
   const close = ()=>{
