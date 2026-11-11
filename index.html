@@ -264,6 +264,34 @@
   .switch input:checked + .switch-track{ background:var(--win); border-color:var(--win); }
   .switch input:checked + .switch-track::after{ transform:translateX(22px); }
   .switch input:focus-visible + .switch-track{ outline:2px solid var(--ink); outline-offset:2px; }
+  /* Enlarged pitch views (live match and review) take the team colour instead of plain black/white. Inside
+     them the page colours are swapped for white-on-team-colour ones, so every label, chip and button stays readable. */
+  .pitch-enlarge-overlay{
+    background:var(--pitch); color:#fff;
+    --ink:#fff; --ink-soft:rgba(255,255,255,0.82); --surface-2:rgba(0,0,0,0.26); --panel:rgba(0,0,0,0.24);
+    --line:rgba(255,255,255,0.30); --win:#C4F5D6; --loss:#FFD6DB; --loss-bg:rgba(0,0,0,0.30);
+  }
+  .pitch-enlarge-overlay .btn.ghost{ color:#fff; border-color:rgba(255,255,255,0.8); background:rgba(0,0,0,0.12); }
+  .pitch-enlarge-overlay .btn.amber{ background:#fff; color:var(--pitch); }
+  .pitch-enlarge-overlay .live-inline-badge{ background:rgba(0,0,0,0.32); color:#fff; }
+  .pitch-enlarge-overlay .live-inline-badge span{ background:#fff !important; }
+  .pitch-enlarge-overlay .scoreboard .timer.stoppage, .pitch-enlarge-overlay .timer.stoppage{ color:#FFE27A; }
+  /* Goal / yellow / red buttons in the player pop-ups: bigger, with the goal ball on a white disc so it stands out */
+  .quick-event-btn{ flex:1; border:none; border-radius:12px; min-height:66px; padding:8px 4px; display:flex; align-items:center; justify-content:center; font-size:30px; line-height:1; cursor:pointer; }
+  .quick-event-btn:active{ filter:brightness(0.92); }
+  .quick-event-btn .qe-ball{ display:flex; align-items:center; justify-content:center; width:52px; height:52px; border-radius:50%; background:#fff; font-size:36px; line-height:1; box-shadow:0 2px 6px rgba(0,0,0,0.35); }
+  /* "Custom" colour button at the end of the quick picks */
+  .custom-colour-btn{ display:inline-flex; align-items:center; gap:8px; height:38px; padding:0 14px 0 5px; border-radius:19px; border:2px solid var(--line); background:var(--panel); color:var(--ink); font-family:'Inter',sans-serif; font-size:14px; font-weight:600; cursor:pointer; }
+  .custom-colour-btn.on{ border:3px solid var(--ink); padding-left:4px; }
+  .custom-colour-btn .custom-dot{ width:26px; height:26px; border-radius:50%; flex-shrink:0; background:conic-gradient(#ff0040,#ff8c00,#ffee00,#22c55e,#00b4ff,#7c3aed,#ff00c8,#ff0040); }
+  /* Digital time control: big HH : MM digits you can type into, with up/down steppers */
+  .dtc{ display:flex; align-items:center; justify-content:center; gap:8px; margin:6px 0 16px; }
+  .dtc .dtc-col{ display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .dtc .dtc-digits{ width:92px; margin:0; padding:8px 0; text-align:center; font-family:'Oswald',sans-serif; font-size:46px !important; font-weight:600; line-height:1.1; letter-spacing:.02em; background:var(--surface-2); border:1px solid var(--line); border-radius:14px; color:var(--ink); }
+  .dtc .dtc-colon{ font-family:'Oswald',sans-serif; font-size:46px; font-weight:600; color:var(--ink); line-height:1; }
+  .dtc .dtc-step{ width:92px; height:42px; display:flex; align-items:center; justify-content:center; border:1px solid var(--line); background:var(--panel); color:var(--ink); border-radius:12px; cursor:pointer; touch-action:manipulation; user-select:none; -webkit-user-select:none; padding:0; }
+  .dtc .dtc-step:active{ background:var(--surface-2); }
+  .dtc .dtc-step svg{ width:22px; height:22px; }
   /* Hexagon colour palette */
   .hex-palette svg{ width:100%; height:auto; display:block; touch-action:manipulation; }
   .hex-palette polygon[data-palette-hex]{ cursor:pointer; }
@@ -602,7 +630,7 @@
   }
   .rel-wrap{position:relative;}
   .pitch-enlarge-overlay{
-    position:fixed; inset:0; z-index:400; background:var(--paper); overflow-y:auto;
+    position:fixed; inset:0; z-index:400; background:var(--pitch); overflow-y:auto;
     -webkit-overflow-scrolling:touch; padding:18px; box-sizing:border-box;
   }
   /* touch-action:none only on the actual draggable markers - applying it to the whole
@@ -1038,6 +1066,46 @@ function hexPaletteHtml(selectedHex){
   }).join('');
   const ring = selected ? `<polygon points="${pts(ox+selected.cx,oy+selected.cy)}" fill="none" stroke="var(--ink)" stroke-width="1.9" stroke-linejoin="round" pointer-events="none"></polygon>` : '';
   return `<svg viewBox="0 0 ${W.toFixed(2)} ${H}" xmlns="http://www.w3.org/2000/svg" role="group" aria-label="Colour palette">${polys}${ring}</svg>`;
+}
+// The hexagon palette lives in a floaty pop-up, opened from the "Custom" button in Settings > Colour.
+function customColourBodyHtml(){
+  const picked = (DATA.themeColor==='custom' && hexToRgb(DATA.customThemeColor)) ? String(DATA.customThemeColor).toUpperCase() : '';
+  let preview = `<div class="small" style="color:var(--ink-soft); margin-top:12px; text-align:center;">Nothing picked yet — tap a colour.</div>`;
+  if(picked){
+    const applied = themeFromHex(picked).pitch;
+    preview = `<div style="display:flex; align-items:center; gap:12px; margin-top:14px;">
+      <span style="width:38px; height:38px; border-radius:50%; background:${applied}; border:2px solid var(--line); flex-shrink:0;"></span>
+      <div style="min-width:0;">
+        <div style="font-weight:600;">Your colour ${applied}</div>
+        ${applied!==picked ? `<div class="small" style="color:var(--ink-soft);">Darkened a little from ${picked} so white text stays easy to read.</div>` : ''}
+      </div>
+    </div>`;
+  }
+  return `<div class="hex-palette">${hexPaletteHtml(picked)}</div>${preview}`;
+}
+function wireCustomColourModal(){
+  document.querySelectorAll('#modal-root [data-palette-hex]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      DATA.themeColor = 'custom';
+      DATA.customThemeColor = el.dataset.paletteHex;
+      applyTheme();
+      saveData();
+      render();                                            // the page behind picks up the new colour straight away
+      const box = document.getElementById('custom-colour-body');
+      if(box){ box.innerHTML = customColourBodyHtml(); wireCustomColourModal(); }   // move the ring + preview, keep the popup open
+    });
+  });
+}
+function openCustomColourModal(){
+  const body = `
+    <h3>Custom colour</h3>
+    <button class="icon-x" data-close-modal>&times;</button>
+    <div class="small" style="color:var(--ink-soft); margin-top:-6px; margin-bottom:12px;">Tap any colour to use it for your team. Try a few — the app behind changes as you go.</div>
+    <div id="custom-colour-body">${customColourBodyHtml()}</div>
+    <button class="btn amber" data-close-modal style="margin-top:16px; margin-bottom:0;">Done</button>`;
+  openModal(body, {floating:true});
+  attachModalHandlers();
+  wireCustomColourModal();
 }
 function applyTheme(){
   const key = DATA.themeColor || 'green';
@@ -2760,6 +2828,41 @@ function plannedMinutesByPeriod(fixture, playerId, useActual){
     return {mins, isSub};
   });
 }
+const REVIEW_MINUTES_SORTS = [
+  {value:'minutes-asc',  label:'Minutes: min to max', short:'Min–Max'},
+  {value:'minutes-desc', label:'Minutes: max to min', short:'Max–Min'},
+  {value:'name-asc',     label:'Name: A–Z',           short:'A–Z'},
+  {value:'name-desc',    label:'Name: Z–A',           short:'Z–A'}
+];
+let reviewMinutesSort = 'name-asc';
+function sortedForReviewMinutes(f, squad, useActual){
+  const total = p => plannedMinutesByPeriod(f, p.id, useActual).reduce((a,x)=>a+x.mins, 0);
+  const byName = (a,b)=> (a.name||'').localeCompare(b.name||'', undefined, {sensitivity:'base', numeric:true});
+  const list = [...squad];
+  switch(reviewMinutesSort){
+    case 'minutes-asc':  return list.sort((a,b)=> (total(a)-total(b)) || byName(a,b));
+    case 'minutes-desc': return list.sort((a,b)=> (total(b)-total(a)) || byName(a,b));
+    case 'name-desc':    return list.sort((a,b)=> byName(b,a));
+    default:             return list.sort(byName);
+  }
+}
+function reviewMinutesSortChipHtml(){
+  const cur = REVIEW_MINUTES_SORTS.find(o=>o.value===reviewMinutesSort) || REVIEW_MINUTES_SORTS[2];
+  return `<button type="button" class="season-chip sort-chip" data-review-minutes-sort-filter title="Sort players">
+    <svg viewBox="0 0 24 24" fill="none"><path d="M7 4v16M7 20l-3.5-3.5M7 20l3.5-3.5M17 20V4M17 4l-3.5 3.5M17 4l3.5 3.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span>${esc(cur.short)}</span>
+  </button>`;
+}
+function wireReviewMinutesSort(afterPick, root){
+  (root || document).querySelectorAll('[data-review-minutes-sort-filter]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      openOptionPicker('Sort players', REVIEW_MINUTES_SORTS.map(o=>({value:o.value, label:o.label})), reviewMinutesSort, (val)=>{
+        reviewMinutesSort = val;
+        afterPick();
+      });
+    });
+  });
+}
 function renderReviewMinutesSection(f, squad, useActual){
   return `
     <div class="section-title">Review player minutes</div>
@@ -2768,6 +2871,7 @@ function renderReviewMinutesSection(f, squad, useActual){
       <button type="button" class="${reviewMinutesTab==='total'?'on':''}" data-review-minutes-tab="total">Total mins</button>
     </div>
     ${reviewMinutesTab==='byperiod' ? `
+    <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">${reviewMinutesSortChipHtml()}</div>
     <div class="small" style="color:var(--ink-soft); margin-bottom:8px;">Bar fills from the left for starters, from the right for subs coming on.</div>
     <div class="card">
       <div class="row" style="padding-bottom:8px; border-bottom:1px solid var(--line); margin-bottom:6px;">
@@ -2777,7 +2881,7 @@ function renderReviewMinutesSection(f, squad, useActual){
         </div>
         <div class="small" style="width:38px; flex-shrink:0; text-align:right; font-weight:700; color:var(--ink-soft);">Tot</div>
       </div>
-      ${squad.map(p=>{
+      ${sortedForReviewMinutes(f, squad, useActual).map(p=>{
         const perPeriod = plannedMinutesByPeriod(f, p.id, useActual);
         const mpp = f.minutesPerPeriod || DEFAULT_CONFIG.minutesPerPeriod;
         const total = perPeriod.reduce((s,x)=>s+x.mins, 0);
@@ -3641,6 +3745,7 @@ function openPlanMinutesReviewModal(fixtureId, useActual){
     document.querySelectorAll('[data-review-minutes-tab]').forEach(btn=>{
       btn.addEventListener('click', ()=>{ reviewMinutesTab = btn.dataset.reviewMinutesTab; renderModal(); });
     });
+    wireReviewMinutesSort(()=> renderModal(), document.getElementById('modal-root'));
   };
   renderModal();
 }
@@ -6604,23 +6709,13 @@ function renderTeamTab(){
             ${selected?'<svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M5 13l4 4L19 7" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>':''}
           </button>`;
         }).join('')}
+        ${(()=>{
+          const isCustom = DATA.themeColor==='custom' && hexToRgb(DATA.customThemeColor);
+          const dot = isCustom ? `background:${themeFromHex(DATA.customThemeColor).pitch};` : '';
+          return `<button type="button" class="custom-colour-btn ${isCustom?'on':''}" data-open-custom-colour title="Choose any colour"><span class="custom-dot" style="${dot}"></span>Custom</button>`;
+        })()}
       </div>
       <div class="small" style="color:var(--ink-soft); margin-top:12px;">Applies across the whole app — headers, buttons, badges.</div>
-    </div>
-    <div class="card">
-      <div style="font-weight:600;">Pick any colour</div>
-      <div class="small" style="color:var(--ink-soft); margin:2px 0 12px;">Tap a colour in the palette to use it for your team.</div>
-      <div class="hex-palette">${hexPaletteHtml(DATA.themeColor==='custom' ? DATA.customThemeColor : '')}</div>
-      ${DATA.themeColor==='custom' && hexToRgb(DATA.customThemeColor) ? (()=>{
-        const picked = String(DATA.customThemeColor).toUpperCase(), applied = themeFromHex(picked).pitch;
-        return `<div style="display:flex; align-items:center; gap:12px; margin-top:14px;">
-          <span style="width:38px; height:38px; border-radius:50%; background:${applied}; border:2px solid var(--line); flex-shrink:0;"></span>
-          <div style="min-width:0;">
-            <div style="font-weight:600;">Your colour ${applied}</div>
-            ${applied!==picked ? `<div class="small" style="color:var(--ink-soft);">Darkened a little from ${picked} so white text stays easy to read.</div>` : ''}
-          </div>
-        </div>`;
-      })() : ''}
     </div>`;
   } else if(tab==='format'){
     if(!DATA.teamSetupCompleted){
@@ -7287,20 +7382,75 @@ function openCoachQualModal(coachId){
     showSavedToast();
   };
 }
-function commitMatchStart(fixtureId, quarter, secondsLeft, actualStartTime){
+function commitMatchStart(fixtureId, quarter, secondsLeft, actualStartTime, stoppageSeconds){
   const f = DATA.fixtures.find(x=>x.id===fixtureId);
   if(!f) return;
   f.status = 'live';
   if(!f.actualLineup) f.actualLineup = JSON.parse(JSON.stringify(f.lineup));
   f.liveState.quarter = quarter;
   f.liveState.secondsLeft = secondsLeft;
-  f.liveState.stoppageSeconds = 0;
-  f.liveState.running = true;
+  f.liveState.stoppageSeconds = stoppageSeconds || 0;
+  setLiveRunning(f, true);
   f.liveState.actualStartTime = actualStartTime || null;
   saveData();
   closeModal();
   go(VIEW.tab==='fixtures'||VIEW.tab==='matchday' ? VIEW.tab : 'matchday', 'live', {id:f.id});
   startTimer(f.id);
+}
+// ---------- Digital time control (HH : MM) ----------
+function pad2(n){ return String(n).padStart(2,'0'); }
+function renderDigitalTimeControl(id, hhmm){
+  const parts = String(hhmm || nowHHMM()).split(':');
+  const h = pad2(Math.max(0, Math.min(23, parseInt(parts[0],10) || 0)));
+  const m = pad2(Math.max(0, Math.min(59, parseInt(parts[1],10) || 0)));
+  const up = '<svg viewBox="0 0 24 24" fill="none"><path d="M6 15l6-6 6 6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const down = '<svg viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const step = (unit, dir)=>`<button type="button" class="dtc-step" data-dtc-step="${unit}|${dir}" aria-label="${dir>0?'Increase':'Decrease'} ${unit==='h'?'hours':'minutes'}">${dir>0?up:down}</button>`;
+  return `<div class="dtc" id="${id}">
+    <div class="dtc-col">${step('h',1)}<input type="text" inputmode="numeric" maxlength="2" autocomplete="off" class="dtc-digits" data-dtc-unit="h" value="${h}" aria-label="Hours">${step('h',-1)}</div>
+    <div class="dtc-colon">:</div>
+    <div class="dtc-col">${step('m',1)}<input type="text" inputmode="numeric" maxlength="2" autocomplete="off" class="dtc-digits" data-dtc-unit="m" value="${m}" aria-label="Minutes">${step('m',-1)}</div>
+  </div>`;
+}
+function getDigitalTimeValue(id){
+  const root = document.getElementById(id); if(!root) return nowHHMM();
+  const h = Math.max(0, Math.min(23, parseInt(root.querySelector('[data-dtc-unit="h"]').value,10) || 0));
+  const m = Math.max(0, Math.min(59, parseInt(root.querySelector('[data-dtc-unit="m"]').value,10) || 0));
+  return pad2(h)+':'+pad2(m);
+}
+function initDigitalTimeControl(id){
+  const root = document.getElementById(id); if(!root) return;
+  const hIn = root.querySelector('[data-dtc-unit="h"]'), mIn = root.querySelector('[data-dtc-unit="m"]');
+  const read = el => parseInt(el.value,10) || 0;
+  const write = (hh,mm)=>{ hIn.value = pad2(((hh%24)+24)%24); mIn.value = pad2(((mm%60)+60)%60); };
+  // Stepping minutes past 59 (or below 00) carries into the hour, like a real clock.
+  const stepBy = (unit, dir)=>{
+    let hh = read(hIn), mm = read(mIn);
+    if(unit==='h') hh += dir;
+    else { mm += dir; if(mm>59){ mm = 0; hh += 1; } else if(mm<0){ mm = 59; hh -= 1; } }
+    write(hh, mm);
+  };
+  root.querySelectorAll('[data-dtc-step]').forEach(btn=>{
+    const [unit, dirStr] = btn.dataset.dtcStep.split('|'); const dir = parseInt(dirStr,10);
+    let delay = null, repeat = null;
+    const stop = ()=>{ clearTimeout(delay); clearInterval(repeat); delay = repeat = null; };
+    btn.addEventListener('pointerdown', (e)=>{
+      e.preventDefault(); stepBy(unit, dir);
+      delay = setTimeout(()=>{ repeat = setInterval(()=> stepBy(unit, dir), 90); }, 400);   // hold to keep stepping
+    });
+    ['pointerup','pointerleave','pointercancel'].forEach(ev=> btn.addEventListener(ev, stop));
+    btn.addEventListener('click', (e)=>{ if(e.detail===0) stepBy(unit, dir); });           // keyboard activation
+  });
+  [hIn, mIn].forEach(inp=>{
+    inp.addEventListener('focus', ()=> setTimeout(()=>{ try{ inp.select(); }catch(e){} }, 0));
+    inp.addEventListener('input', ()=>{ inp.value = inp.value.replace(/\D/g,'').slice(0,2); });
+    inp.addEventListener('blur', ()=> write(Math.min(23, read(hIn)), Math.min(59, read(mIn))));   // typed values clamp to a real time
+  });
+}
+function quickEventBtnHtml(kind, attr, title){
+  const colours = {goal:'#2E9E3F', yellowcard:'#F4C430', redcard:'#E0393E'};
+  const icon = kind==='goal' ? '<span class="qe-ball">⚽</span>' : (kind==='yellowcard' ? '🟨' : '🟥');
+  return `<button type="button" ${attr}="${kind}" class="quick-event-btn" style="background:${colours[kind]};" title="${title}">${icon}</button>`;
 }
 function nowHHMM(){
   const d = new Date();
@@ -7461,7 +7611,7 @@ function renderNewFixtureWizardStep2(){
   const body = `
     <div style="display:flex; flex-direction:column; max-height:70vh;">
       <div style="flex-shrink:0;">
-        <h3>Team selection</h3>
+        <h3>Copy Lineup?</h3>
         <button class="icon-x" data-close-modal>&times;</button>
         <div class="small" style="color:var(--ink-soft); margin-top:-6px; margin-bottom:14px;">Start with a blank teamsheet, or copy the squad and formation from a recent fixture.</div>
       </div>
@@ -7758,65 +7908,82 @@ function openStartMatchConfirm(fixtureId){
     }, 350);
   };
 }
-function openKickoffTimeConfirm(fixtureId){
+function scheduledKickoffHHMM(f){
+  return (f && f.dateTime && f.dateTime.includes('T')) ? f.dateTime.split('T')[1].slice(0,5) : null;
+}
+// How far into the first period we are, if it kicked off at timeVal (HH:MM, earlier today).
+function elapsedSecondsSince(timeVal){
+  const [hh, mm] = String(timeVal).split(':').map(Number);
+  const d = new Date(); d.setHours(hh||0, mm||0, 0, 0);
+  return Math.floor((Date.now() - d.getTime()) / 1000);      // negative if the time is still in the future
+}
+function goLiveFromTime(fixtureId, quarter, timeVal, exactElapsedSeconds){
+  const f = DATA.fixtures.find(x=>x.id===fixtureId); if(!f) return;
+  const mpp = f.minutesPerPeriod || DEFAULT_CONFIG.minutesPerPeriod;
+  const rawElapsed = (typeof exactElapsedSeconds === 'number') ? exactElapsedSeconds : elapsedSecondsSince(timeVal);
+  if(rawElapsed < 0) timeVal = nowHHMM();                       // a start time in the future just means "starting now"
+  const elapsed = Math.max(0, rawElapsed);
+  const secondsLeft = Math.max(0, mpp*60 - elapsed);
+  const stoppage = Math.max(0, elapsed - mpp*60);            // already past the end of regular time
+  closeModal();
+  showKickoffAnimation();
+  setTimeout(()=>{ commitMatchStart(fixtureId, quarter, secondsLeft, timeVal, stoppage); }, 350);
+}
+// "Match is starting now": did it kick off at the scheduled time? -> Go live?  /  No -> set the time -> Go live?
+function openKickoffTimeConfirm(fixtureId, step, chosenTime){
   const f = DATA.fixtures.find(x=>x.id===fixtureId);
   if(!f) return;
-  const body = `
-    <h3>Kick off</h3>
-    <button class="icon-x" data-close-modal>&times;</button>
-    <div class="small" style="color:var(--ink-soft); margin-top:-6px; margin-bottom:16px;">vs ${esc(f.opponent||'TBC')}</div>
-    <label>Kick-off time</label>
-    <div class="toggle-group" id="kickoff-quick-group">
-      <button type="button" data-kickoff-quick="${f.dateTime && f.dateTime.includes('T') ? f.dateTime.split('T')[1].slice(0,5) : nowHHMM()}">Original KO time</button>
-      <button type="button" class="on" data-kickoff-quick="${nowHHMM()}">Now</button>
-    </div>
-    <input type="time" id="kickoff-time" value="${nowHHMM()}">
-    <div class="small" style="color:var(--ink-soft); margin-top:-10px; margin-bottom:18px;">Pick whichever's right, or set your own time above.</div>
-    <div style="display:flex; gap:10px;">
-      <button class="btn ghost" data-kickoff-back="${fixtureId}" style="flex:1; margin-bottom:0;">&larr; Back</button>
-      <button class="btn amber" data-kickoff-confirm="${fixtureId}" style="flex:1; margin-bottom:0;">⚽ Kick off</button>
-    </div>
-  `;
+  const ko = scheduledKickoffHHMM(f);
+  step = step || (ko ? 'ask' : 'time');
+  const header = (title)=>`<h3>${title}</h3><button class="icon-x" data-close-modal>&times;</button>
+    <div class="small" style="color:var(--ink-soft); margin-top:-6px; margin-bottom:16px;">vs ${esc(f.opponent||'TBC')}</div>`;
+  let body = '';
+  if(step==='ask'){
+    body = `${header('Kick off')}
+      <div style="font-size:17px; font-weight:600; margin-bottom:16px;">Did the match kick off at <span style="font-family:'Oswald',sans-serif; font-size:22px;">${esc(ko)}</span>?</div>
+      <div style="display:flex; gap:10px; margin-bottom:10px;">
+        <button class="btn amber" data-ko-yes style="flex:1; margin-bottom:0;">Yes</button>
+        <button class="btn ghost" data-ko-no style="flex:1; margin-bottom:0;">No</button>
+      </div>
+      <button class="btn ghost" data-kickoff-back style="margin-bottom:0;">&larr; Back</button>`;
+  } else if(step==='confirm'){
+    body = `${header('Go live?')}
+      <div style="font-size:15px; color:var(--ink-soft); margin-bottom:18px;">Kick-off at <b style="color:var(--ink);">${esc(chosenTime)}</b>. The clock starts from there.</div>
+      <div style="display:flex; gap:10px;">
+        <button class="btn ghost" data-kickoff-back style="flex:1; margin-bottom:0;">&larr; Back</button>
+        <button class="btn amber" data-kickoff-golive style="flex:1; margin-bottom:0;">⚽ Go live</button>
+      </div>`;
+  } else {
+    body = `${header('Kick-off time')}
+      <label>What time did the match kick off?</label>
+      ${renderDigitalTimeControl('kickoff-dtc', nowHHMM())}
+      <div class="small" style="color:var(--ink-soft); margin:-4px 0 18px;">Set to the time it is now. Change it if it started earlier. Go live?</div>
+      <div style="display:flex; gap:10px;">
+        <button class="btn ghost" data-kickoff-back style="flex:1; margin-bottom:0;">&larr; Back</button>
+        <button class="btn amber" data-kickoff-golive style="flex:1; margin-bottom:0;">⚽ Go live</button>
+      </div>`;
+  }
   openModal(body, {floating:true});
   attachModalHandlers();
-  const backBtn = document.querySelector('[data-kickoff-back]');
-  if(backBtn) backBtn.onclick = ()=> openStartMatchConfirm(fixtureId);
-  document.querySelectorAll('[data-kickoff-quick]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      const timeInput = document.getElementById('kickoff-time');
-      if(timeInput) timeInput.value = btn.dataset.kickoffQuick;
-      document.querySelectorAll('#kickoff-quick-group [data-kickoff-quick]').forEach(b=> b.classList.toggle('on', b===btn));
-    });
-  });
-  const kickoffTimeInput = document.getElementById('kickoff-time');
-  if(kickoffTimeInput) kickoffTimeInput.addEventListener('input', ()=>{
-    // A manually-typed time no longer exactly matches either quick option, so neither
-    // should read as "selected" once it's been hand-edited.
-    document.querySelectorAll('#kickoff-quick-group [data-kickoff-quick]').forEach(b=> b.classList.remove('on'));
-  });
-  const confirmBtn = document.querySelector('[data-kickoff-confirm]');
-  if(confirmBtn) confirmBtn.onclick = ()=>{
-    const timeVal = document.getElementById('kickoff-time').value || nowHHMM();
-    const mpp = f.minutesPerPeriod || DEFAULT_CONFIG.minutesPerPeriod;
-    // If the kick-off time was wound back a few minutes, count that time off the
-    // first quarter's clock too, rather than always starting a fresh full period.
-    const [kh, km] = timeVal.split(':').map(Number);
-    const koDate = new Date();
-    koDate.setHours(kh, km, 0, 0);
-    let elapsedSeconds = Math.floor((new Date() - koDate) / 1000);
-    if(elapsedSeconds < 0) elapsedSeconds = 0;
-    const secondsLeft = Math.max(0, (mpp*60) - elapsedSeconds);
-    closeModal();
-    showKickoffAnimation();
-    setTimeout(()=>{
-      commitMatchStart(fixtureId, 1, secondsLeft, timeVal);
-    }, 350);
+  const back = document.querySelector('[data-kickoff-back]');
+  if(back) back.onclick = ()=>{
+    if(step==='ask' || (step==='time' && !ko)) openStartMatchConfirm(fixtureId);
+    else openKickoffTimeConfirm(fixtureId, 'ask');
   };
+  const yes = document.querySelector('[data-ko-yes]');
+  if(yes) yes.onclick = ()=> openKickoffTimeConfirm(fixtureId, 'confirm', ko);
+  const no = document.querySelector('[data-ko-no]');
+  if(no) no.onclick = ()=> openKickoffTimeConfirm(fixtureId, 'time');
+  const go = document.querySelector('[data-kickoff-golive]');
+  if(step==='time') initDigitalTimeControl('kickoff-dtc');
+  if(go) go.onclick = ()=> goLiveFromTime(fixtureId, 1, step==='confirm' ? chosenTime : getDigitalTimeValue('kickoff-dtc'));
 }
+// "Match already started": which period, and when it started (a digital time) - or how many minutes in.
 function openMatchAlreadyStartedModal(fixtureId){
   const f = DATA.fixtures.find(x=>x.id===fixtureId);
   if(!f) return;
   const mpp = f.minutesPerPeriod || DEFAULT_CONFIG.minutesPerPeriod;
+  const minuteValues = Array.from({length: mpp+1}, (_,m)=>m);
   const body = `
     <h3>How far into the match?</h3>
     <button class="icon-x" data-close-modal>&times;</button>
@@ -7824,8 +7991,19 @@ function openMatchAlreadyStartedModal(fixtureId){
     <div class="toggle-group" id="already-started-quarter" data-selected="1">
       ${periodKeys(f).map((q,i)=>`<button type="button" class="${i===0?'on':''}" data-quarter-opt="${i+1}">${esc(periodBadgeLabel(f, i+1))}</button>`).join('')}
     </div>
-    <label>How many minutes has this period been running for?</label>
-    ${renderMinuteWheel('already-started-minutes', Array.from({length: mpp+1}, (_,m)=>m), 0, "'")}
+    <label>Tell us how far in</label>
+    <div class="toggle-group" id="already-started-mode" data-selected="time">
+      <button type="button" class="on" data-as-mode="time">Start time</button>
+      <button type="button" data-as-mode="minutes">Minutes in</button>
+    </div>
+    <div id="already-started-time-pane">
+      <label>What time did this period start?</label>
+      ${renderDigitalTimeControl('already-started-dtc', nowHHMM())}
+    </div>
+    <div id="already-started-minutes-pane" style="display:none;">
+      <label>How many minutes has this period been running for?</label>
+      ${renderMinuteWheel('already-started-minutes', minuteValues, 0, "'")}
+    </div>
     <div class="small" style="color:var(--ink-soft); margin-bottom:18px;">We'll work out how much time is left in this period from this.</div>
     <div style="display:flex; gap:10px;">
       <button class="btn ghost" data-already-started-back="${fixtureId}" style="flex:1; margin-bottom:0;">&larr; Back</button>
@@ -7834,7 +8012,8 @@ function openMatchAlreadyStartedModal(fixtureId){
   `;
   openModal(body, {floating:true});
   attachModalHandlers();
-  initMinuteWheel('already-started-minutes', Array.from({length: mpp+1}, (_,m)=>m), 0);
+  initDigitalTimeControl('already-started-dtc');
+  let wheelReady = false;
   document.querySelectorAll('[data-quarter-opt]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const grp = document.getElementById('already-started-quarter');
@@ -7842,25 +8021,31 @@ function openMatchAlreadyStartedModal(fixtureId){
       grp.querySelectorAll('[data-quarter-opt]').forEach(b=> b.classList.toggle('on', b.dataset.quarterOpt===btn.dataset.quarterOpt));
     });
   });
+  document.querySelectorAll('[data-as-mode]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const mode = btn.dataset.asMode;
+      document.getElementById('already-started-mode').dataset.selected = mode;
+      document.querySelectorAll('[data-as-mode]').forEach(b=> b.classList.toggle('on', b===btn));
+      document.getElementById('already-started-time-pane').style.display = mode==='time' ? '' : 'none';
+      document.getElementById('already-started-minutes-pane').style.display = mode==='minutes' ? '' : 'none';
+      // The wheel can only position itself once it's actually on screen.
+      if(mode==='minutes' && !wheelReady){ wheelReady = true; initMinuteWheel('already-started-minutes', minuteValues, 0); }
+    });
+  });
   const backBtn = document.querySelector('[data-already-started-back]');
   if(backBtn) backBtn.onclick = ()=> openStartMatchConfirm(fixtureId);
   const goLiveBtn = document.querySelector('[data-already-started-golive]');
   if(goLiveBtn) goLiveBtn.onclick = ()=>{
     const quarter = parseInt(document.getElementById('already-started-quarter').dataset.selected);
-    const minutesScroller = document.getElementById('already-started-minutes');
-    const minutesIn = minutesScroller ? Math.max(0, parseInt(minutesScroller.dataset.selected)) : 0;
-    const elapsedSeconds = minutesIn * 60;
-    const secondsLeft = Math.max(0, (mpp*60) - elapsedSeconds);
-    // Work backwards from now to get the period's actual start time, for the record,
-    // since the user told us how long it's been running rather than when it began.
-    const startDate = new Date(Date.now() - elapsedSeconds*1000);
-    const pad = n => n.toString().padStart(2,'0');
-    const startTimeVal = `${pad(startDate.getHours())}:${pad(startDate.getMinutes())}`;
-    closeModal();
-    showKickoffAnimation();
-    setTimeout(()=>{
-      commitMatchStart(fixtureId, quarter, secondsLeft, startTimeVal);
-    }, 350);
+    const mode = document.getElementById('already-started-mode').dataset.selected;
+    if(mode==='minutes'){
+      const scroller = document.getElementById('already-started-minutes');
+      const minutesIn = scroller ? Math.max(0, parseInt(scroller.dataset.selected) || 0) : 0;
+      const startDate = new Date(Date.now() - minutesIn*60*1000);   // work back to when the period began, for the record
+      goLiveFromTime(fixtureId, quarter, pad2(startDate.getHours()) + ':' + pad2(startDate.getMinutes()), minutesIn*60);
+    } else {
+      goLiveFromTime(fixtureId, quarter, getDigitalTimeValue('already-started-dtc'));
+    }
   };
 }
 function openEndGameConfirm(fixtureId){
@@ -7892,7 +8077,7 @@ function commitMatchFinished(fixtureId){
   const f = DATA.fixtures.find(x=>x.id===fixtureId);
   if(!f) return;
   f.status = 'finished';
-  f.liveState.running = false;
+  setLiveRunning(f, false);
   stopTimer();
   saveData();
 }
@@ -7995,7 +8180,7 @@ function openStartQuarterModal(fixtureId, quarterNum){
     f.liveState.quarter = quarterNum;
     f.liveState.secondsLeft = Math.max(0, Math.min(mpp*60, secondsLeft));
     f.liveState.stoppageSeconds = 0;
-    f.liveState.running = true;
+    setLiveRunning(f, true);
     f.liveState.actualStartTime = new Date().toISOString();
     liveViewingQuarter = null;
     gridPitchEnlargedQuarter = quarterNum;
@@ -9761,9 +9946,9 @@ function openPlanLineupSubModal(fixtureId, quarterKey, pos, useActual){
       <div class="small" style="color:var(--loss); font-weight:600; margin-bottom:14px;">${esc(starter.name)} has been sent off — no further events can be logged for them this match.</div>
       ` : `
       <div style="display:flex; gap:8px; margin-bottom:14px;">
-        <button type="button" data-quick-marker-event="goal" style="${quickBtnStyle} background:#2E9E3F;" title="Log a goal for ${esc(starter.name)}">⚽</button>
-        <button type="button" data-quick-marker-event="yellowcard" style="${quickBtnStyle} background:#F4C430;" title="Log a yellow card for ${esc(starter.name)}">🟨</button>
-        <button type="button" data-quick-marker-event="redcard" style="${quickBtnStyle} background:#E0393E;" title="Log a red card for ${esc(starter.name)}">🟥</button>
+        ${quickEventBtnHtml('goal','data-quick-marker-event','Log a goal for '+esc(starter.name))}
+        ${quickEventBtnHtml('yellowcard','data-quick-marker-event','Log a yellow card for '+esc(starter.name))}
+        ${quickEventBtnHtml('redcard','data-quick-marker-event','Log a red card for '+esc(starter.name))}
       </div>`)) : ''}
       ${showQuickLog && quarterEvents.length>0 ? `
       <div class="small" style="color:var(--ink-soft); margin-bottom:6px; font-weight:600;">This ${periodWord(f).toLowerCase()}</div>
@@ -9946,9 +10131,9 @@ function openPlanLineupSubModal(fixtureId, quarterKey, pos, useActual){
         <h3>${esc(forPlayer.name)} &mdash; ${esc(periodBadgeLabel(f, qNum))}</h3>
         <button class="icon-x" data-close-modal>&times;</button>
         <div style="display:flex; gap:8px;">
-          <button type="button" data-quick-marker-event-for="goal" style="${quickBtnStyle} background:#2E9E3F;" title="Log a goal for ${esc(forPlayer.name)}">⚽</button>
-          <button type="button" data-quick-marker-event-for="yellowcard" style="${quickBtnStyle} background:#F4C430;" title="Log a yellow card for ${esc(forPlayer.name)}">🟨</button>
-          <button type="button" data-quick-marker-event-for="redcard" style="${quickBtnStyle} background:#E0393E;" title="Log a red card for ${esc(forPlayer.name)}">🟥</button>
+          ${quickEventBtnHtml('goal','data-quick-marker-event-for','Log a goal for '+esc(forPlayer.name))}
+          ${quickEventBtnHtml('yellowcard','data-quick-marker-event-for','Log a yellow card for '+esc(forPlayer.name))}
+          ${quickEventBtnHtml('redcard','data-quick-marker-event-for','Log a red card for '+esc(forPlayer.name))}
         </div>
       `;
       openModal(body, {floating:true});
@@ -11250,7 +11435,7 @@ function attachHandlers(){
   const timerToggle = document.querySelector('[data-timer-toggle]');
   if(timerToggle) timerToggle.addEventListener('click', ()=>{
     const f = DATA.fixtures.find(x=>x.id===VIEW.params.id);
-    f.liveState.running = !f.liveState.running;
+    setLiveRunning(f, !f.liveState.running);
     saveData();
     if(f.liveState.running) startTimer(f.id); else stopTimer();
     render();
@@ -11259,7 +11444,7 @@ function attachHandlers(){
     el.addEventListener('click', ()=>{
       const f = DATA.fixtures.find(x=>x.id===el.dataset.enlargeTimerToggle);
       if(!f) return;
-      f.liveState.running = !f.liveState.running;
+      setLiveRunning(f, !f.liveState.running);
       saveData();
       if(f.liveState.running) startTimer(f.id); else stopTimer();
       render();
@@ -11274,10 +11459,10 @@ function attachHandlers(){
     } else {
       // The score is already kept live-synced as Goal/Oppo goal events are logged, so
       // there's nothing left to confirm here - just move straight into the next period.
+      setLiveRunning(f, false);          // catch the old period's clock up and stop it first
       f.liveState.quarter = Math.min(f.periods, f.liveState.quarter+1);
       f.liveState.secondsLeft = f.minutesPerPeriod * 60;
       f.liveState.stoppageSeconds = 0;
-      f.liveState.running = false;
       liveViewingQuarter = null;
       stopTimer();
       saveData();
@@ -11890,14 +12075,8 @@ function attachHandlers(){
       render();
     });
   });
-  document.querySelectorAll('[data-palette-hex]').forEach(el=>{
-    el.addEventListener('click', ()=>{
-      DATA.themeColor = 'custom';
-      DATA.customThemeColor = el.dataset.paletteHex;
-      applyTheme();
-      saveData();
-      render();
-    });
+  document.querySelectorAll('[data-open-custom-colour]').forEach(el=>{
+    el.addEventListener('click', openCustomColourModal);
   });
   wireTextSizeToggle(document);
   const darkModeToggle = document.getElementById('dark-mode-toggle');
@@ -12294,6 +12473,7 @@ function attachHandlers(){
       render();
     });
   });
+  wireReviewMinutesSort(()=> render(), document.getElementById('app'));
   document.querySelectorAll('[data-coach-editor-tab]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       coachEditorTab = btn.dataset.coachEditorTab;
@@ -12395,31 +12575,59 @@ function attachModalHandlers(){
 
 }
 
+// ---- The live clock ----
+// The clock is worked out from real elapsed time (liveState.lastTickAt), not by counting interval
+// ticks. A phone that is locked, or an app that is backgrounded or closed, stops the ticks but not
+// the match, so every read of the clock first catches it up from the wall clock (syncLiveClock).
+let _lastPaintedClock = '';
+function syncLiveClock(f){
+  const ls = f && f.liveState;
+  if(!ls || !ls.running) return false;
+  const now = Date.now();
+  if(!ls.lastTickAt || now < ls.lastTickAt){ ls.lastTickAt = now; return false; }   // first run, or the phone's clock was set back
+  let delta = Math.floor((now - ls.lastTickAt) / 1000);
+  if(delta <= 0) return false;
+  ls.lastTickAt += delta * 1000;                                    // keep the sub-second remainder for next time
+  const used = Math.min(ls.secondsLeft, delta);
+  ls.secondsLeft -= used; delta -= used;
+  if(delta > 0) ls.stoppageSeconds = (ls.stoppageSeconds || 0) + delta;   // regular time is up: count stoppage time
+  return true;
+}
+function setLiveRunning(f, on){
+  const ls = f && f.liveState; if(!ls) return;
+  if(on){ ls.running = true; ls.lastTickAt = Date.now(); }
+  else { syncLiveClock(f); ls.running = false; ls.lastTickAt = null; }
+}
+function paintLiveClock(f, force){
+  const d = liveTimerDisplay(f.liveState);
+  if(!force && d.text === _lastPaintedClock) return;
+  _lastPaintedClock = d.text;
+  // Updates every matching element, not just the first - the enlarged pitch view
+  // shows its own copy of this same clock, and both need to tick together.
+  document.querySelectorAll('.scoreboard .timer').forEach(t=>{ t.textContent = d.text; t.classList.toggle('stoppage', d.stoppage); });
+  updateLiveMinutesTracker(f);
+}
+function resyncLiveClockNow(){
+  // Called when the app comes back to the front (screen unlocked, app switched back to, page restored).
+  const f = timerFixtureId ? DATA.fixtures.find(x=>x.id===timerFixtureId) : null;
+  if(f && f.liveState && f.liveState.running){ syncLiveClock(f); paintLiveClock(f, true); }
+}
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) resyncLiveClockNow(); });
+window.addEventListener('focus', resyncLiveClockNow);
+window.addEventListener('pageshow', resyncLiveClockNow);
 function startTimer(fixtureId){
   stopTimer();
   timerFixtureId = fixtureId;
-  timerInterval = setInterval(()=>{
+  let lastSavedAt = Date.now();
+  const tick = ()=>{
     const f = DATA.fixtures.find(x=>x.id===fixtureId);
-    if(!f || !f.liveState.running){ stopTimer(); return; }
-    if(f.liveState.secondsLeft>0){
-      f.liveState.secondsLeft--;
-      // Updates every matching element, not just the first - the enlarged pitch view
-      // shows its own copy of this same clock, and both need to tick together.
-      const m=Math.floor(f.liveState.secondsLeft/60), s=(f.liveState.secondsLeft%60).toString().padStart(2,'0');
-      document.querySelectorAll('.scoreboard .timer').forEach(t=>{ t.textContent = `${m}m ${s}s`; t.classList.remove('stoppage'); });
-      updateLiveMinutesTracker(f);
-      if(f.liveState.secondsLeft % 10 === 0) saveData();
-    } else {
-      // Regular time's up - count stoppage time upward instead of just stopping, so
-      // the clock (and anything logged against it) keeps reflecting what's actually
-      // happening until the coach ends the period themselves.
-      f.liveState.stoppageSeconds = (f.liveState.stoppageSeconds||0) + 1;
-      const sm=Math.floor(f.liveState.stoppageSeconds/60), ss=(f.liveState.stoppageSeconds%60).toString().padStart(2,'0');
-      document.querySelectorAll('.scoreboard .timer').forEach(t=>{ t.textContent = `+${sm}m ${ss}s`; t.classList.add('stoppage'); });
-      updateLiveMinutesTracker(f);
-      if(f.liveState.stoppageSeconds % 10 === 0) saveData();
-    }
-  }, 1000);
+    if(!f || !f.liveState || !f.liveState.running){ stopTimer(); return; }
+    syncLiveClock(f);
+    paintLiveClock(f);
+    if(Date.now() - lastSavedAt >= 10000){ lastSavedAt = Date.now(); saveData(); }
+  };
+  tick();                                    // catch up and paint straight away
+  timerInterval = setInterval(tick, 250);    // frequent enough that a second is never skipped on screen
 }
 function updateLiveMinutesTracker(f){
   const total = totalMatchMinutes(f);
@@ -12441,7 +12649,7 @@ function updateLiveMinutesTracker(f){
     }
   });
 }
-function stopTimer(){ clearInterval(timerInterval); timerInterval = null; timerFixtureId = null; }
+function stopTimer(){ clearInterval(timerInterval); timerInterval = null; timerFixtureId = null; _lastPaintedClock = ''; }
 
 // Swipe right from the left edge to go back, mirroring iOS's edge-swipe gesture.
 // Reuses whatever .backbar is currently on screen rather than tracking its own
