@@ -94,6 +94,19 @@
     opacity:0.25;
   }
   .topbar > *:not(.topbar-watermark-wrap){ position:relative; z-index:1; }
+  /* Main-tab banners (Home, Players, Live, Coaches, Settings): centred title + subtitle, with the
+     team switcher tucked into the top-right corner. Screens with a back button are untouched. */
+  .topbar-main{ text-align:center; }
+  .topbar.topbar-main h1{ font-size:30px; margin:0; letter-spacing:.015em; }
+  .topbar.topbar-main .sub{ font-size:15.5px; margin-top:4px; }
+  .team-switch{
+    display:flex; align-items:center; gap:7px; cursor:pointer;
+    width:fit-content; margin:0 0 4px auto; padding:2px 0 2px 10px;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .team-switch .eyebrow{ font-size:15px; font-weight:600; letter-spacing:.01em; }
+  .team-switch .team-switch-badge{ width:24px; height:24px; border-radius:50%; object-fit:cover; flex-shrink:0; }
+  .team-switch svg{ width:13px; height:13px; flex-shrink:0; }
   .topbar h1{
     font-size:22px;
     font-weight:600;
@@ -107,7 +120,7 @@
   }
   .content{
     flex:1;
-    padding:16px 16px 90px;
+    padding:16px 16px 100px;
     overflow-y:auto;
   }
   .tabbar{
@@ -130,23 +143,23 @@
     flex:1;
     border:none;
     background:none;
-    padding:10px 2px 12px;
+    padding:9px 2px 11px;
     display:flex;
     flex-direction:column;
     align-items:center;
-    gap:3px;
+    gap:4px;
     color:var(--ink-soft);
     font-family:'Inter',sans-serif;
-    font-size:10.5px;
+    font-size:12.5px;
     font-weight:600;
     white-space:nowrap;
     cursor:pointer;
   }
   .tabbtn.active{color:var(--pitch);}
-  .tabbtn svg{width:20px; height:20px;}
+  .tabbtn svg{width:24px; height:24px;}
   .fab{
     position:fixed;
-    bottom:74px;
+    bottom:84px;
     left:50%;
     transform:translateX(170px);
     width:52px;
@@ -3653,9 +3666,9 @@ function renderMatchdayTab(){
     `;
   }
   return `
-  <div class="topbar">
+  <div class="topbar topbar-main">
     ${teamLogoWatermarkHtml()}
-    <div style="display:flex; align-items:center; justify-content:center; gap:5px; cursor:pointer; margin-bottom:8px;" data-open-team-switcher>${safeBadgeSrc(DATA.teamBadge) ? `<img src="${safeBadgeSrc(DATA.teamBadge)}" style="width:16px;height:16px;border-radius:50%;object-fit:cover;">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <div class="team-switch" data-open-team-switcher>${safeBadgeSrc(DATA.teamBadge) ? `<img class="team-switch-badge" src="${safeBadgeSrc(DATA.teamBadge)}">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     <h1>Live</h1>
     <div class="sub">${new Date().toLocaleDateString(undefined,{weekday:'long', day:'numeric', month:'long'})}</div>
   </div>
@@ -3774,15 +3787,15 @@ function renderHomeTab(){
     tabHtml = renderPlayerStatsContent(seasonFixtures);
   }
   return `
-  <div class="topbar" style="position:relative;">
+  <div class="topbar topbar-main" style="position:relative;">
     ${teamLogoWatermarkHtml()}
-    <div style="display:flex; align-items:center; justify-content:center; gap:5px; cursor:pointer; margin-bottom:8px;" data-open-team-switcher>${safeBadgeSrc(DATA.teamBadge) ? `<img src="${safeBadgeSrc(DATA.teamBadge)}" style="width:16px;height:16px;border-radius:50%;object-fit:cover;">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <div class="team-switch" data-open-team-switcher>${safeBadgeSrc(DATA.teamBadge) ? `<img class="team-switch-badge" src="${safeBadgeSrc(DATA.teamBadge)}">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     <h1>Home</h1>
     <div class="sub">Welcome back</div>
-    ${nextMatch ? `<div class="tap" data-open-fixture="${nextMatch.id}" style="position:absolute; top:16px; right:20px; text-align:right; cursor:pointer; max-width:46%;">
-      <div style="font-size:10.5px; color:rgba(255,255,255,0.75); font-weight:700; text-transform:uppercase; letter-spacing:0.04em;">Next match</div>
-      <div style="font-size:13.5px; font-weight:700; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">vs ${esc(nextMatch.opponent||'TBC')}</div>
-      <div style="font-size:11px; color:rgba(255,255,255,0.75);">${fmtDate(nextMatch.dateTime)}</div>
+    ${nextMatch ? `<div class="tap" data-open-fixture="${nextMatch.id}" style="margin:12px auto 0; width:fit-content; max-width:94%; text-align:center; cursor:pointer; background:rgba(255,255,255,0.16); border:1px solid rgba(255,255,255,0.3); border-radius:14px; padding:6px 18px 7px;">
+      <div style="font-size:11px; color:rgba(255,255,255,0.8); font-weight:700; text-transform:uppercase; letter-spacing:0.05em;">Next match</div>
+      <div style="font-size:15.5px; font-weight:700; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:1px;">vs ${esc(nextMatch.opponent||'TBC')}</div>
+      <div style="font-size:13px; font-weight:500; color:rgba(255,255,255,0.88); margin-top:1px;">${fmtDate(nextMatch.dateTime)}</div>
     </div>` : ''}
   </div>
   <div class="content">
@@ -5153,9 +5166,9 @@ function renderPlayersTab(){
         </div>`;
       }).join('')}</div>`;
   return `
-  <div class="topbar">
+  <div class="topbar topbar-main">
     ${teamLogoWatermarkHtml()}
-    <div style="display:flex; align-items:center; justify-content:center; gap:5px; cursor:pointer; margin-bottom:8px;" data-open-team-switcher>${safeBadgeSrc(DATA.teamBadge) ? `<img src="${safeBadgeSrc(DATA.teamBadge)}" style="width:16px;height:16px;border-radius:50%;object-fit:cover;">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <div class="team-switch" data-open-team-switcher>${safeBadgeSrc(DATA.teamBadge) ? `<img class="team-switch-badge" src="${safeBadgeSrc(DATA.teamBadge)}">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     <h1>Players</h1>
     <div class="sub">${players.length} in the squad pool</div>
   </div>
@@ -5671,9 +5684,9 @@ function renderCoachesTab(){
     </div>`;
   }
   return `
-  <div class="topbar" style="position:relative;">
+  <div class="topbar topbar-main" style="position:relative;">
     ${teamLogoWatermarkHtml()}
-    <div style="display:flex; align-items:center; justify-content:center; gap:5px; cursor:pointer; margin:0 auto 8px; width:fit-content;" data-open-team-switcher>${safeBadgeSrc(DATA.teamBadge) ? `<img src="${safeBadgeSrc(DATA.teamBadge)}" style="width:16px;height:16px;border-radius:50%;object-fit:cover;">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <div class="team-switch" data-open-team-switcher>${safeBadgeSrc(DATA.teamBadge) ? `<img class="team-switch-badge" src="${safeBadgeSrc(DATA.teamBadge)}">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     <h1>Coaches</h1>
     <div class="sub">${DATA.coaches.length} coach${DATA.coaches.length===1?'':'es'} · qualifications &amp; certifications</div>
   </div>
@@ -6583,12 +6596,12 @@ function renderTeamTab(){
     <div class="small" style="color:var(--ink-soft); text-align:center; margin-top:6px;">SquadHub · version ${APP_VERSION}</div>`;
   }
   return `
-  <div class="topbar" style="position:relative;">
+  <div class="topbar topbar-main" style="position:relative;">
     ${teamLogoWatermarkHtml()}
-    <div style="display:flex; align-items:center; justify-content:center; gap:5px; cursor:pointer; margin-bottom:8px;" data-open-team-switcher>${safeBadgeSrc(DATA.teamBadge) ? `<img src="${safeBadgeSrc(DATA.teamBadge)}" style="width:16px;height:16px;border-radius:50%;object-fit:cover;">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <div class="team-switch" data-open-team-switcher>${safeBadgeSrc(DATA.teamBadge) ? `<img class="team-switch-badge" src="${safeBadgeSrc(DATA.teamBadge)}">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     <h1>Settings</h1>
     <div class="sub">Format, identity &amp; backup</div>
-    ${!DATA.teamSetupCompleted ? `<button type="button" data-open-team-wizard title="Team setup assistant" style="position:absolute; top:12px; right:14px; background:rgba(255,255,255,0.18); border:1.5px solid rgba(255,255,255,0.4); border-radius:20px; padding:7px 13px; display:flex; align-items:center; gap:6px; color:#fff; cursor:pointer; font-weight:700; font-size:12.5px; white-space:nowrap;">
+    ${!DATA.teamSetupCompleted ? `<button type="button" data-open-team-wizard title="Team setup assistant" style="margin:12px auto 0; width:fit-content; background:rgba(255,255,255,0.18); border:1.5px solid rgba(255,255,255,0.4); border-radius:20px; padding:7px 13px; display:flex; align-items:center; gap:6px; color:#fff; cursor:pointer; font-weight:700; font-size:12.5px; white-space:nowrap;">
       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" style="flex-shrink:0;"><path d="M9.5 3.5l1 2.5 2.5 1-2.5 1-1 2.5-1-2.5L6 7l2.5-1 1-2.5z" fill="currentColor"/><path d="M17.5 11l1.2 3 3 1.2-3 1.2-1.2 3-1.2-3-3-1.2 3-1.2 1.2-3z" fill="currentColor"/></svg>
       Finish setup
     </button>` : ''}
