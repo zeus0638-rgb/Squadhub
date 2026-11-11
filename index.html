@@ -10,6 +10,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="SquadHub">
+<script>try{ if(localStorage.getItem('squadhub_text_size')!=='standard') document.documentElement.classList.add('text-large'); }catch(e){ document.documentElement.classList.add('text-large'); }</script>
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -97,16 +98,13 @@
   /* Main-tab banners (Home, Players, Live, Coaches, Settings): centred title + subtitle, with the
      team switcher tucked into the top-right corner. Screens with a back button are untouched. */
   .topbar-main{ text-align:center; }
-  .topbar.topbar-main h1{ font-size:30px; margin:0; letter-spacing:.015em; }
-  .topbar.topbar-main .sub{ font-size:15.5px; margin-top:4px; }
   .team-switch{
-    display:flex; align-items:center; gap:7px; cursor:pointer;
-    width:fit-content; margin:0 0 4px auto; padding:2px 0 2px 10px;
+    display:flex; align-items:center; gap:5px; cursor:pointer;
+    width:fit-content; margin:0 0 8px auto; padding:2px 0 2px 10px;
     -webkit-tap-highlight-color:transparent;
   }
-  .team-switch .eyebrow{ font-size:15px; font-weight:600; letter-spacing:.01em; }
-  .team-switch .team-switch-badge{ width:24px; height:24px; border-radius:50%; object-fit:cover; flex-shrink:0; }
-  .team-switch svg{ width:13px; height:13px; flex-shrink:0; }
+  .team-switch .team-switch-badge{ width:16px; height:16px; border-radius:50%; object-fit:cover; flex-shrink:0; }
+  .team-switch svg{ width:10px; height:10px; flex-shrink:0; }
   .topbar h1{
     font-size:22px;
     font-weight:600;
@@ -120,7 +118,7 @@
   }
   .content{
     flex:1;
-    padding:16px 16px 100px;
+    padding:16px 16px 90px;
     overflow-y:auto;
   }
   .tabbar{
@@ -143,23 +141,23 @@
     flex:1;
     border:none;
     background:none;
-    padding:9px 2px 11px;
+    padding:10px 2px 12px;
     display:flex;
     flex-direction:column;
     align-items:center;
-    gap:4px;
+    gap:3px;
     color:var(--ink-soft);
     font-family:'Inter',sans-serif;
-    font-size:12.5px;
+    font-size:10.5px;
     font-weight:600;
     white-space:nowrap;
     cursor:pointer;
   }
   .tabbtn.active{color:var(--pitch);}
-  .tabbtn svg{width:24px; height:24px;}
+  .tabbtn svg{width:20px; height:20px;}
   .fab{
     position:fixed;
-    bottom:84px;
+    bottom:74px;
     left:50%;
     transform:translateX(170px);
     width:52px;
@@ -697,33 +695,106 @@
   .report-view-grid .rv-starter{ font-weight:700; color:var(--ink); line-height:1.15; }
   .report-view-grid .rv-sub{ color:var(--ink-soft); font-weight:600; line-height:1.15; }
 
-  /* ---- Home area: bigger text in every sub tab and popup ---- */
-  .home-area .toggle-group button{ font-size:15px; padding:9px 2px; line-height:1.15; }
-  .home-area .section-title{ font-size:15.5px; }
-  .home-area .small{ font-size:14.5px; }
-  .home-area .stat-box{ padding:14px 4px; }
-  .home-area .stat-box .v{ font-size:32px; }
-  .home-area .stat-box .l{ font-size:12px; }
-  .home-area .fixture-card .opp{ font-size:21px; }
-  .home-area .fixture-card .meta{ font-size:14px; }
-  .home-area .pill{ font-size:12.5px; padding:4px 11px; }
-  .home-area .attr-bar-row{ margin-bottom:11px; }
-  .home-area .attr-bar-track{ height:10px; }
-  .home-area .attr-bar-row .av{ font-size:18px; width:32px; }
-  /* Player names in Player stats: one look for every tab (Apps, Goals, Assists, Awards, Cards) */
-  .home-area .attr-bar-row .al.ps-name,
-  .home-area .player-row .pname{ font-size:16.5px; font-weight:600; color:var(--ink); }
-  .home-area .attr-bar-row .al.ps-name{ width:104px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  /* Popups opened from the Home area */
-  .pop-lg h3{ font-size:24px; margin-bottom:12px; }
-  .pop-lg .pop-sub{ font-size:16px; color:var(--ink-soft); margin:-4px 0 14px; }
-  .pop-lg .pop-row{ padding:13px 0; border-bottom:1px solid var(--line); cursor:pointer; }
-  .pop-lg .pop-opp{ font-size:19px; font-weight:500; }
-  .pop-lg .pop-meta{ font-size:15px; color:var(--ink-soft); margin-top:3px; }
-  .pop-lg .pop-score{ font-family:'Oswald',sans-serif; font-size:26px; font-weight:600; white-space:nowrap; }
-  .pop-lg .pop-team{ flex:1; font-size:18px; font-weight:600; color:var(--ink); }
-  .pop-lg .btn{ font-size:16px; }
-  .pop-lg .pick-row{ font-size:17px; padding:13px 15px; }
+  /* ---- Home area helpers: Standard sizes (the original look) ---- */
+  .hm-gt.small{ font-size:10.5px; }
+  .hm-score{ font-size:18px; }
+  .hm-award{ font-size:12.5px; }
+  .hm-form-row{ gap:8px; }
+  .hm-form-dot{ width:34px; height:34px; border-radius:50%; font-size:13px; }
+  .hm-form-date.small{ font-size:10px; }
+  .ps-card-count{ font-size:13px; }
+  .attr-bar-row .al.ps-name{ width:92px; font-size:14.5px; font-weight:600; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .nm-label{ font-size:10.5px; color:rgba(255,255,255,0.75); }
+  .nm-opp{ font-size:13.5px; }
+  .nm-date{ font-size:11px; color:rgba(255,255,255,0.75); }
+  .pop-sub{ font-size:13px; color:var(--ink-soft); margin:-6px 0 14px; }
+  .pop-row{ padding:9px 0; border-bottom:1px solid var(--line); cursor:pointer; }
+  .pop-opp{ font-size:13.5px; }
+  .pop-meta{ font-size:13px; color:var(--ink-soft); margin-top:2px; }
+  .pop-score{ font-size:15px; font-weight:600; white-space:nowrap; }
+  .pop-team{ flex:1; font-weight:600; color:var(--ink); }
+  .pick-row{ padding:12px 14px; font-size:14.5px; }
+  .text-size-row{ margin-top:14px; }
+  .nw{ white-space:nowrap; }
+
+  /* =====================================================================================
+     TEXT SIZE = LARGER (the default). Everything below only applies while the user's
+     "Text size" setting is Larger (html.text-large). Standard uses the base rules above,
+     i.e. the sizes the app had before the larger-text update.
+     ===================================================================================== */
+  html.text-large .content{ padding-bottom:100px; }
+  html.text-large .tabbtn{ padding:9px 2px 11px; gap:4px; font-size:12.5px; }
+  html.text-large .tabbtn svg{ width:24px; height:24px; }
+  html.text-large .fab{ bottom:84px; }
+  html.text-large .topbar.topbar-main h1{ font-size:30px; margin:0; letter-spacing:.015em; }
+  html.text-large .topbar.topbar-main .sub{ font-size:15.5px; margin-top:4px; }
+  html.text-large .team-switch{ gap:7px; margin-bottom:4px; }
+  html.text-large .team-switch .eyebrow{ font-size:15px; font-weight:600; letter-spacing:.01em; }
+  html.text-large .team-switch .team-switch-badge{ width:24px; height:24px; }
+  html.text-large .team-switch svg{ width:13px; height:13px; }
+
+  /* Home, Players, Coaches and Settings content */
+  html.text-large .fs-area .toggle-group button{ font-size:15px; padding:9px 2px; line-height:1.15; }
+  html.text-large .fs-area .toggle-group-scroll button{ font-size:15px; padding:11px 16px; }
+  html.text-large .fs-area .section-title{ font-size:15.5px; }
+  html.text-large .fs-area .small{ font-size:14.5px; }
+  html.text-large .fs-area .stat-box{ padding:14px 4px; }
+  html.text-large .fs-area .stat-box .v{ font-size:32px; }
+  html.text-large .fs-area .stat-box .l{ font-size:12px; }
+  html.text-large .fs-area .fixture-card .opp{ font-size:21px; }
+  html.text-large .fs-area .fixture-card .meta{ font-size:14px; }
+  html.text-large .fs-area .pill{ font-size:12.5px; padding:4px 11px; }
+  html.text-large .fs-area .attr-bar-row{ margin-bottom:11px; }
+  html.text-large .fs-area .attr-bar-track{ height:10px; }
+  html.text-large .fs-area .attr-bar-row .av{ font-size:18px; width:32px; }
+  html.text-large .fs-area .attr-bar-row .al.ps-name,
+  html.text-large .fs-area .player-row .pname{ font-size:16.5px; font-weight:600; color:var(--ink); }
+  html.text-large .fs-area .attr-bar-row .al.ps-name{ width:104px; }
+  html.text-large .fs-area .small.hm-gt{ font-size:12.5px; }
+  html.text-large .fs-area .hm-score{ font-size:24px; }
+  html.text-large .fs-area .hm-award{ font-size:14.5px; }
+  html.text-large .fs-area .hm-form-row{ gap:10px; }
+  html.text-large .fs-area .hm-form-dot{ width:42px; height:42px; font-size:16px; }
+  html.text-large .fs-area .small.hm-form-date{ font-size:12.5px; }
+  html.text-large .fs-area .ps-card-count{ font-size:16px; }
+  html.text-large .nm-label{ font-size:11px; color:rgba(255,255,255,0.8); }
+  html.text-large .nm-opp{ font-size:15.5px; }
+  html.text-large .nm-date{ font-size:13px; font-weight:500; color:rgba(255,255,255,0.88); }
+  /* Players and Coaches lists */
+  html.text-large .fs-area .player-row{ padding:13px 0; }
+  html.text-large .fs-area .player-row .ppos{ font-size:13.5px; }
+  html.text-large .fs-area .player-row .ppos.pl-stats{ font-size:12.5px; }
+  html.text-large .fs-area .shirt{ width:42px; height:42px; font-size:17px; }
+  /* Settings tabs and the text inside their forms */
+  html.text-large .fs-map label{ font-size:14.5px; }
+  html.text-large .fs-map input[type=text], html.text-large .fs-map input[type=number], html.text-large .fs-map input[type=datetime-local], html.text-large .fs-map input[type=month], html.text-large .fs-map input[type=date], html.text-large .fs-map input[type=time], html.text-large .fs-map input[type=email], html.text-large .fs-map input[type=password], html.text-large .fs-map select, html.text-large .fs-map textarea, html.text-large .fs-map .pick-select{ font-size:16.5px; padding:12px 13px; }
+  html.text-large .fs-map .btn{ font-size:16.5px; padding:13px 20px; }
+  html.text-large .fs-map .btn.small{ font-size:14.5px; padding:9px 15px; }
+  /* Text written inline in Players / Coaches / Settings markup: one step up (+2px) */
+  html.text-large .fs-map [style*="font-size:10px"]{ font-size:12px !important; }
+  html.text-large .fs-map [style*="font-size:10.5px"]{ font-size:12.5px !important; }
+  html.text-large .fs-map [style*="font-size:11px"]{ font-size:13px !important; }
+  html.text-large .fs-map [style*="font-size:11.5px"]{ font-size:13.5px !important; }
+  html.text-large .fs-map [style*="font-size:12px"]{ font-size:14px !important; }
+  html.text-large .fs-map [style*="font-size:12.5px"]{ font-size:14.5px !important; }
+  html.text-large .fs-map [style*="font-size:13px"]{ font-size:15px !important; }
+  html.text-large .fs-map [style*="font-size:13.5px"]{ font-size:15.5px !important; }
+  html.text-large .fs-map [style*="font-size:14px"]{ font-size:16px !important; }
+  html.text-large .fs-map [style*="font-size:14.5px"]{ font-size:16.5px !important; }
+  html.text-large .fs-map [style*="font-size:15px"]{ font-size:17px !important; }
+  html.text-large .fs-map [style*="font-size:15.5px"]{ font-size:17.5px !important; }
+  html.text-large .fs-map [style*="font-size:16px"]{ font-size:18px !important; }
+  html.text-large .fs-map [style*="font-size:17px"]{ font-size:19px !important; }
+  /* Popups */
+  html.text-large .pop-lg h3{ font-size:24px; margin-bottom:12px; }
+  html.text-large .pop-lg .pop-sub{ font-size:16px; margin:-4px 0 14px; }
+  html.text-large .pop-lg .pop-row{ padding:13px 0; }
+  html.text-large .pop-lg .pop-opp{ font-size:19px; font-weight:500; }
+  html.text-large .pop-lg .pop-meta{ font-size:15px; margin-top:3px; }
+  html.text-large .pop-lg .pop-score{ font-size:26px; }
+  html.text-large .pop-lg .pop-team{ font-size:18px; }
+  html.text-large .pop-lg .btn{ font-size:16px; }
+  html.text-large .pop-lg .pick-row{ font-size:17px; padding:13px 15px; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 </head>
@@ -1781,6 +1852,7 @@ function hideSignInHold(){
   setTimeout(()=> el.remove(), 200);
 }
 async function loadAfterSignIn(){
+  adoptAccountTextSize();
   showSignInHold();
   try{
     await loadData({ render:false });
@@ -3756,7 +3828,7 @@ function renderHomeTab(){
           </div>
           <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-end; flex-shrink:0;">
             <span class="pill ${upcoming.competitionType.toLowerCase()} ${upcoming.status==='live'?'live':''}" style="text-align:right;">${upcoming.status==='live'?'LIVE':esc(competitionDisplayLabel(upcoming))}</span>
-            <span class="small" style="color:var(--ink-soft); font-size:12.5px;">${gameTypeForFixture(upcoming)==='development'?'Development':'Competitive'}</span>
+            <span class="small hm-gt" style="color:var(--ink-soft);">${gameTypeForFixture(upcoming)==='development'?'Development':'Competitive'}</span>
           </div>
         </div>
         ${h2h ? `<div class="small" style="color:var(--ink-soft); margin-top:6px; padding-top:6px; border-top:1px solid var(--line);">Head-to-head: <span style="color:var(--win); font-weight:700;">${h2h.w}W</span> <span style="color:var(--draw); font-weight:700;">${h2h.d}D</span> <span style="color:var(--loss); font-weight:700;">${h2h.l}L</span> · ${h2h.gf}-${h2h.ga}</div>` : ''}
@@ -3781,14 +3853,14 @@ function renderHomeTab(){
             <div>
               <div class="opp">vs ${esc(f.opponent||'TBC')}${venueBadge(f)}</div>
               <div class="meta">${shortDate(f.dateTime)} · ${esc(competitionDisplayLabel(f))}</div>
-              <div class="small" style="color:var(--ink-soft); font-size:12.5px; margin-top:1px;">${gameTypeForFixture(f)==='development'?'Development':'Competitive'}</div>
+              <div class="small hm-gt" style="color:var(--ink-soft); margin-top:1px;">${gameTypeForFixture(f)==='development'?'Development':'Competitive'}</div>
             </div>
             <div style="text-align:right; flex-shrink:0; white-space:nowrap;">
-              <div class="num" style="font-size:24px; font-weight:600;">${f.finalScore.us} – ${f.finalScore.them}</div>
+              <div class="num hm-score" style="font-weight:600;">${f.finalScore.us} – ${f.finalScore.them}</div>
               <span class="pill ${res}">${res.toUpperCase()}</span>
             </div>
           </div>
-          ${awardLines.length>0 ? `<div style="font-size:14.5px; color:var(--ink-soft); margin-top:6px;">${awardLines.join(' · ')}</div>` : ''}
+          ${awardLines.length>0 ? `<div class="hm-award" style="color:var(--ink-soft); margin-top:6px;">${awardLines.join(' · ')}</div>` : ''}
         </div>`;
       }).join('')}`;
   } else if(tab==='teamstats'){
@@ -3806,11 +3878,11 @@ function renderHomeTab(){
     <div class="section-title">Form guide <span style="font-weight:400; color:var(--ink-soft);">— last 5 matches</span></div>
     <div class="card">
       ${form.length===0 ? `<div class="small" style="color:var(--ink-soft);">No matches played yet</div>` : `
-      <div style="display:flex; gap:10px; justify-content:center;">
+      <div class="hm-form-row" style="display:flex; justify-content:center;">
         ${form.map(x=>`
           <div class="tap" data-open-form-result="${x.fixture.id}" style="cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:4px;">
-            <div style="width:42px; height:42px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:16px; color:#fff; background:${x.result==='win'?'var(--win)':x.result==='draw'?'var(--draw)':'var(--loss)'};">${x.result[0].toUpperCase()}</div>
-            <div class="small" style="color:var(--ink-soft); font-size:12.5px;">${shortDate(x.fixture.dateTime)}</div>
+            <div class="hm-form-dot" style="display:flex; align-items:center; justify-content:center; font-weight:700; color:#fff; background:${x.result==='win'?'var(--win)':x.result==='draw'?'var(--draw)':'var(--loss)'};">${x.result[0].toUpperCase()}</div>
+            <div class="small hm-form-date" style="color:var(--ink-soft);">${shortDate(x.fixture.dateTime)}</div>
           </div>`).join('')}
       </div>`}
     </div>`;
@@ -3824,12 +3896,12 @@ function renderHomeTab(){
     <h1>Home</h1>
     <div class="sub">Welcome back</div>
     ${nextMatch ? `<div class="tap" data-open-fixture="${nextMatch.id}" style="margin:12px auto 0; width:fit-content; max-width:94%; text-align:center; cursor:pointer; background:rgba(255,255,255,0.16); border:1px solid rgba(255,255,255,0.3); border-radius:14px; padding:6px 18px 7px;">
-      <div style="font-size:11px; color:rgba(255,255,255,0.8); font-weight:700; text-transform:uppercase; letter-spacing:0.05em;">Next match</div>
-      <div style="font-size:15.5px; font-weight:700; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:1px;">vs ${esc(nextMatch.opponent||'TBC')}</div>
-      <div style="font-size:13px; font-weight:500; color:rgba(255,255,255,0.88); margin-top:1px;">${fmtDate(nextMatch.dateTime)}</div>
+      <div class="nm-label" style="font-weight:700; text-transform:uppercase; letter-spacing:0.05em;">Next match</div>
+      <div class="nm-opp" style="font-weight:700; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:1px;">vs ${esc(nextMatch.opponent||'TBC')}</div>
+      <div class="nm-date" style="margin-top:1px;">${fmtDate(nextMatch.dateTime)}</div>
     </div>` : ''}
   </div>
-  <div class="content home-area">
+  <div class="content fs-area">
     <div class="toggle-group">
       ${tabs.map(t=>`<button type="button" class="${tab===t.id?'on':''}" data-home-tab="${t.id}">${t.label}</button>`).join('')}
     </div>
@@ -5148,8 +5220,8 @@ function renderPlayerStatsContent(seasonFixtures){
           <div class="player-row tap" data-open-player="${x.player.id}">
             <div style="flex:1;" class="pname">${esc(x.player.name)}</div>
             <div style="display:flex; gap:14px; align-items:center;">
-              <span style="font-size:16px; font-weight:700; color:var(--ink);">🟨 ${x.counts.yellow}</span>
-              <span style="font-size:16px; font-weight:700; color:var(--ink);">🟥 ${x.counts.red}</span>
+              <span class="ps-card-count" style="font-weight:700; color:var(--ink);">🟨 ${x.counts.yellow}</span>
+              <span class="ps-card-count" style="font-weight:700; color:var(--ink);">🟥 ${x.counts.red}</span>
             </div>
           </div>`).join('');
       })()}
@@ -5192,7 +5264,7 @@ function renderPlayersTab(){
           <div style="flex:1; min-width:0;">
             <div class="pname" style="display:flex; align-items:center; justify-content:space-between; gap:8px;"><span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(p.name)}</span><span class="pill ${(p.registeredSeasons||[]).includes(pillSeason)?'win':'draw'}" style="flex-shrink:0; margin-left:auto;">${(p.registeredSeasons||[]).includes(pillSeason)?'Registered':'Not registered'}</span></div>
             <div class="ppos">${(p.positions||[]).join(', ')||'No position set'}</div>
-            <div class="ppos" style="margin-top:2px;">${s.matches} apps · ${s.minutes}' · ${s.goals}&#9917; · ${s.assists} ast · ${s.motmCount} POTM · ${s.moments} MoTM</div>
+            <div class="ppos pl-stats" style="margin-top:2px;"><span class="nw">${s.matches} apps</span> · <span class="nw">${s.minutes}'</span> · <span class="nw">${s.goals}&#9917;</span> · <span class="nw">${s.assists} ast</span> · <span class="nw">${s.motmCount} POTM</span> · <span class="nw">${s.moments} MoTM</span></div>
           </div>
         </div>`;
       }).join('')}</div>`;
@@ -5203,7 +5275,7 @@ function renderPlayersTab(){
     <h1>Players</h1>
     <div class="sub">${players.length} in the squad pool</div>
   </div>
-  <div class="content">
+  <div class="content fs-area fs-map">
     <div class="season-chip-wrap split">${playersSortChipHtml()}${seasonChipHtml('players', playersSeasonFilter)}</div>
     ${tabHtml}
   </div>`;
@@ -5713,7 +5785,7 @@ function renderCoachesTab(){
     <h1>Coaches</h1>
     <div class="sub">${DATA.coaches.length} coach${DATA.coaches.length===1?'':'es'} · qualifications &amp; certifications</div>
   </div>
-  <div class="content">
+  <div class="content fs-area fs-map">
     ${tabHtml}
   </div>`;
 }
@@ -5772,6 +5844,10 @@ function openTeamSwitcherModal(){
         </div>`;
       }).join('')}
     </div>
+    <div class="text-size-row">
+      <div class="small" style="color:var(--ink-soft); font-weight:600; margin-bottom:6px;">Text size</div>
+      ${textSizeToggleHtml()}
+    </div>
     <button class="btn ghost" data-add-new-team style="margin-top:14px;">+ Add another team</button>
     ${currentUser ? `<button class="btn ghost" data-log-out style="margin-top:10px; color:var(--loss); border-color:var(--loss); display:flex; align-items:center; justify-content:center; gap:7px;">
       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" style="flex-shrink:0;"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 17l5-5-5-5M21 12H9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -5781,6 +5857,7 @@ function openTeamSwitcherModal(){
   `;
   openModal(body, {floating:true, anchorToBanner:true});
   attachModalHandlers();
+  wireTextSizeToggle(document.getElementById('modal-root'));
   document.querySelectorAll('[data-switch-team]').forEach(el=>{
     el.addEventListener('click', ()=>{
       closeModal();
@@ -6403,6 +6480,11 @@ function renderTeamTab(){
         </label>
       </div>
     </div>
+    <div class="card" style="margin-bottom:16px;">
+      <div style="font-weight:600;">Text size</div>
+      <div class="small" style="color:var(--ink-soft); margin:2px 0 10px;">Standard or larger text. This is your own setting and only affects you.</div>
+      ${textSizeToggleHtml()}
+    </div>
     <div class="card">
       <div style="display:flex; flex-wrap:wrap; gap:12px;">
         ${Object.keys(THEME_COLORS).map(key=>{
@@ -6631,7 +6713,7 @@ function renderTeamTab(){
       Finish setup
     </button>` : ''}
   </div>
-  <div class="content">
+  <div class="content fs-area fs-map">
     <div class="toggle-group-scroll">
       ${tabs.map(t=>`<button type="button" class="${tab===t.id?'on':''}" data-team-tab="${t.id}">${t.label}</button>`).join('')}
     </div>
@@ -6878,6 +6960,7 @@ function openModal(html, opts){
   const wrap = document.createElement('div');
   wrap.className = 'modal-bg' + (floating ? ' floating' : '');
   wrap.id = 'modal-root';
+  if(VIEW.tab==='team' && !VIEW.screen) wrap.classList.add('fs-area','fs-map');   // same text size as the Settings page behind it
   wrap.innerHTML = `<div class="modal rel-wrap${floating ? ' floating' : ''}">${html}</div>`;
   // Mobile browsers fire a follow-up synthetic "click" shortly after the touch that
   // triggered this modal to open, at the same screen coordinates as that touch. That
@@ -6923,9 +7006,58 @@ function anchorModalToBanner(wrap){
   const t = bannerTitleTop();
   if(t==null) return;                              // no banner on this screen: stay centred as usual
   const top = Math.max(12, Math.ceil(t) + 1);      // rounds down the screen, never up: the border can't rise above the lettering
+  wrap.dataset.anchorBanner = '1';
   wrap.style.alignItems = 'flex-start';
   wrap.style.paddingTop = top + 'px';
   if(wrap.firstElementChild) wrap.firstElementChild.style.maxHeight = '100%';   // fill down, scroll inside
+}
+// ---------- Text size: Standard or Larger (a personal setting, not part of any team) ----------
+// "Larger" is the default. The choice is kept on this device, and also on the signed-in account so a
+// new device picks it up. All the size rules live in the stylesheet under html.text-large.
+const TEXT_SIZE_KEY = 'squadhub_text_size';
+function getTextSize(){
+  try{ return localStorage.getItem(TEXT_SIZE_KEY)==='standard' ? 'standard' : 'large'; }catch(e){ return 'large'; }
+}
+function applyTextSize(){
+  document.documentElement.classList.toggle('text-large', getTextSize()==='large');
+}
+function adoptAccountTextSize(){
+  // A device with no choice of its own follows the one saved on the account.
+  try{
+    if(localStorage.getItem(TEXT_SIZE_KEY)!==null) return;
+    const remote = currentUser && currentUser.user_metadata && currentUser.user_metadata.text_size;
+    if(remote==='standard' || remote==='large'){
+      localStorage.setItem(TEXT_SIZE_KEY, remote);
+      applyTextSize();
+    }
+  }catch(e){}
+}
+function setTextSize(mode){
+  mode = mode==='standard' ? 'standard' : 'large';
+  try{ localStorage.setItem(TEXT_SIZE_KEY, mode); }catch(e){}
+  applyTextSize();
+  if(typeof supabaseClient!=='undefined' && supabaseClient && currentUser){
+    try{ Promise.resolve(supabaseClient.auth.updateUser({data:{text_size:mode}})).catch(()=>{}); }catch(e){}
+  }
+  render();
+  document.querySelectorAll('[data-text-size-filter]').forEach(b=> b.classList.toggle('on', b.dataset.textSizeFilter===mode));
+  const m = document.getElementById('modal-root');
+  if(m && m.dataset.anchorBanner) anchorModalToBanner(m);   // the banner title just changed size
+}
+// (the attribute ends in "-filter" so it stays usable for view-only coaches, like the other display controls)
+function textSizeToggleHtml(){
+  const cur = getTextSize();
+  return `<div class="toggle-group" style="margin-bottom:0;">
+    <button type="button" class="${cur==='standard'?'on':''}" data-text-size-filter="standard">Standard</button>
+    <button type="button" class="${cur==='large'?'on':''}" data-text-size-filter="large">Larger</button>
+  </div>`;
+}
+function wireTextSizeToggle(root){
+  (root || document).querySelectorAll('[data-text-size-filter]').forEach(btn=>{
+    if(btn._tsWired) return;
+    btn._tsWired = true;
+    btn.addEventListener('click', ()=> setTextSize(btn.dataset.textSizeFilter));
+  });
 }
 function closeModal(){
   document.querySelectorAll('#modal-root').forEach(m=> m.remove());
@@ -11627,6 +11759,7 @@ function attachHandlers(){
       render();
     });
   });
+  wireTextSizeToggle(document);
   const darkModeToggle = document.getElementById('dark-mode-toggle');
   if(darkModeToggle) darkModeToggle.addEventListener('change', ()=>{
     DATA.darkMode = darkModeToggle.checked;
