@@ -253,11 +253,23 @@
   body.dark-theme .btn.ghost{color:#fff; border-color:rgba(255,255,255,0.65);}
   .btn.danger{background:none; color:var(--loss); border:1px solid var(--loss);}
   .btn.small{width:auto; padding:8px 14px; font-size:13px;}
+  /* Header back button: a pill with a round arrow badge, so it reads clearly as a button on
+     every screen. The whole pill is the tap target. */
   .backbar{
-    display:flex; align-items:center; gap:10px;
-    margin-bottom:2px; cursor:pointer;
-    color:#F6D6D9; font-size:13px; font-weight:600;
+    display:inline-flex; align-items:center; gap:8px; align-self:flex-start;
+    margin-bottom:8px; padding:4px 15px 4px 4px; border-radius:999px;
+    background:rgba(255,255,255,0.20); border:1px solid rgba(255,255,255,0.35);
+    color:#fff; font-size:14px; font-weight:700; letter-spacing:0.2px; line-height:1;
+    cursor:pointer; -webkit-tap-highlight-color:transparent; user-select:none;
   }
+  .backbar:active{ transform:scale(0.96); background:rgba(255,255,255,0.30); }
+  .backbar .back-arrow{
+    width:32px; height:32px; border-radius:50%; flex-shrink:0;
+    background:#fff; color:var(--pitch);
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 1px 4px rgba(0,0,0,0.25);
+  }
+  .backbar .back-arrow svg{ width:19px; height:19px; display:block; }
   table.gridtable{
     width:100%;
     border-collapse:collapse;
@@ -364,7 +376,30 @@
   }
   .toggle-group-scroll button:last-child{border-right:none;}
   .toggle-group-scroll button.on{background:var(--pitch); color:#fff;}
+  /* Every native <select> is swapped for one of these (see enhanceSelect). The select stays in
+     the page, hidden, so all the code that reads/sets it keeps working. */
+  select.pick-hidden{ display:none !important; }
+  .pick-select{
+    display:flex; align-items:center; justify-content:space-between; gap:6px;
+    width:100%; padding:10px 11px; border:1px solid var(--line); border-radius:8px;
+    background:var(--panel); font-family:'Inter',sans-serif; font-size:14.5px; line-height:1.25;
+    color:var(--ink); margin-bottom:14px; text-align:left; cursor:pointer;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .pick-select .pick-select-label{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pick-select svg{ width:13px; height:13px; flex-shrink:0; opacity:0.65; }
+  .pick-select:disabled{ opacity:0.55; cursor:not-allowed; }
+  table.gridtable .pick-select{ margin:0; padding:3px 2px; font-size:10.5px; border-radius:5px; width:100%; justify-content:center; text-align:center; }
+  table.gridtable .pick-select svg{ display:none; }
   .season-chip-wrap{ display:flex; justify-content:flex-end; margin-bottom:10px; }
+  /* Players tab: sort chip on the left, season chip on the right, same row */
+  .season-chip-wrap.split{ justify-content:space-between; align-items:center; }
+  button.season-chip{ text-align:left; line-height:1.3; }
+  .season-chip.sort-chip{
+    display:inline-flex; align-items:center; gap:6px; padding:5px 11px 5px 8px;
+    background-image:none; color:var(--ink-soft);
+  }
+  .season-chip.sort-chip svg{ width:14px; height:14px; flex-shrink:0; }
   .season-chip{
     width:auto; appearance:none; -webkit-appearance:none; background:var(--surface-2);
     border:1px solid var(--line); border-radius:14px; padding:5px 22px 5px 10px;
@@ -689,6 +724,7 @@ let matchesSinceAwardFilter = null;
 let playerProfileSeasonFilter = 'all';
 let homeSeasonFilter = 'current';
 let playersSeasonFilter = 'current';
+let playersSort = 'name';   // Players tab ordering - alphabetical unless changed
 let coachesSeasonFilter = 'current';
 let coachEditorTab = 'details';
 let matchSetupTab = 'gridpitch'; // which sub-tab the Match Setup screen is showing: 'details', 'gridpitch' or 'availability'
@@ -998,6 +1034,199 @@ function seasonLabelForDate(dateStr){
   if(m >= 6){ return `${String(y).slice(-2)}/${String(y+1).slice(-2)}`; }
   return `${String(y-1).slice(-2)}/${String(y).slice(-2)}`;
 }
+const BACK_ARROW = '<span class="back-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';
+
+// A floaty option list, used in place of a native <select> (which Android draws as a
+// full-screen sheet, and iOS as a wheel, neither of which matches the rest of the app).
+// It lives in its own layer (#picker-root, above any open modal) so a picker opened from
+// inside a form popup doesn't close that popup underneath it.
+function closePickerOverlay(){ document.querySelectorAll('#picker-root').forEach(m=> m.remove()); }
+// items: [{value,label,disabled?}] or {group:true,label} headings
+function showPickerOverlay(title, items, currentValue, onPick){
+  closePickerOverlay();
+  const cur = String(currentValue==null ? '' : currentValue);
+  const wrap = document.createElement('div');
+  wrap.id = 'picker-root';
+  wrap.className = 'modal-bg floating';
+  wrap.style.zIndex = '700';
+  const rows = items.map((it,i)=>{
+    if(it.group) return `<div class="small" style="color:var(--ink-soft); font-weight:700; text-transform:uppercase; letter-spacing:0.4px; margin:8px 2px 6px;">${esc(it.label)}</div>`;
+    const sel = String(it.value)===cur;
+    return `<div class="card tap" data-pick-idx="${i}" ${sel?'data-pick-selected="1"':''} style="padding:12px 14px; margin-bottom:6px; font-size:14.5px; ${sel?'background:color-mix(in srgb, var(--win) 18%, transparent); font-weight:600;':''} ${it.disabled?'opacity:0.4; pointer-events:none;':''}">${esc(it.label)}</div>`;
+  }).join('');
+  wrap.innerHTML = `<div class="modal rel-wrap floating"><h3>${esc(title)}</h3><button type="button" class="icon-x" data-picker-close>&times;</button><div data-pick-list style="max-height:60vh; overflow-y:auto; margin-top:6px;">${rows}</div></div>`;
+  // Same ghost-click protection as openModal: the tap that opened this must not also hit a row.
+  const openedAt = Date.now();
+  wrap.addEventListener('click', (e)=>{
+    if(Date.now()-openedAt <= 400){ e.stopPropagation(); e.preventDefault(); return; }
+    if(e.target===wrap || e.target.closest('[data-picker-close]')){ closePickerOverlay(); return; }
+    const row = e.target.closest('[data-pick-idx]');
+    if(row){
+      const it = items[parseInt(row.dataset.pickIdx,10)];
+      closePickerOverlay();
+      if(it && !it.group && !it.disabled) onPick(it.value);
+    }
+  }, true);
+  document.body.appendChild(wrap);
+  const chosen = wrap.querySelector('[data-pick-selected]');
+  if(chosen && chosen.scrollIntoView) chosen.scrollIntoView({block:'center'});
+}
+function openOptionPicker(title, options, currentValue, onPick){
+  showPickerOverlay(title, options, currentValue, onPick);
+}
+
+// ---- Replace every native <select> with the floaty picker ----------------------------
+// The select itself is kept (hidden) so every existing handler that reads .value, listens for
+// 'change', or rebuilds its options keeps working untouched; choosing in the picker sets the
+// select's value and fires its 'change' event, exactly as the OS dropdown used to.
+function pickTitleFor(sel){
+  if(sel.dataset.pickTitle) return sel.dataset.pickTitle;
+  for(const k in sel.dataset){
+    const m = /^q\d+\|([ab])\|(.+)$/.exec(sel.dataset[k] || '');
+    if(m) return m[2] + (m[1]==='b' ? ' (substitute)' : '');
+    const g = /^q\d+\|(.+)$/.exec(sel.dataset[k] || '');
+    if(g && k==='gridPos') return g[1];
+  }
+  if(sel.hasAttribute('data-spread-max')) return 'Maximum minutes';
+  let lab = sel.id ? document.querySelector('label[for="'+sel.id+'"]') : null;
+  if(!lab){
+    const prev = sel.previousElementSibling;
+    if(prev && prev.tagName==='LABEL') lab = prev;
+  }
+  if(!lab && sel.parentElement) lab = sel.parentElement.querySelector(':scope > label');
+  if(lab){
+    const t = lab.textContent.replace(/\s*[—–-]\s.*$/,'').trim();
+    if(t) return t;
+  }
+  return 'Choose';
+}
+function pickItemsFor(sel){
+  const items = [];
+  Array.from(sel.children).forEach(ch=>{
+    if(ch.tagName==='OPTGROUP'){
+      items.push({group:true, label: ch.label});
+      Array.from(ch.children).forEach(o=> items.push({value:o.value, label:(o.textContent||'').trim() || '—', disabled:o.disabled || ch.disabled}));
+    } else if(ch.tagName==='OPTION'){
+      items.push({value:ch.value, label:(ch.textContent||'').trim() || '—', disabled:ch.disabled});
+    }
+  });
+  return items;
+}
+function syncPickSelect(sel){
+  const btn = sel._pickBtn;
+  if(!btn) return;
+  const o = sel.options[sel.selectedIndex];
+  const lbl = btn.querySelector('.pick-select-label');
+  if(lbl) lbl.textContent = o ? (o.textContent||'').trim() : '';
+  btn.disabled = !!sel.disabled;
+}
+function enhanceSelect(sel){
+  if(sel._pickBtn || sel.multiple) return;
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'pick-select';
+  btn.style.cssText = sel.style.cssText;      // keep the inline sizing/colour the field was given
+  btn.innerHTML = '<span class="pick-select-label"></span><svg viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  sel.classList.add('pick-hidden');
+  sel.after(btn);
+  sel._pickBtn = btn;
+  btn.addEventListener('click', (e)=>{
+    e.stopPropagation(); e.preventDefault();   // some selects sit inside tappable rows
+    if(sel.disabled) return;
+    showPickerOverlay(pickTitleFor(sel), pickItemsFor(sel), sel.value, (val)=>{
+      sel.value = val;
+      sel.dispatchEvent(new Event('change', {bubbles:true}));
+      syncPickSelect(sel);
+    });
+  });
+  syncPickSelect(sel);
+}
+(function setupSelectPickers(){
+  // Programmatic `select.value = x` (e.g. one dropdown resetting another) keeps the label in step.
+  const d = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+  if(d && d.set){
+    Object.defineProperty(HTMLSelectElement.prototype, 'value', {
+      configurable:true, enumerable:d.enumerable,
+      get(){ return d.get.call(this); },
+      set(v){ d.set.call(this, v); if(this._pickBtn) syncPickSelect(this); }
+    });
+  }
+  function enhanceWithin(node){
+    if(!node || node.nodeType!==1) return;
+    if(node.tagName==='SELECT') enhanceSelect(node);
+    else if(node.querySelectorAll) node.querySelectorAll('select').forEach(enhanceSelect);
+  }
+  const mo = new MutationObserver((records)=>{
+    records.forEach(r=>{
+      if(r.type==='childList'){
+        r.addedNodes.forEach(enhanceWithin);
+        const t = r.target;   // options added/removed inside an existing select
+        const owner = t && t.nodeType===1 ? (t.tagName==='SELECT' ? t : (t.closest ? t.closest('select') : null)) : null;
+        if(owner && owner._pickBtn) syncPickSelect(owner);
+      } else if(r.type==='attributes' && r.target.tagName==='SELECT' && r.target._pickBtn){
+        syncPickSelect(r.target);
+      }
+    });
+  });
+  function start(){
+    enhanceWithin(document.body);
+    mo.observe(document.body, {childList:true, subtree:true, attributes:true, attributeFilter:['disabled']});
+  }
+  if(document.body) start(); else document.addEventListener('DOMContentLoaded', start);
+})();
+
+// Primary position: a tappable field that opens the picker above. The chosen value lives in a
+// hidden input with the same id the old <select> had, so saving the player is unchanged.
+function primaryPosFieldHtml(value){
+  return `<input type="hidden" id="p-primary-position" value="${esc(value||'')}">
+    <div class="card tap" data-primary-pos-field style="padding:10px 12px; margin-bottom:6px; display:flex; align-items:center; justify-content:space-between; gap:8px; cursor:pointer;">
+      <span data-primary-pos-label style="font-size:14px; color:${value?'var(--ink)':'var(--ink-soft)'};">${value?esc(value):'None'}</span>
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none"><path d="M6 9l6 6 6-6" stroke="var(--ink-soft)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>`;
+}
+function setPrimaryPosValue(val){
+  const hid = document.getElementById('p-primary-position');
+  if(hid) hid.value = val || '';
+  const lbl = document.querySelector('[data-primary-pos-label]');
+  if(lbl){
+    lbl.textContent = val || 'None';
+    lbl.style.color = val ? 'var(--ink)' : 'var(--ink-soft)';
+  }
+}
+
+// ---- One season at a time ---------------------------------------------------------
+// registeredSeasons stays a list, because every season's squad, stats and coach lists are
+// built from it. The editor only ever sets ONE registration (the current season, or a later
+// one); every earlier season stays on the record as history and is never removed by saving.
+function activeRegisteredSeason(registered){
+  const reg = Array.from(new Set(registered||[])).sort((a,b)=>a.localeCompare(b));
+  const latest = reg.length ? reg[reg.length-1] : '';
+  return (latest && latest.localeCompare(currentSeasonLabel()) >= 0) ? latest : '';
+}
+function applySeasonRegistration(registered, chosen){
+  const reg = Array.from(new Set(registered||[])).sort((a,b)=>a.localeCompare(b));
+  if(!chosen){
+    const active = activeRegisteredSeason(reg);
+    return active ? reg.filter(l=>l!==active) : reg;   // earlier seasons are history - keep them
+  }
+  return reg.filter(l=>l.localeCompare(chosen) < 0).concat([chosen]);
+}
+function seasonRegistrationHtml(radioName, registered){
+  if(DATA.seasons.length===0){
+    return `<div class="small" style="color:var(--ink-soft);">No seasons set up yet — add one in Settings &rarr; Seasons.</div>`;
+  }
+  const active = activeRegisteredSeason(registered);
+  const history = Array.from(new Set(registered||[])).filter(l=>l!==active).sort((a,b)=>a.localeCompare(b));
+  const row = (value, label, last)=>`
+    <label style="display:flex; align-items:center; gap:10px; padding:8px 0; ${last?'':'border-bottom:1px solid var(--line);'} cursor:pointer; margin-bottom:0;">
+      <input type="radio" name="${radioName}" value="${esc(value)}" ${active===value?'checked':''} style="width:auto; margin:0;">
+      <span style="font-weight:500; font-size:14px; color:var(--ink); text-transform:none;">${label}</span>
+    </label>`;
+  return row('', 'Not registered', false)
+    + DATA.seasons.map((s,i)=>row(s.label, esc(s.label)+(s.current?' (current)':''), i===DATA.seasons.length-1)).join('')
+    + `<div class="small" style="color:var(--ink-soft); margin-top:10px;">Registered for one season at a time. Earlier seasons stay on the record as history${history.length?': <b>'+history.map(esc).join(', ')+'</b>':''}.</div>`;
+}
+
 function currentSeasonLabel(){
   const marked = DATA.seasons.find(s=>s.current);
   if(marked) return marked.label;
@@ -1007,7 +1236,25 @@ function datesForSeasonLabel(lbl){
   const startYear = 2000 + parseInt(lbl.split('/')[0], 10);
   return { startDate: `${startYear}-08-01`, endDate: `${startYear+1}-06-30` };
 }
+// The app labels seasons like "26/27". Data from elsewhere (e.g. a hand-made import) can carry
+// "2026/27" instead, which then shows up as a duplicate season next to the real "26/27".
+function normaliseSeasonLabel(l){
+  const m = /^20(\d{2})\/(\d{2})$/.exec(String(l==null ? '' : l).trim());
+  return m ? m[1]+'/'+m[2] : l;
+}
+function normaliseSeasonLabels(){
+  const uniq = (arr)=> Array.from(new Set(arr));
+  const seen = {};
+  DATA.seasons = (DATA.seasons||[]).filter(s=>{
+    s.label = normaliseSeasonLabel(s.label);
+    if(seen[s.label]){ if(s.current) seen[s.label].current = true; return false; }   // merge duplicates
+    seen[s.label] = s; return true;
+  });
+  (DATA.players||[]).forEach(p=>{ if(Array.isArray(p.registeredSeasons)) p.registeredSeasons = uniq(p.registeredSeasons.map(normaliseSeasonLabel)); });
+  (DATA.coaches||[]).forEach(c=>{ if(Array.isArray(c.registeredSeasons)) c.registeredSeasons = uniq(c.registeredSeasons.map(normaliseSeasonLabel)); });
+}
 function ensureSeasonsFromFixtures(){
+  normaliseSeasonLabels();
   const labels = new Set(DATA.seasons.map(s=>s.label));
   DATA.fixtures.forEach(f=>{
     const lbl = seasonLabelForDate(f.dateTime);
@@ -1054,13 +1301,51 @@ function formatSeasonRange(s){
   };
   return `${fmt(s.startDate)} – ${fmt(s.endDate)}`;
 }
-function seasonFilterOptions(selectedValue){
+// The season filter chips (Home, Players, Player profile, Coaches) are buttons that open the
+// app's floaty picker, rather than native <select>s that Android draws as a full-screen sheet.
+function seasonFilterChoices(){
   const cur = currentSeasonLabel();
-  return `
-    <option value="all" ${selectedValue==='all'?'selected':''}>All seasons</option>
-    <option value="current" ${selectedValue==='current'?'selected':''}>Current${cur?' ('+esc(cur)+')':''}</option>
-    ${[...DATA.seasons].reverse().filter(s=>s.label!==cur).map(s=>`<option value="${esc(s.label)}" ${selectedValue===s.label?'selected':''}>${esc(s.label)}</option>`).join('')}
-  `;
+  return [
+    {value:'all', label:'All seasons'},
+    {value:'current', label:'Current'+(cur ? ' ('+cur+')' : '')}
+  ].concat([...DATA.seasons].reverse().filter(s=>s.label!==cur).map(s=>({value:s.label, label:s.label})));
+}
+function seasonChipHtml(target, selectedValue){
+  const choice = seasonFilterChoices().find(c=>c.value===selectedValue);
+  return `<button type="button" class="season-chip" data-season-filter="${target}" data-value="${esc(selectedValue)}">${esc(choice ? choice.label : String(selectedValue))}</button>`;
+}
+
+// ---- Players tab sorting ---------------------------------------------------------
+const PLAYER_SORTS = [
+  {value:'name',      label:'Name (A–Z)',               short:'A–Z'},
+  {value:'name-desc', label:'Name (Z–A)',               short:'Z–A'},
+  {value:'shirt',     label:'Shirt number',             short:'Shirt no.'},
+  {value:'apps',      label:'Most appearances',         short:'Apps'},
+  {value:'minutes',   label:'Most minutes played',      short:'Minutes'},
+  {value:'goals',     label:'Most goals',               short:'Goals'},
+  {value:'assists',   label:'Most assists',             short:'Assists'},
+  {value:'potm',      label:'Most Player of the Match', short:'POTM'},
+  {value:'moments',   label:'Most Moments of the Match',short:'MoTM'}
+];
+function playerNameCompare(a,b){ return (a.name||'').localeCompare(b.name||'', undefined, {sensitivity:'base', numeric:true}); }
+function sortPlayersForList(players, sortKey, seasonFixtures){
+  const list = [...players];
+  if(sortKey==='name-desc') return list.sort((a,b)=>playerNameCompare(b,a));
+  if(sortKey==='shirt') return list.sort((a,b)=> byShirtNumber(a,b) || playerNameCompare(a,b));
+  const statKey = {apps:'matches', minutes:'minutes', goals:'goals', assists:'assists', potm:'motmCount', moments:'moments'}[sortKey];
+  if(statKey){
+    const stats = {};
+    list.forEach(p=>{ stats[p.id] = seasonStatsForPlayer(p.id, seasonFixtures)[statKey] || 0; });
+    return list.sort((a,b)=> (stats[b.id]-stats[a.id]) || playerNameCompare(a,b));   // ties fall back to A–Z
+  }
+  return list.sort(playerNameCompare);   // 'name' - the default
+}
+function playersSortChipHtml(){
+  const cur = PLAYER_SORTS.find(o=>o.value===playersSort) || PLAYER_SORTS[0];
+  return `<button type="button" class="season-chip sort-chip" data-players-sort-filter title="Sort players">
+    <svg viewBox="0 0 24 24" fill="none"><path d="M7 4v16M7 20l-3.5-3.5M7 20l3.5-3.5M17 20V4M17 4l-3.5 3.5M17 4l3.5 3.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span>${esc(cur.short)}</span>
+  </button>`;
 }
 
 function defaultAwardTypes(){
@@ -3504,7 +3789,7 @@ function renderHomeTab(){
     <div class="toggle-group">
       ${tabs.map(t=>`<button type="button" class="${tab===t.id?'on':''}" data-home-tab="${t.id}">${t.label}</button>`).join('')}
     </div>
-    <div class="season-chip-wrap"><select class="season-chip" data-season-filter="home">${seasonFilterOptions(homeSeasonFilter)}</select></div>
+    <div class="season-chip-wrap">${seasonChipHtml('home', homeSeasonFilter)}</div>
     ${tabHtml}
   </div>`;
 }
@@ -3681,7 +3966,7 @@ function renderFixtureEditor(id){
   if(!isDraft) stackHeight += 34 + 8; // delete row
   return `
   <div class="topbar" style="position:relative; min-height:${stackHeight}px;">
-    <div class="backbar" data-back>&larr; Back</div>
+    <div class="backbar" data-back>${BACK_ARROW}<span>Back</span></div>
     <h1 style="padding-right:150px; word-wrap:break-word;">${f.opponent ? 'vs '+esc(f.opponent) : 'New fixture'}</h1>
     <div style="position:absolute; top:14px; right:14px; display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
       ${f.status==='live' ? `<button data-goto-live="${f.id}" style="background:var(--amber); border:none; border-radius:20px; padding:7px 14px; display:flex; align-items:center; gap:6px; color:#fff; font-family:'Inter',sans-serif; font-weight:600; font-size:12.5px; cursor:pointer;">
@@ -3819,7 +4104,7 @@ function renderMatchSetup(id){
   }
   return `
   <div class="topbar" style="position:relative;">
-    <div class="backbar" data-exit-match-setup>&larr; Exit</div>
+    <div class="backbar" data-exit-match-setup>${BACK_ARROW}<span>Exit</span></div>
     <h1 style="padding-right:70px; word-wrap:break-word;">${f.opponent ? 'vs '+esc(f.opponent) : 'Match setup'}${venueBadge(f)}</h1>
     <div class="sub" style="display:flex; align-items:center; flex-wrap:wrap;">${fmtDate(f.dateTime)}${f.location?` · <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(f.location)}" target="_blank" rel="noopener" style="color:inherit; text-decoration:none; display:inline-flex; align-items:center; gap:3px; white-space:nowrap;">${esc(f.location)}<svg viewBox="0 0 24 24" width="13" height="13" fill="none" style="flex-shrink:0;"><path d="M12 22s7-7.2 7-12a7 7 0 10-14 0c0 4.8 7 12 7 12z" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="10" r="2.5" stroke="currentColor" stroke-width="1.8"/></svg></a>`:''}</div>
     <div style="position:absolute; top:14px; right:14px; display:flex; gap:8px;">
@@ -3985,7 +4270,7 @@ function renderLive(id){
 
   return `
   <div class="topbar" style="position:relative;">
-    <div class="backbar" ${isReview ? `data-open-review-exit="${f.id}"` : `data-back-to-fixture="${f.id}"`}>&larr; ${isReview ? 'Exit review' : 'Exit live view'}</div>
+    <div class="backbar" ${isReview ? `data-open-review-exit="${f.id}"` : `data-back-to-fixture="${f.id}"`}>${BACK_ARROW}<span>${isReview ? 'Exit review' : 'Exit live view'}</span></div>
     <h1>vs ${esc(f.opponent||'TBC')}</h1>
     ${isReview ? `<button data-review-save-now="${f.id}" title="Save" style="position:absolute; top:14px; right:14px; background:rgba(255,255,255,0.15); border:none; border-radius:50%; width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:#fff; cursor:pointer;">
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M4 4.5A1.5 1.5 0 015.5 3H15l5 5v10.5a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.5v-14z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8 3v5h7V3" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><rect x="7" y="13" width="10" height="6.5" stroke="currentColor" stroke-width="1.7"/></svg>
@@ -4539,7 +4824,7 @@ function renderOpponentDetail(id){
   const stats = opponentStats(id);
   return `
   <div class="topbar">
-    <div class="backbar" data-back-to-opponent-origin>&larr; Back</div>
+    <div class="backbar" data-back-to-opponent-origin>${BACK_ARROW}<span>Back</span></div>
     <h1>${esc(opponent.name)}</h1>
     <div class="sub">${stats.played} match${stats.played===1?'':'es'} played</div>
   </div>
@@ -4584,7 +4869,7 @@ function renderEditScoreScreen(id){
   if(!f) return '<div class="content">Not found</div>';
   return `
   <div class="topbar">
-    <div class="backbar" data-back-to-result="${f.id}">&larr; Back to match</div>
+    <div class="backbar" data-back-to-result="${f.id}">${BACK_ARROW}<span>Back to match</span></div>
     <h1>Edit final score</h1>
     <div class="sub">vs ${esc(f.opponent||'TBC')} · ${fmtDate(f.dateTime)}</div>
   </div>
@@ -4711,7 +4996,7 @@ function renderResultDetail(id){
 
   return `
   <div class="topbar" style="position:relative; min-height:108px;">
-    <div class="backbar" data-back>&larr; Back</div>
+    <div class="backbar" data-back>${BACK_ARROW}<span>Back</span></div>
     <h1>vs ${esc(f.opponent||'TBC')}</h1>
     <div class="sub" style="display:flex; align-items:center; flex-wrap:wrap;">${fmtDate(f.dateTime)} · ${esc(competitionDisplayLabel(f))}${f.venue ? ` · ${f.venue==='home'?'Home':'Away'}` : ''}${f.location ? ` · <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(f.location)}" target="_blank" rel="noopener" style="color:inherit; text-decoration:none; display:inline-flex; align-items:center; gap:3px; white-space:nowrap;">${esc(f.location)}<svg viewBox="0 0 24 24" width="13" height="13" fill="none" style="flex-shrink:0;"><path d="M12 22s7-7.2 7-12a7 7 0 10-14 0c0 4.8 7 12 7 12z" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="10" r="2.5" stroke="currentColor" stroke-width="1.8"/></svg></a>` : ''}</div>
     <div style="position:absolute; top:14px; right:14px; display:flex; gap:8px;">
@@ -4844,9 +5129,9 @@ function byShirtNumber(a,b){ return (a.shirtNumber||99)-(b.shirtNumber||99); }
 // between player profiles follows, so the two can never disagree.
 function squadListPlayers(){
   const resolvedSeason = resolveSeasonFilter(playersSeasonFilter);
-  let players = [...DATA.players].sort(byShirtNumber);
+  let players = [...DATA.players];
   if(resolvedSeason) players = players.filter(p=> (p.registeredSeasons||[]).includes(resolvedSeason));
-  return players;
+  return sortPlayersForList(players, playersSort, fixturesForSeason(playersSeasonFilter));
 }
 function renderPlayersTab(){
   const resolvedSeason = resolveSeasonFilter(playersSeasonFilter);
@@ -4860,8 +5145,8 @@ function renderPlayersTab(){
         return `
         <div class="player-row tap" data-open-player="${p.id}">
           ${shirtHtml(p)}
-          <div style="flex:1;">
-            <div class="pname">${esc(p.name)} <span class="pill ${(p.registeredSeasons||[]).includes(pillSeason)?'win':'draw'}" style="margin-left:4px;">${(p.registeredSeasons||[]).includes(pillSeason)?'Registered':'Not registered'}</span></div>
+          <div style="flex:1; min-width:0;">
+            <div class="pname" style="display:flex; align-items:center; justify-content:space-between; gap:8px;"><span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(p.name)}</span><span class="pill ${(p.registeredSeasons||[]).includes(pillSeason)?'win':'draw'}" style="flex-shrink:0; margin-left:auto;">${(p.registeredSeasons||[]).includes(pillSeason)?'Registered':'Not registered'}</span></div>
             <div class="ppos">${(p.positions||[]).join(', ')||'No position set'}</div>
             <div class="ppos" style="margin-top:2px;">${s.matches} apps · ${s.minutes}' · ${s.goals}&#9917; · ${s.assists} ast · ${s.motmCount} POTM · ${s.moments} MoTM</div>
           </div>
@@ -4875,7 +5160,7 @@ function renderPlayersTab(){
     <div class="sub">${players.length} in the squad pool</div>
   </div>
   <div class="content">
-    <div class="season-chip-wrap"><select class="season-chip" data-season-filter="players">${seasonFilterOptions(playersSeasonFilter)}</select></div>
+    <div class="season-chip-wrap split">${playersSortChipHtml()}${seasonChipHtml('players', playersSeasonFilter)}</div>
     ${tabHtml}
   </div>`;
 }
@@ -4888,28 +5173,20 @@ function renderPlayerEditor(id){
     <input type="text" id="p-name" value="${esc(p.name)}" placeholder="Player name">
     <label>Shirt number</label>
     <input type="number" id="p-number" value="${p.shirtNumber||''}" placeholder="e.g. 9">
-    <label>Registered seasons</label>
+    <label>Registered season</label>
     <div class="card" id="p-registered-seasons" style="margin-bottom:16px;">
-      ${DATA.seasons.length===0 ? `<div class="small" style="color:var(--ink-soft);">No seasons set up yet — add one in Settings &rarr; Seasons.</div>` :
-        DATA.seasons.map(s=>`
-        <label style="display:flex; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid var(--line); cursor:pointer; margin-bottom:0;">
-          <input type="checkbox" data-p-reg-season="${esc(s.label)}" ${(p.registeredSeasons||[]).includes(s.label)?'checked':''} style="width:auto; margin:0;">
-          <span style="font-weight:500; font-size:14px; color:var(--ink); text-transform:none;">${esc(s.label)}${s.current?' (current)':''}</span>
-        </label>`).join('')}
+      ${seasonRegistrationHtml('p-reg-season', p.registeredSeasons)}
     </div>
     <label>Preferred positions</label>
     <div class="toggle-group" id="p-positions" data-selected='${JSON.stringify(p.positions||[])}'>
       ${currentPositions().map(pos=>`<button type="button" class="pos-toggle ${((p.positions||[]).some(pp=>positionGroupKey(pp)===positionGroupKey(pos)))?'on':''}" data-pos="${pos}">${pos}</button>`).join('')}
     </div>
     <label>Primary position <span style="font-weight:400; color:var(--ink-soft);">— optional</span></label>
-    <select id="p-primary-position">
-      <option value="">None</option>
-      ${currentPositions().filter(pos=>(p.positions||[]).some(pp=>positionGroupKey(pp)===positionGroupKey(pos))).map(pos=>`<option value="${pos}" ${p.primaryPosition===pos?'selected':''}>${pos}</option>`).join('')}
-    </select>
-    <div class="small" style="color:var(--ink-soft); margin-top:-10px; margin-bottom:16px;">When spreading minutes evenly, we'll try to keep roughly 3/4 of this player's time in their primary position.</div>`;
+    ${primaryPosFieldHtml(p.primaryPosition && (p.positions||[]).some(pp=>positionGroupKey(pp)===positionGroupKey(p.primaryPosition)) ? p.primaryPosition : '')}
+    <div class="small" style="color:var(--ink-soft); margin-bottom:16px;">When spreading minutes evenly, we'll try to keep roughly 3/4 of this player's time in their primary position.</div>`;
   return `
   <div class="topbar" style="position:relative;">
-    <div class="backbar" ${editing ? `data-back-to-player="${p.id}"` : 'data-back'}>&larr; Back</div>
+    <div class="backbar" ${editing ? `data-back-to-player="${p.id}"` : 'data-back'}>${BACK_ARROW}<span>Back</span></div>
     <h1>${editing?'Edit player':'New player'}</h1>
     <div style="position:absolute; top:14px; right:14px; display:flex; gap:8px;">
       ${editing ? `<button type="button" data-delete-player="${p.id}" title="Remove player" style="background:rgba(255,255,255,0.15); border:none; border-radius:50%; width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:#fff; cursor:pointer;">
@@ -4944,7 +5221,7 @@ function renderPlayerProfile(id){
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M12 20h9" stroke="currentColor" stroke-width="1.8"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
       </button>
     </div>
-    <div class="season-chip-wrap"><select class="season-chip" data-season-filter="playerprofile">${seasonFilterOptions(playerProfileSeasonFilter)}</select></div>
+    <div class="season-chip-wrap">${seasonChipHtml('playerprofile', playerProfileSeasonFilter)}</div>
     <div class="stat-grid">
       <div class="stat-box tap" data-open-player-stat="matches" style="cursor:pointer;"><div class="v">${s.matches}</div><div class="l">MATCHES</div></div>
       <div class="stat-box tap" data-open-player-stat="minutes" style="cursor:pointer;"><div class="v">${s.minutes}</div><div class="l">MINUTES</div></div>
@@ -4956,7 +5233,7 @@ function renderPlayerProfile(id){
     </div>`;
   return `
   <div class="topbar" style="position:relative;">
-    <div class="backbar" data-back>&larr; Back</div>
+    <div class="backbar" data-back>${BACK_ARROW}<span>Back</span></div>
     <h1>${esc(p.name)}</h1>
     <div class="sub">#${p.shirtNumber||'-'} · ${(p.positions||[]).join(', ')||'No position set'}</div>
   </div>
@@ -4970,7 +5247,7 @@ function renderCoachEditor(id){
   const c = editing || {id:uid(), name:'', role:'', startDate:'', photo:null};
   return `
   <div class="topbar" style="position:relative;">
-    <div class="backbar" data-back>&larr; Back</div>
+    <div class="backbar" data-back>${BACK_ARROW}<span>Back</span></div>
     <h1>${editing?'Edit coach':'New coach'}</h1>
     <div style="position:absolute; top:14px; right:14px; display:flex; gap:8px;">
       ${editing ? `<button type="button" data-remove-coach="${c.id}" title="Remove coach" style="background:rgba(255,255,255,0.15); border:none; border-radius:50%; width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:#fff; cursor:pointer;">
@@ -4985,8 +5262,8 @@ function renderCoachEditor(id){
     ${editing ? `
     <div class="toggle-group">
       <button type="button" class="${coachEditorTab==='details'?'on':''}" data-coach-editor-tab="details">Basic info</button>
-      <button type="button" class="${coachEditorTab==='access'?'on':''}" data-coach-editor-tab="access">App access</button>
       <button type="button" class="${coachEditorTab==='quals'?'on':''}" data-coach-editor-tab="quals">Qualifications</button>
+      <button type="button" class="${coachEditorTab==='access'?'on':''}" data-coach-editor-tab="access">App access</button>
     </div>` : ''}
     ${(!editing || coachEditorTab==='details') ? `
     <div style="display:flex; align-items:center; gap:14px; margin-bottom:16px;">
@@ -5000,14 +5277,9 @@ function renderCoachEditor(id){
     <input type="text" id="c-role" value="${esc(c.role||'')}" placeholder="e.g. Head Coach, Assistant, First Aid Officer">
     <label>Start date</label>
     <input type="date" id="c-startdate" value="${c.startDate||''}">
-    <label>Registered seasons</label>
+    <label>Registered season</label>
     <div class="card" style="margin-bottom:16px;">
-      ${DATA.seasons.length===0 ? `<div class="small" style="color:var(--ink-soft);">No seasons set up yet — add one in Settings &rarr; Seasons.</div>` :
-        DATA.seasons.map(s=>`
-        <label style="display:flex; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid var(--line); cursor:pointer; margin-bottom:0;">
-          <input type="checkbox" data-c-reg-season="${esc(s.label)}" ${(c.registeredSeasons||[]).includes(s.label)?'checked':''} style="width:auto; margin:0;">
-          <span style="font-weight:500; font-size:14px; color:var(--ink); text-transform:none;">${esc(s.label)}${s.current?' (current)':''}</span>
-        </label>`).join('')}
+      ${seasonRegistrationHtml('c-reg-season', c.registeredSeasons)}
     </div>
     ` : ''}
     ${(editing && coachEditorTab==='access') ? `
@@ -5056,7 +5328,7 @@ function renderCoachProfile(id){
   if(!c) return '<div class="content">Not found</div>';
   return `
   <div class="topbar" style="position:relative;">
-    <div class="backbar" data-back>&larr; Back</div>
+    <div class="backbar" data-back>${BACK_ARROW}<span>Back</span></div>
     <h1>${esc(c.name||'Unnamed coach')}</h1>
     <div class="sub">${esc(c.role||'No role set')}${c.startDate?' · since '+shortDate(c.startDate):''}</div>
     <button data-open-coach-edit="${c.id}" style="position:absolute; top:16px; right:16px; background:rgba(255,255,255,0.15); border:none; border-radius:50%; width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:#fff; cursor:pointer;">
@@ -5364,7 +5636,7 @@ function renderCoachesTab(){
       <div class="stat-box"><div class="v" style="color:var(--win);">${qs.valid}</div><div class="l">VALID</div></div>
     </div>
 
-    <div class="season-chip-wrap"><select class="season-chip" data-season-filter="coaches">${seasonFilterOptions(coachesSeasonFilter)}</select></div>
+    <div class="season-chip-wrap">${seasonChipHtml('coaches', coachesSeasonFilter)}</div>
     <div class="section-title" style="margin-top:0;">Coaches</div>
     <div class="toggle-group" style="margin-bottom:10px;">
       <button type="button" class="${coachQualifyFilter==='all'?'on':''}" data-coach-qualify-filter="all">All</button>
@@ -5888,7 +6160,7 @@ function renderTeamSetupWizard(){
   if(DATA.teamSetupCompleted){
     return `
     <div class="topbar">
-      <div class="backbar" data-wiz-close>&larr; Back</div>
+      <div class="backbar" data-wiz-close>${BACK_ARROW}<span>Back</span></div>
       <h1>Team setup assistant</h1>
     </div>
     <div class="content">
@@ -6472,6 +6744,8 @@ function openImportConfirm(incoming, forNewTeam){
     } else {
       DATA = incoming;
     }
+    if(!DATA.seasons) DATA.seasons = [];
+    ensureSeasonsFromFixtures();
     applyTheme();
     saveData();
     closeModal();
@@ -10853,15 +11127,21 @@ function attachHandlers(){
       // Keep the Primary position dropdown's options in sync with whatever's toggled
       // on right now, so a newly-ticked position shows up there immediately - no need
       // to save the player first just to be able to pick it as primary.
-      const primarySel = document.getElementById('p-primary-position');
-      if(primarySel){
-        const prevValue = primarySel.value;
+      const primaryHid = document.getElementById('p-primary-position');
+      if(primaryHid){
         const eligible = currentPositions().filter(cp=> sel.some(s=> positionGroupKey(s)===positionGroupKey(cp)));
-        const stillValid = eligible.some(cp=> cp===prevValue);
-        primarySel.innerHTML = `<option value="">None</option>` + eligible.map(cp=>`<option value="${cp}" ${cp===prevValue?'selected':''}>${cp}</option>`).join('');
-        if(!stillValid) primarySel.value = '';
+        if(primaryHid.value && !eligible.includes(primaryHid.value)) setPrimaryPosValue('');
       }
     });
+  });
+  const primaryPosField = document.querySelector('[data-primary-pos-field]');
+  if(primaryPosField) primaryPosField.addEventListener('click', ()=>{
+    const grp = document.getElementById('p-positions');
+    const hid = document.getElementById('p-primary-position');
+    if(!grp || !hid) return;
+    const sel = JSON.parse(grp.dataset.selected || '[]');
+    const eligible = currentPositions().filter(cp=> sel.some(s=> positionGroupKey(s)===positionGroupKey(cp)));
+    openOptionPicker('Primary position', [{value:'', label:'None'}].concat(eligible.map(cp=>({value:cp, label:cp}))), hid.value, (val)=> setPrimaryPosValue(val));
   });
   document.querySelectorAll('.venue-toggle').forEach(btn=>{
     btn.addEventListener('click', ()=>{
@@ -10911,9 +11191,10 @@ function attachHandlers(){
     p.name = newName;
     const numberEl = document.getElementById('p-number');
     if(numberEl) p.shirtNumber = numberEl.value ? parseInt(numberEl.value) : null;
-    const regSeasonEls = document.querySelectorAll('[data-p-reg-season]');
+    const regSeasonEls = document.querySelectorAll('input[name="p-reg-season"]');
     if(regSeasonEls.length>0){
-      p.registeredSeasons = Array.from(regSeasonEls).filter(el=>el.checked).map(el=>el.dataset.pRegSeason);
+      const pickedEl = document.querySelector('input[name="p-reg-season"]:checked');
+      p.registeredSeasons = applySeasonRegistration(p.registeredSeasons, pickedEl ? pickedEl.value : '');
     }
     const positionsEl = document.getElementById('p-positions');
     if(positionsEl) p.positions = JSON.parse(positionsEl.dataset.selected);
@@ -11338,9 +11619,10 @@ function attachHandlers(){
     if(emailEl) c.email = emailEl.value.trim();
     const permEl = document.querySelector('input[name="c-permission"]:checked');
     if(permEl) c.permissionLevel = permEl.value;
-    const cRegSeasonEls = document.querySelectorAll('[data-c-reg-season]');
+    const cRegSeasonEls = document.querySelectorAll('input[name="c-reg-season"]');
     if(cRegSeasonEls.length>0){
-      c.registeredSeasons = Array.from(cRegSeasonEls).filter(el=>el.checked).map(el=>el.dataset.cRegSeason);
+      const cPickedEl = document.querySelector('input[name="c-reg-season"]:checked');
+      c.registeredSeasons = applySeasonRegistration(c.registeredSeasons, cPickedEl ? cPickedEl.value : '');
     }
     if(isNew) syncMandatoryQualsForAllCoaches();
     saveData();
@@ -11390,13 +11672,23 @@ function attachHandlers(){
     });
   });
   document.querySelectorAll('[data-season-filter]').forEach(el=>{
-    el.addEventListener('change', ()=>{
+    el.addEventListener('click', ()=>{
       const target = el.dataset.seasonFilter;
-      if(target==='home') homeSeasonFilter = el.value;
-      else if(target==='players') playersSeasonFilter = el.value;
-      else if(target==='coaches') coachesSeasonFilter = el.value;
-      else if(target==='playerprofile') playerProfileSeasonFilter = el.value;
-      render();
+      openOptionPicker('Season', seasonFilterChoices(), el.dataset.value, (val)=>{
+        if(target==='home') homeSeasonFilter = val;
+        else if(target==='players') playersSeasonFilter = val;
+        else if(target==='coaches') coachesSeasonFilter = val;
+        else if(target==='playerprofile') playerProfileSeasonFilter = val;
+        render();
+      });
+    });
+  });
+  document.querySelectorAll('[data-players-sort-filter]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      openOptionPicker('Sort players', PLAYER_SORTS.map(o=>({value:o.value, label:o.label})), playersSort, (val)=>{
+        playersSort = val;
+        render();
+      });
     });
   });
   document.querySelectorAll('[data-pitch-tab-quarter]').forEach(btn=>{
@@ -11839,7 +12131,7 @@ function stopTimer(){ clearInterval(timerInterval); timerInterval = null; timerF
     const dx = t.clientX - touchStartX;
     const dy = Math.abs(t.clientY - touchStartY);
     if(dx > SWIPE_DISTANCE && dy < MAX_VERTICAL){
-      if(document.getElementById('modal-root')) return; // a modal is open - let it be closed its own way
+      if(document.getElementById('modal-root') || document.getElementById('picker-root')) return; // a modal is open - let it be closed its own way
       const backEl = document.querySelector('.backbar');
       if(backEl) backEl.click();
     }
@@ -11856,11 +12148,11 @@ function stopTimer(){ clearInterval(timerInterval); timerInterval = null; timerF
   const EDGE_ZONE = 32;
   const MIN_DISTANCE = 60;   // minimum horizontal travel to count as a swipe
   const DOMINANCE = 0.6;     // vertical travel must stay under this fraction of horizontal
-  const IGNORE = 'input, select, textarea, [contenteditable="true"], .wheel-wrap, .pitch-holder, .pitch-svg, [data-pitch-token]';
+  const IGNORE = 'input, select, textarea, .pick-select, #picker-root, [contenteditable="true"], .wheel-wrap, .pitch-holder, .pitch-svg, [data-pitch-token]';
   let startX = 0, startY = 0, tracking = false, ctx = null;
 
   function swipeContext(){
-    if(document.getElementById('modal-root')) return null; // a modal owns every gesture while it's open
+    if(document.getElementById('modal-root') || document.getElementById('picker-root')) return null; // a modal owns every gesture while it's open
     if(VIEW.screen === 'playerProfile') return 'player';
     if(!VIEW.screen && document.querySelector('[data-home-tab]')) return 'hometabs';
     return null;
@@ -11901,7 +12193,7 @@ function stopTimer(){ clearInterval(timerInterval); timerInterval = null; timerF
     if(i === -1){
       // Opened from somewhere that isn't in this season's list (e.g. a chart) - fall back
       // to the whole squad rather than leaving the swipe dead.
-      order = [...DATA.players].sort(byShirtNumber);
+      order = sortByName(DATA.players);
       i = order.findIndex(p=>p.id===id);
     }
     const target = i === -1 ? null : order[i + step];
