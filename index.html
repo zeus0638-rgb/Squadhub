@@ -300,12 +300,34 @@
   .live-banner-score .lbs-score{ flex:none; font-size:40px; font-weight:700; line-height:1; white-space:nowrap; }
   .whistle-btn{ position:absolute; top:66px; right:14px; width:40px; height:40px; padding:0; background:none; border:none; display:flex; align-items:center; justify-content:center; cursor:pointer; }
   .whistle-btn .ring{ width:36px; height:36px; border-radius:50%; background:rgba(255,255,255,0.18); border:2.5px solid rgba(255,255,255,0.65); display:flex; align-items:center; justify-content:center; }
+  .mins-seg-played, .mins-seg-forecast{ position:absolute; top:0; bottom:0; }
+  .mins-seg-played{ background:var(--pitch); }
+  .mins-seg-forecast{ background:repeating-linear-gradient(135deg, rgba(240,170,40,0.85) 0 5px, rgba(240,170,40,0.5) 5px 10px); }
+  .mins-now-line{ position:absolute; width:2px; margin-left:-1px; background:var(--ink); z-index:4; pointer-events:none; box-shadow:0 0 0 1px rgba(0,0,0,0.28); }
+  .mins-legend{ display:flex; flex-wrap:wrap; gap:6px 14px; align-items:center; color:var(--ink-soft); margin:0 0 10px; font-size:11.5px; font-weight:600; }
+  .mins-legend .lg{ display:inline-block; width:14px; height:10px; border-radius:3px; margin-right:5px; vertical-align:-1px; }
+  .mins-legend .lg-played{ background:var(--pitch); }
+  .mins-legend .lg-fore{ background:repeating-linear-gradient(135deg, rgba(240,170,40,0.85) 0 3px, rgba(240,170,40,0.5) 3px 6px); }
+  .mins-legend .lg-now{ width:2px; height:13px; border-radius:0; background:var(--ink); vertical-align:-3px; margin-right:6px; }
+  #sub-alerts{ position:fixed; left:0; right:0; top:calc(env(safe-area-inset-top, 0px) + 8px); z-index:900; display:flex; flex-direction:column; align-items:center; gap:8px; padding:0 10px; pointer-events:none; }
+  .sub-alert{ pointer-events:auto; width:100%; max-width:460px; background:var(--panel); color:var(--ink); border:2px solid var(--pitch); border-radius:16px; padding:12px 14px; box-shadow:0 8px 28px rgba(0,0,0,0.45); animation:subAlertIn 0.25s ease-out, subAlertPulse 1.8s ease-in-out infinite; }
+  .sub-alert .sa-head{ display:flex; align-items:center; gap:8px; font-size:12px; font-weight:800; letter-spacing:0.08em; text-transform:uppercase; color:var(--pitch); }
+  .sub-alert .sa-main{ font-family:'Oswald',sans-serif; font-size:22px; font-weight:600; line-height:1.2; margin-top:4px; }
+  .sub-alert .sa-sub{ font-size:13px; color:var(--ink-soft); margin-top:2px; }
+  .sub-alert .sa-btns{ display:flex; gap:8px; margin-top:10px; }
+  .sub-alert .sa-btns button{ flex:1; border-radius:10px; padding:9px 6px; font-weight:700; font-size:13.5px; font-family:'Inter',sans-serif; cursor:pointer; border:1.5px solid var(--pitch); background:transparent; color:var(--pitch); }
+  .sub-alert .sa-btns button.primary{ background:var(--pitch); color:#fff; }
+  @keyframes subAlertIn{ from{ transform:translateY(-16px); opacity:0; } to{ transform:translateY(0); opacity:1; } }
+  @keyframes subAlertPulse{ 0%,100%{ box-shadow:0 8px 28px rgba(0,0,0,0.45), 0 0 0 0 rgba(255,255,255,0); } 50%{ box-shadow:0 8px 28px rgba(0,0,0,0.45), 0 0 14px 2px var(--pitch); } }
+  .bench-chip.tap{ cursor:pointer; -webkit-tap-highlight-color:transparent; }
+  .bench-chip.tap:active{ filter:brightness(0.85); }
   .qs-list{ display:flex; flex-direction:column; gap:4px; margin-left:-9px; }   /* the pill's outline hangs out to the left only, so the text lines up with the page edge and nothing pokes into the title */
   .qs-row{ display:flex; align-items:center; gap:7px; font-size:14px; font-weight:700; line-height:1; padding:4px 7px; border:2px solid transparent; border-radius:999px; white-space:nowrap; }
   .qs-row .qs-q{ width:22px; }
   .qs-row .qs-sc{ display:inline-grid; grid-template-columns:minmax(13px,auto) 9px minmax(13px,auto); align-items:center; font-variant-numeric:tabular-nums; }
   .qs-row .qs-us{ text-align:right; } .qs-row .qs-dash{ text-align:center; } .qs-row .qs-them{ text-align:left; }
-  .qs-row.qs-live{ font-weight:800; border-color:#fff; animation:qsLivePulse 1.7s ease-in-out infinite; }
+  .qs-row.qs-live{ font-weight:800; border-color:#fff; animation:qsLivePulse 1.7s ease-in-out infinite; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+  .qs-row.qs-live:active{ background:rgba(255,255,255,0.18); }
   .qs-row .qs-chip{ margin:0; font-size:9.5px; padding:2px 6px; gap:4px; }
   @keyframes qsLivePulse{ 0%,100%{ border-color:rgba(255,255,255,0.3); box-shadow:0 0 0 0 rgba(255,255,255,0); } 50%{ border-color:#fff; box-shadow:0 0 12px 1px rgba(255,255,255,0.65); } }
   @media (prefers-reduced-motion: reduce){ .qs-row.qs-live{ animation:none; } }
@@ -1274,7 +1296,7 @@ function renderPeriodScoreList(f){
   return `<div class="qs-list" data-score-lines>${periodKeys(f).map((pk,i)=>{
     const q = i+1, isLive = q===liveQ, notYet = q>liveQ;
     const g = goals(q);
-    return `<div class="qs-row${isLive?' qs-live':''}">
+    return `<div class="qs-row${isLive?' qs-live':''}"${isLive ? ' data-go-live-row role="button" tabindex="0" title="Go to the live period"' : ''}>
       <span class="qs-q">${f.periods===2 ? 'H'+q : 'Q'+q}</span>
       <span class="qs-sc"><span class="qs-us">${notYet?'#':g.us}</span><span class="qs-dash">&ndash;</span><span class="qs-them">${notYet?'#':g.them}</span></span>
       ${isLive ? `<span class="live-inline-badge qs-chip"><span style="width:5px; height:5px; border-radius:50%; background:var(--loss);"></span>LIVE</span>` : ''}
@@ -2892,24 +2914,27 @@ function liveElapsedInPeriod(f){
   return Math.min(mpp, Math.max(0, (mpp*60 - f.liveState.secondsLeft) / 60));
 }
 function soFarMinutesByPeriod(f, playerId){
+  // Per period: the stretches of the period this player is (or is planned to be) on the pitch, split at "now" into
+  // played (solid) and forecast (still to come). Times are minutes into the period, so they can be drawn to scale.
   const mpp = f.minutesPerPeriod || DEFAULT_CONFIG.minutesPerPeriod, half = mpp/2;
   const curQ = f.liveState.quarter, elapsed = liveElapsedInPeriod(f);
   const lineup = f.actualLineup || f.lineup;
   return periodKeys(f).map((q,idx)=>{
-    const qNum = idx+1; let exact = 0, isSub = false;
+    const qNum = idx+1; let played = 0, forecast = 0, isSub = false; const segs = [];
     f.positions.forEach(pos=>{
       const slot = lineup[q] && lineup[q][pos]; if(!slot) return;
-      const a = slot.a, b = (!slot.b || slot.b===slot.a) ? slot.a : slot.b;
+      const hasSub = !!slot.b && slot.b!==slot.a;
       const swap = (slot.subAt!=null && slot.subAt>0 && slot.subAt<mpp) ? slot.subAt : half;
-      const bDur = mpp - swap;
-      let aMins, bMins;
-      if(qNum < curQ){ aMins = swap; bMins = bDur; }
-      else if(qNum === curQ){ aMins = Math.min(swap, elapsed); bMins = Math.min(bDur, Math.max(0, elapsed - swap)); }
-      else { aMins = 0; bMins = 0; }
-      if(a===playerId) exact += aMins;
-      if(b===playerId){ exact += bMins; if(b!==a) isSub = true; }
+      const spans = [];
+      if(slot.a===playerId) spans.push([0, hasSub ? swap : mpp]);
+      if(hasSub && slot.b===playerId){ spans.push([swap, mpp]); isSub = true; }
+      spans.forEach(([S,E])=>{
+        const cut = qNum<curQ ? E : (qNum===curQ ? Math.min(E, Math.max(S, elapsed)) : S);
+        if(cut>S){ segs.push({s:S, e:cut, k:'p'}); played += cut-S; }
+        if(E>cut){ segs.push({s:cut, e:E, k:'f'}); forecast += E-cut; }
+      });
     });
-    return {mins: Math.round(exact), exact, isSub};
+    return {mins: Math.round(played), exact: played, forecast: Math.round(forecast), forecastExact: forecast, isSub, segs};
   });
 }
 const REVIEW_MINUTES_SORTS = [
@@ -2949,35 +2974,58 @@ function wireReviewMinutesSort(afterPick, root){
   });
 }
 function renderReviewMinutesSection(f, squad, useActual, title, soFar){
-  const mppNow = f.minutesPerPeriod || DEFAULT_CONFIG.minutesPerPeriod;
+  const mpp = f.minutesPerPeriod || DEFAULT_CONFIG.minutesPerPeriod;
+  const N = periodKeys(f).length;
+  const curQ = soFar ? f.liveState.quarter : 0;
   const elapsedNow = soFar ? liveElapsedInPeriod(f) : 0;
-  const matchSoFar = soFar ? Math.max(1, (f.liveState.quarter-1)*mppNow + elapsedNow) : 0;
+  const totalMatch = totalMatchMinutes(f);
+  const matchSoFar = soFar ? (curQ-1)*mpp + elapsedNow : 0;
+  const nameStyle = 'width:70px; flex-shrink:0; font-size:12.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
+  // The thin "now" line. In the by-period grid it sits inside the live period's column at the right fraction of that
+  // period; every row draws its own piece, stretched to meet the rows above and below so it reads as one line.
+  const periodNowLine = (top, bottom)=> soFar
+    ? `<div class="mins-now-line" style="left:calc(((100% - ${5*(N-1)}px) / ${N}) * ${(curQ-1) + (mpp>0 ? elapsedNow/mpp : 0)} + ${5*(curQ-1)}px); top:${-top}px; bottom:${-bottom}px;"></div>` : '';
+  const totalNowLine = (top, bottom)=> soFar
+    ? `<div class="mins-now-line" style="left:${Math.min(100, matchSoFar/totalMatch*100)}%; top:${-top}px; bottom:${-bottom}px;"></div>` : '';
+  const legend = soFar ? `<div class="mins-legend"><span><i class="lg lg-played"></i>Played</span><span><i class="lg lg-fore"></i>Forecast (still to come)</span><span><i class="lg lg-now"></i>Now</span></div>` : '';
   return `
-    <div class="section-title"${title?' style="margin-top:0;"':''}>${esc(title || 'Review player minutes')}</div>
-    ${soFar ? `<div class="small" style="color:var(--ink-soft); margin:-4px 0 10px;">Up to now &mdash; ${esc(periodBadgeLabel(f, f.liveState.quarter))}, ${Math.floor(elapsedNow)} of ${mppNow} mins in.</div>` : ''}
+    ${soFar ? '' : `<div class="section-title"${title?' style="margin-top:0;"':''}>${esc(title || 'Review player minutes')}</div>`}
+    ${soFar ? `<div class="small" style="color:var(--ink-soft); margin:0 0 10px;">Up to now &mdash; ${esc(periodBadgeLabel(f, curQ))}, ${Math.floor(elapsedNow)} of ${mpp} mins in.</div>` : ''}
     <div class="toggle-group">
       <button type="button" class="${reviewMinutesTab==='byperiod'?'on':''}" data-review-minutes-tab="byperiod">By period</button>
       <button type="button" class="${reviewMinutesTab==='total'?'on':''}" data-review-minutes-tab="total">Total mins</button>
     </div>
     ${reviewMinutesTab==='byperiod' ? `
     <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">${reviewMinutesSortChipHtml()}</div>
-    <div class="small" style="color:var(--ink-soft); margin-bottom:8px;">Bar fills from the left for starters, from the right for subs coming on.</div>
+    ${soFar ? legend : `<div class="small" style="color:var(--ink-soft); margin-bottom:8px;">Bar fills from the left for starters, from the right for subs coming on.</div>`}
     <div class="card">
       <div class="row" style="padding-bottom:8px; border-bottom:1px solid var(--line); margin-bottom:6px;">
         <div style="width:70px; flex-shrink:0;"></div>
-        <div style="display:flex; flex:1; gap:5px;">
+        <div style="display:flex; flex:1; gap:5px; position:relative; align-self:stretch; align-items:center;">
           ${periodKeys(f).map((pk,i)=>`<div class="small" style="flex:1; text-align:center; font-weight:700; color:var(--ink-soft);">${esc(periodBadgeLabel(f, i+1))}</div>`).join('')}
+          ${periodNowLine(-15, 15)}
         </div>
-        <div class="small" style="width:38px; flex-shrink:0; text-align:right; font-weight:700; color:var(--ink-soft);">Tot</div>
+        <div class="small" style="width:${soFar?52:38}px; flex-shrink:0; text-align:right; font-weight:700; color:var(--ink-soft);">Tot</div>
       </div>
       ${sortedForReviewMinutes(f, squad, useActual, soFar).map(p=>{
         const perPeriod = soFar ? soFarMinutesByPeriod(f, p.id) : plannedMinutesByPeriod(f, p.id, useActual);
-        const mpp = f.minutesPerPeriod || DEFAULT_CONFIG.minutesPerPeriod;
         const total = soFar ? Math.round(perPeriod.reduce((s,x)=>s+x.exact, 0)) : perPeriod.reduce((s,x)=>s+x.mins, 0);
+        const totalForecast = soFar ? Math.round(perPeriod.reduce((s,x)=>s+x.forecastExact, 0)) : 0;
         return `<div class="row" style="padding:6px 0; border-bottom:1px solid var(--line); align-items:center;">
-          <div style="width:70px; flex-shrink:0; font-size:12.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(p.name.split(' ')[0])}</div>
-          <div style="display:flex; flex:1; gap:5px;">
-            ${perPeriod.map(({mins, isSub})=>{
+          <div style="${nameStyle}">${esc(p.name.split(' ')[0])}</div>
+          <div style="display:flex; flex:1; gap:5px; position:relative; align-self:stretch; align-items:center;">
+            ${perPeriod.map((pp, qi)=>{
+              if(soFar){
+                const playedPct = mpp>0 ? Math.round((pp.exact/mpp)*100) : 0;
+                const label = pp.mins>0 ? pp.mins+"'" : (pp.forecast>0 ? pp.forecast+"'" : '');
+                // In the live period the "now" line runs through the middle of the cell, so its label sits to the left of it.
+                const isLiveCell = (qi+1)===curQ;
+                return `<div style="flex:1; height:22px; background:var(--surface-2); border-radius:5px; position:relative; overflow:hidden;">
+                  ${pp.segs.map(g=>`<div class="${g.k==='p'?'mins-seg-played':'mins-seg-forecast'}" style="left:${g.s/mpp*100}%; width:${(g.e-g.s)/mpp*100}%;"></div>`).join('')}
+                  <div style="position:relative; z-index:1; height:100%; display:flex; align-items:center; justify-content:${isLiveCell?'flex-start':'center'}; ${isLiveCell?'padding-left:4px; ':''}font-size:10.5px; font-weight:700; color:${(isLiveCell ? playedPct>=35 : playedPct>=50)?'#fff':'var(--ink)'};">${label}</div>
+                </div>`;
+              }
+              const {mins, isSub} = pp;
               const pct = mpp>0 ? Math.min(100, Math.round((mins/mpp)*100)) : 0;
               const side = isSub ? 'right' : 'left';
               return `<div style="flex:1; height:22px; background:var(--surface-2); border-radius:5px; position:relative; overflow:hidden;">
@@ -2985,25 +3033,60 @@ function renderReviewMinutesSection(f, squad, useActual, title, soFar){
                 <div style="position:relative; z-index:1; height:100%; display:flex; align-items:center; justify-content:center; font-size:10.5px; font-weight:700; color:${pct>=50?'#fff':'var(--ink)'};">${mins>0?mins+"'":''}</div>
               </div>`;
             }).join('')}
+            ${periodNowLine(6, 7)}
           </div>
-          <div style="width:38px; flex-shrink:0; text-align:right; font-size:12.5px; font-weight:700;">${total}'</div>
+          <div style="width:${soFar?52:38}px; flex-shrink:0; text-align:right; line-height:1.15;">
+            <div style="font-size:12.5px; font-weight:700;">${total}'</div>
+            ${soFar && totalForecast>0 ? `<div style="font-size:10px; font-weight:600; color:var(--ink-soft);">&rarr;${total+totalForecast}'</div>` : ''}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>` : (soFar ? `
+    ${legend}
+    <div class="card">
+      <div class="row" style="padding-bottom:8px; border-bottom:1px solid var(--line); margin-bottom:6px;">
+        <div style="width:70px; flex-shrink:0;"></div>
+        <div style="flex:1; position:relative; align-self:stretch;">${totalNowLine(-4, 15)}</div>
+        <div class="small" style="width:64px; flex-shrink:0; text-align:right; font-weight:700; color:var(--ink-soft);">Mins</div>
+      </div>
+      ${[...squad].sort((a,b)=> liveMinutesSplit(f,b.id).played - liveMinutesSplit(f,a.id).played).map(p=>{
+        const split = liveMinutesSplit(f, p.id);
+        const played = Math.round(split.played), forecast = Math.round(split.projected);
+        const playedPct = Math.min(100, played/totalMatch*100);
+        const nowPct = Math.min(100, matchSoFar/totalMatch*100);
+        const foreStart = Math.max(playedPct, nowPct);                     // what's still to come starts from "now"
+        const forePct = Math.max(0, Math.min(100-foreStart, forecast/totalMatch*100));
+        return `<div class="row" style="padding:6px 0; border-bottom:1px solid var(--line); align-items:center;">
+          <div style="${nameStyle}">${esc(p.name.split(' ')[0])}</div>
+          <div style="flex:1; position:relative; align-self:stretch;">
+            <div style="position:absolute; left:0; right:0; top:50%; height:22px; margin-top:-11px; background:var(--surface-2); border-radius:5px; overflow:hidden;">
+              <div class="mins-seg-played" style="left:0; width:${playedPct}%;"></div>
+              <div class="mins-seg-forecast" style="left:${foreStart}%; width:${forePct}%;"></div>
+            </div>
+            ${totalNowLine(6, 7)}
+          </div>
+          <div style="width:64px; flex-shrink:0; text-align:right; line-height:1.15;">
+            <div style="font-size:12.5px; font-weight:700;">${played}'</div>
+            ${forecast>0 ? `<div style="font-size:10px; font-weight:600; color:var(--ink-soft);">&rarr;${played+forecast}'</div>` : ''}
+          </div>
         </div>`;
       }).join('')}
     </div>` : `
     <div class="card">
-      ${[...squad].sort((a,b)=> soFar ? (liveMinutesSplit(f,b.id).played - liveMinutesSplit(f,a.id).played) : (computePlannedMinutes(f,b.id,useActual) - computePlannedMinutes(f,a.id,useActual))).map(p=>{
-        const m = soFar ? Math.round(liveMinutesSplit(f,p.id).played) : computePlannedMinutes(f,p.id,useActual);
-        const total = soFar ? Math.round(matchSoFar) : totalMatchMinutes(f);
+      ${[...squad].sort((a,b)=> computePlannedMinutes(f,b.id,useActual) - computePlannedMinutes(f,a.id,useActual)).map(p=>{
+        const m = computePlannedMinutes(f,p.id,useActual);
+        const total = totalMatchMinutes(f);
         const pct = Math.min(100, Math.round((m/total)*100));
         const cls = m<total/2?'low':(m>total*0.75?'high':'');
         return `<div class="attr-bar-row">
-          <div class="al" style="width:92px;">${esc(p.name.split(' ')[0])}</div>
+          <div class="al" style="width:70px; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(p.name.split(' ')[0])}</div>
           <div class="attr-bar-track"><div class="attr-bar-fill ${cls}" style="width:${pct}%"></div></div>
           <div class="av" style="width:34px;">${m}'</div>
         </div>`;
       }).join('')}
-    </div>`}`;
+    </div>`)}`;
 }
+
 function computeActualMinutes(fixture, playerId){
   return minutesFromLineup(fixture.actualLineup || fixture.lineup, fixture.positions, playerId, fixture.periods, fixture.minutesPerPeriod);
 }
@@ -3648,11 +3731,12 @@ function renderReportViewOverlay(){
     </div>
   </div>`;
 }
-function renderBenchStripForQuarter(f, quarterKey, useActual){
+function renderBenchStripForQuarter(f, quarterKey, useActual, subTap){
   // Players in the matchday squad who aren't a starter or a sub-on at any position
   // this quarter - genuinely on the bench for this one quarter specifically.
   const lineup = useActual ? (f.actualLineup || f.lineup) : f.lineup;
   const quarterLineup = lineup[quarterKey] || {};
+  const qNum = periodKeys(f).indexOf(quarterKey) + 1;
   const onPitchIds = new Set();
   Object.values(quarterLineup).forEach(slot=>{
     if(slot && slot.a) onPitchIds.add(slot.a);
@@ -3663,16 +3747,25 @@ function renderBenchStripForQuarter(f, quarterKey, useActual){
   if(benchPlayers.length===0) return '';
   return `
   <div style="margin-top:12px;">
-    <div class="small" style="color:var(--ink-soft); margin-bottom:6px; font-weight:600;">Bench</div>
+    <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom:6px;">
+      <div class="small" style="color:var(--ink-soft); font-weight:600;">Bench</div>
+      ${subTap ? `<div class="small" style="color:var(--ink-soft);">Tap a player to make a sub</div>` : ''}
+    </div>
     <div style="display:flex; flex-wrap:wrap; gap:8px;">
-      ${benchPlayers.map(p=>`
-        <div style="display:flex; align-items:center; gap:6px; background:var(--surface-2); border-radius:20px; padding:5px 11px 5px 5px;">
+      ${benchPlayers.map(p=>{
+        const off = hasRedCard(f, p.id);                       // sent off earlier: can't come back on
+        const tappable = subTap && !off;
+        return `
+        <div class="bench-chip${tappable?' tap':''}" ${tappable ? `data-bench-sub="${f.id}|${qNum}|${p.id}" role="button"` : ''} style="display:flex; align-items:center; gap:6px; background:var(--surface-2); border-radius:20px; padding:5px 11px 5px 5px; ${off?'opacity:0.45;':''}">
           ${shirtHtml(p, 'width:22px;height:22px;font-size:10px;')}
           <span style="font-size:12.5px; font-weight:600; color:var(--ink);">${esc(p.name.split(' ')[0])}</span>
-        </div>`).join('')}
+          ${tappable ? `<span style="font-size:13px; opacity:0.75;">&#8644;</span>` : ''}
+        </div>`;
+      }).join('')}
     </div>
   </div>`;
 }
+
 function renderGridPitchEnlargeOverlay(){
   const f = DATA.fixtures.find(x=>x.id===VIEW.params.id);
   if(!f || !gridPitchEnlargedQuarter) return '';
@@ -3706,39 +3799,27 @@ function renderGridPitchEnlargeOverlay(){
   // would be wrong here once more goals have gone in after this quarter finished.
   const cumUsByQ = isPastQuarter ? (f.events||[]).filter(e=>e.type==='goal' && e.quarter<=gridPitchEnlargedQuarter).length : 0;
   const cumThemByQ = isPastQuarter ? (f.events||[]).filter(e=>e.type==='oppogoal' && e.quarter<=gridPitchEnlargedQuarter).length : 0;
+  // The period score list is the way back to the live period (tap the pulsing row), so there is no "Return to live"
+  // button. Start this quarter / End game sit to the right of the list, roughly level with its last two rows.
   const headerOld = `
-    <div style="display:grid; grid-template-columns:minmax(max-content,1fr) auto minmax(36px,1fr); gap:6px; align-items:start; margin-bottom:6px;">
-      <div style="min-width:0;">${isActuallyLive ? renderPeriodScoreList(f) : ''}</div>
-      <div style="text-align:center; min-width:0;">
+    <div style="display:grid; grid-template-columns:minmax(max-content,1fr) auto minmax(36px,1fr); grid-template-rows:auto 1fr; column-gap:6px; row-gap:6px; align-items:start; margin-bottom:10px;">
+      <div style="grid-column:1; grid-row:1 / span 2; min-width:0;">${isActuallyLive ? renderPeriodScoreList(f) : ''}</div>
+      <div style="grid-column:2; grid-row:1; text-align:center; min-width:0;">
         <div style="font-weight:700; font-family:'Oswald',sans-serif; font-size:24px; color:var(--ink);">${esc(periodFullLabel(f, gridPitchEnlargedQuarter))}</div>
         ${isFutureQuarter ? `<div class="small" style="color:var(--ink-soft); font-weight:700; margin-top:2px;">Not yet started</div>` : ''}
       </div>
-      <div style="text-align:right; min-width:0;">
+      <div style="grid-column:3; grid-row:1; text-align:right; min-width:0;">
         <button type="button" data-close-grid-pitch-enlarge title="Close" style="background:var(--surface-2); border:none; border-radius:50%; width:32px; height:32px; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; color:var(--ink);">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         </button>
       </div>
+      ${isActuallyLive && (isFutureQuarter || gridPitchEnlargedQuarter>1) ? `
+      <div style="grid-column:2 / span 2; grid-row:2; align-self:end; margin-bottom:2px; display:flex; flex-wrap:wrap; justify-content:flex-start; gap:6px; min-width:0;">
+        ${!isFutureQuarter ? `<button type="button" class="btn ghost small" data-enlarge-prev-quarter style="margin:0; width:auto; padding:7px 10px; font-size:12.5px; white-space:nowrap;">&larr; Review prev Q</button>` : ''}
+        ${isFutureQuarter ? `<button type="button" class="btn amber small" data-start-this-quarter="${gridPitchEnlargedQuarter}" style="margin:0; width:auto; padding:7px 10px; font-size:12.5px; white-space:nowrap;">Start this ${f.periods===2?'half':'quarter'}</button>` : ''}
+        ${(isFutureQuarter && isLastQuarter) ? `<button type="button" class="btn ghost small" data-enlarge-game-ended style="margin:0; width:auto; padding:7px 10px; font-size:12.5px; white-space:nowrap; border-color:var(--loss); color:var(--loss);">End game</button>` : ''}
+      </div>` : ''}
     </div>
-    ${isActuallyLive ? `
-    <div style="display:grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); align-items:center; gap:6px; margin-bottom:${isThisQuarterLive?'2px':'10px'};">
-      <div style="display:flex; justify-content:flex-start; min-width:0;">
-        ${(!isFutureQuarter && gridPitchEnlargedQuarter>1) ? `<button type="button" class="btn ghost small" data-enlarge-prev-quarter style="margin-bottom:0; width:100%; padding-left:6px; padding-right:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">&larr; Review prev Q</button>`
-          : isFutureQuarter ? `<button type="button" class="btn ghost small" data-enlarge-return-to-live style="margin-bottom:0; width:100%; padding-left:6px; padding-right:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Return to live</button>` : ''}
-      </div>
-      <div style="display:flex; justify-content:center; min-width:0;">
-        ${isThisQuarterLive ? `<div class="scoreboard" style="background:none; padding:0;"><button type="button" data-enlarge-timer-toggle="${f.id}" title="${f.liveState.running?'Pause':'Start'} clock" class="timer${timerDisplay.stoppage?' stoppage':''}" style="font-family:'Oswald',sans-serif; font-size:22px; font-weight:800; color:${timerDisplay.stoppage?'#FFD54A':'var(--ink)'}; text-align:center; white-space:nowrap; background:none; border:none; padding:0; cursor:pointer;">${timerDisplay.text}</button></div>`
-          : isPastQuarter ? `<button type="button" class="btn ghost small" data-enlarge-return-to-live style="margin-bottom:0; width:100%; padding-left:6px; padding-right:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Return to live</button>`
-          : `<button type="button" class="btn amber small" data-start-this-quarter="${gridPitchEnlargedQuarter}" style="margin-bottom:0; width:auto; padding-left:14px; padding-right:14px; white-space:nowrap;">Start this ${f.periods===2?'half':'quarter'}</button>`}
-      </div>
-      <div style="display:flex; justify-content:flex-end; min-width:0;">
-        ${isThisQuarterLive && isLastQuarter ? `<button type="button" class="btn ghost small" data-enlarge-game-ended style="margin-bottom:0; width:100%; border-color:var(--loss); color:var(--loss);">End game</button>`
-          : isThisQuarterLive ? `<button type="button" class="btn ghost small" data-enlarge-next-quarter style="margin-bottom:0; width:100%; padding-left:6px; padding-right:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Start ${esc(periodBadgeLabel(f, gridPitchEnlargedQuarter+1))} &rarr;</button>`
-          : (isFutureQuarter && isLastQuarter) ? `<button type="button" class="btn ghost small" data-enlarge-game-ended style="margin-bottom:0; width:100%; border-color:var(--loss); color:var(--loss);">End game</button>`
-          : ''}
-      </div>
-    </div>
-    ${isThisQuarterLive ? `<div class="small" style="text-align:center; font-weight:700; color:${scoreStateColor}; margin-bottom:10px;">${scoreState} ${f.finalScore.us}&ndash;${f.finalScore.them}</div>` : ''}
-    ` : ''}
 `;
   // While this period is live the top of the screen is built for reading from arm's length: big period name, clock and
   // score in the middle, the score of each period so far down the left, close (and End game) on the right.
@@ -3762,7 +3843,7 @@ function renderGridPitchEnlargeOverlay(){
   <div class="pitch-enlarge-overlay" id="grid-pitch-enlarge">
     ${headerHtml}
     <div id="grid-pitch-enlarge-pitch" class="card pitch-holder ${isThisQuarterLive?'live-pulse':''} ${pitchQuarterTransitionDir===1?'pitch-quarter-fwd':pitchQuarterTransitionDir===-1?'pitch-quarter-back':''}" style="padding:0;">${renderPitchFormation(f, qKey, {showSubs:true, tapEnabled:unlocked, showName:true, fitScreen:true, fitScreenOffset:150, allowReset:unlocked, allowAutoGenerate:isPlanningContext, allowPlayerMins:true, minsSoFar:isActuallyLive, allowEvents:!isPlanningContext, allowOppoGoal:(isActuallyLive || (reviewMode && reviewFixtureId===f.id)), showSwipeHints:true, showQuarterWatermark:true, useActual, lockedUntilReview:!unlocked && !isPlanningContext, allowInfoTap:!unlocked && !isPlanningContext})}</div>
-    ${renderBenchStripForQuarter(f, qKey, useActual)}
+    ${renderBenchStripForQuarter(f, qKey, useActual, unlocked && !isPlanningContext)}
     ${(!unlocked && !isPlanningContext) ? `<div class="small" style="color:var(--ink-soft); text-align:center; margin-top:10px;">Tap "Review &amp; edit match" to correct anything here, or tap a marker for their stats this ${periodWord(f).toLowerCase()}.</div>` : ''}
   </div>`;
 }
@@ -3982,6 +4063,8 @@ function openQuarterQuickLog(fixtureId, qNum, type){
       <button class="btn amber" data-ql-confirm>Log ${eventLabel}</button>`;
     openModal(body, {floating:true});
     attachModalHandlers();
+    const qlWheel = document.getElementById('ql-minute-wheel');
+    if(qlWheel) qlWheel.scrollTop = Math.round(mpp/2) * 40;        // start the wheel on its default, not at 0'
     setupWheelPicker('ql-minute-wheel');
     initDigitalTimeControl('ql-dtc');
     document.querySelectorAll('[data-ql-mode]').forEach(btn=>{
@@ -7198,12 +7281,50 @@ function renderTeamTab(){
       `).join('')}
     </div>`;
   } else if(tab==='notifications'){
+    const ns = notifSettings();
+    const perm = phoneNotifStatus();
+    const permText = perm==='granted' ? 'Allowed' : perm==='denied' ? 'Blocked in your phone settings' : perm==='unsupported' ? 'Not available on this device' : 'Not asked yet';
+    const sw = (key, on)=>`<label class="switch"><input type="checkbox" role="switch" data-notif-toggle="${key}" ${on?'checked':''}><span class="switch-track"></span></label>`;
     tabHtml = `
-    <div class="section-title" style="margin-top:0;">Notifications</div>
-    <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:60px 20px;">
-      <svg viewBox="0 0 24 24" width="44" height="44" fill="none" style="color:var(--ink-soft); margin-bottom:16px;"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M13.73 21a2 2 0 01-3.46 0" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <div style="font-family:'Oswald',sans-serif; font-weight:600; font-size:22px; color:var(--ink);">Coming soon</div>
-    </div>`;
+    <div class="section-title" style="margin-top:0;">Substitution reminders</div>
+    <div class="card">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px;">
+        <div><div style="font-weight:600;">Remind me about planned subs</div><div class="small" style="color:var(--ink-soft);">During a live match: who comes off, who comes on, and where.</div></div>
+        ${sw('subReminders', ns.subReminders)}
+      </div>
+      <label>Remind me</label>
+      <div class="toggle-group" style="margin-bottom:14px;">
+        <button type="button" class="${ns.subLeadMinutes===0?'on':''}" data-sub-lead="0">At the time</button>
+        <button type="button" class="${ns.subLeadMinutes===1?'on':''}" data-sub-lead="1">1 min before</button>
+        <button type="button" class="${ns.subLeadMinutes===2?'on':''}" data-sub-lead="2">2 min before</button>
+      </div>
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+        <div><div style="font-weight:600;">Sound and vibration</div><div class="small" style="color:var(--ink-soft);">A short alert tone and buzz with each reminder.</div></div>
+        ${sw('subSound', ns.subSound)}
+      </div>
+    </div>
+
+    <div class="section-title">Phone notifications</div>
+    <div class="card">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px;">
+        <div><div style="font-weight:600;">Status</div><div class="small" style="color:var(--ink-soft);" id="notif-perm-text">${permText}</div></div>
+      </div>
+      <button type="button" class="btn amber" data-notif-allow ${perm==='granted'||perm==='unsupported'?'disabled':''} style="margin-bottom:10px;">Allow phone notifications</button>
+      <button type="button" class="btn ghost" data-notif-test style="margin-bottom:12px;">Send a test reminder</button>
+      <div class="small" style="color:var(--ink-soft);">
+        With notifications allowed, a reminder also appears as a phone notification when SquadHub is running but you've switched to another app.
+        A fully locked phone, or an app that's been closed, can't be woken without a push service, so the option below keeps the screen on during a live match.
+      </div>
+    </div>
+
+    <div class="section-title">Keep the screen on</div>
+    <div class="card">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+        <div><div style="font-weight:600;">Keep the screen on during a live match</div><div class="small" style="color:var(--ink-soft);">Stops the phone locking mid-match, so the clock and reminders stay on time. Uses more battery.</div></div>
+        ${sw('keepScreenOn', ns.keepScreenOn)}
+      </div>
+    </div>
+    <div class="small" style="color:var(--ink-soft); text-align:center; margin-top:6px;">More notification options are coming soon.</div>`;
   } else if(tab==='backup'){
     tabHtml = `
     <div class="section-title" style="margin-top:0;">Export</div>
@@ -7769,6 +7890,261 @@ function quickEventBtnHtml(kind, attr, title){
   const colours = {goal:'#2E9E3F', yellowcard:'#F4C430', redcard:'#E0393E'};
   const icon = kind==='goal' ? '<span class="qe-ball">⚽</span>' : (kind==='yellowcard' ? '🟨' : '🟥');
   return `<button type="button" ${attr}="${kind}" class="quick-event-btn" style="background:${colours[kind]};" title="${title}">${icon}</button>`;
+}
+// ---------- Substitution from the bench: tap a bench player -> who comes off -> when ----------
+function openBenchSubModal(fixtureId, qNum, benchId){
+  const f = DATA.fixtures.find(x=>x.id===fixtureId);
+  const bench = getPlayer(benchId);
+  if(!f || !bench) return;
+  const qKey = periodKeys(f)[qNum-1];
+  if(!qKey) return;
+  if(!f.actualLineup) f.actualLineup = JSON.parse(JSON.stringify(f.lineup));
+  const mpp = f.minutesPerPeriod || DEFAULT_CONFIG.minutesPerPeriod, half = mpp/2;
+  const inReview = reviewMode && reviewFixtureId===f.id;
+  const isLiveQ = !inReview && f.status!=='finished' && !!f.liveState && f.liveState.quarter===qNum;
+  const clampMin = (m)=> Math.max(1, Math.min(mpp-1, m));
+  const nowMin = isLiveQ ? clampMin(Math.round(liveElapsedInPeriod(f))) : clampMin(Math.round(half));   // defaults to "now" in the live period
+  const swapAt = (slot)=> (slot.subAt!=null && slot.subAt>0 && slot.subAt<mpp) ? slot.subAt : half;
+  const first = (id)=> (getPlayer(id) ? getPlayer(id).name.split(' ')[0] : '?');
+  const lineup = f.actualLineup[qKey] || {};
+
+  // Who is on the pitch at the default time, position by position.
+  const candidates = f.positions.map(pos=>{
+    const slot = lineup[pos]; if(!slot || !slot.a) return null;
+    const hasSub = !!slot.b && slot.b!==slot.a;
+    const swap = swapAt(slot);
+    const subAlreadyOn = hasSub && nowMin >= swap;
+    const occupant = subAlreadyOn ? slot.b : slot.a;
+    if(!getPlayer(occupant) || hasRedCard(f, occupant)) return null;          // sent off = not on the pitch
+    return {pos, slot, hasSub, swap, subAlreadyOn, occupant};
+  }).filter(Boolean);
+
+  const stepWho = ()=>{
+    const body = `
+      <h3>${esc(first(benchId))} comes on for&hellip;</h3>
+      <button class="icon-x" data-close-modal>&times;</button>
+      <div class="small" style="color:var(--ink-soft); margin:-6px 0 12px;">${esc(periodFullLabel(f, qNum))} &middot; pick who goes off</div>
+      <div class="card" style="max-height:52vh; overflow-y:auto; margin-bottom:0;">
+        ${candidates.length===0 ? '<div class="small" style="color:var(--ink-soft); padding:10px;">No one is recorded on the pitch for this period.</div>' : candidates.map(c=>{
+          const pl = getPlayer(c.occupant);
+          const note = c.subAlreadyOn ? `Already a sub here (came on at ${c.swap}')`
+                     : c.hasSub ? `Planned sub: ${first(c.slot.b)} at ${c.swap}' &mdash; this replaces it` : '';
+          return `<div class="player-row ${c.subAlreadyOn?'':'tap'}" ${c.subAlreadyOn ? 'style="opacity:0.45;"' : `data-bs-out="${esc(c.pos)}"`}>
+            ${shirtHtml(pl)}
+            <div style="flex:1; min-width:0;"><div class="pname">${esc(pl.name)}</div><div class="ppos">${esc(c.pos)}${note ? ' &middot; '+note : ''}</div></div>
+          </div>`;
+        }).join('')}
+      </div>`;
+    openModal(body, {floating:true});
+    attachModalHandlers();
+    document.querySelectorAll('[data-bs-out]').forEach(el=>{
+      el.addEventListener('click', ()=> stepWhen(candidates.find(c=>c.pos===el.dataset.bsOut)));
+    });
+  };
+
+  const stepWhen = (c)=>{
+    const outId = c.occupant;
+    const values = Array.from({length: mpp-1}, (_,i)=>i+1);
+    const body = `
+      <h3>When did ${esc(first(benchId))} come on?</h3>
+      <button class="icon-x" data-close-modal>&times;</button>
+      <div class="small" style="color:var(--ink-soft); margin:-6px 0 12px;">${esc(first(benchId))} on for ${esc(first(outId))} &middot; ${esc(c.pos)} &middot; ${esc(periodFullLabel(f, qNum))}</div>
+      ${isLiveQ ? `
+      <div class="toggle-group" id="bs-time-mode" data-selected="quarter">
+        <button type="button" class="on" data-bs-mode="quarter">${esc(periodWord(f))} mins</button>
+        <button type="button" data-bs-mode="clock">Real time</button>
+      </div>` : ''}
+      <div id="bs-quarter-fields">${renderMinuteWheel('bs-minute-wheel', values, nowMin, "'")}</div>
+      <div id="bs-clock-fields" style="display:none;">${renderDigitalTimeControl('bs-dtc', nowHHMM())}</div>
+      <div class="small" style="color:var(--ink-soft); margin:4px 0 14px;">${isLiveQ ? `It's ${Math.floor(liveElapsedInPeriod(f))}' into the ${esc(periodWord(f).toLowerCase())} right now.` : 'Not the live period, so set the minute it happened.'}</div>
+      <div style="display:flex; gap:10px;">
+        <button class="btn ghost" data-bs-back style="flex:1; margin-bottom:0;">&larr; Back</button>
+        <button class="btn amber" data-bs-confirm style="flex:1; margin-bottom:0;">Make sub</button>
+      </div>`;
+    openModal(body, {floating:true});
+    attachModalHandlers();
+    initMinuteWheel('bs-minute-wheel', values, nowMin);
+    initDigitalTimeControl('bs-dtc');
+    document.querySelectorAll('[data-bs-mode]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        document.getElementById('bs-time-mode').dataset.selected = btn.dataset.bsMode;
+        document.querySelectorAll('[data-bs-mode]').forEach(b=> b.classList.toggle('on', b===btn));
+        document.getElementById('bs-quarter-fields').style.display = btn.dataset.bsMode==='quarter' ? '' : 'none';
+        document.getElementById('bs-clock-fields').style.display = btn.dataset.bsMode==='clock' ? '' : 'none';
+      });
+    });
+    document.querySelector('[data-bs-back]').onclick = stepWho;
+    document.querySelector('[data-bs-confirm]').onclick = ()=>{
+      const modeEl = document.getElementById('bs-time-mode');
+      const useClock = !!modeEl && modeEl.dataset.selected==='clock';
+      let minute, clockTime = null;
+      if(useClock){
+        clockTime = getDigitalTimeValue('bs-dtc');
+        const [hh, mm] = clockTime.split(':').map(Number);
+        const t = new Date(); t.setHours(hh, mm, 0, 0);
+        const minutesAgo = Math.max(0, (Date.now() - t.getTime()) / 60000);     // a time in the future just means "now"
+        minute = clampMin(Math.round(liveElapsedInPeriod(f) - minutesAgo));
+      } else {
+        minute = clampMin(parseInt(document.getElementById('bs-minute-wheel').dataset.selected) || nowMin);
+      }
+      // Re-check at the chosen time: has someone already replaced this player by then?
+      const slot = (f.actualLineup[qKey] || {})[c.pos];
+      if(!slot || slot.a!==c.occupant){ alert('That position has changed - please start again.'); closeModal(); return; }
+      const hadSub = !!slot.b && slot.b!==slot.a;
+      if(hadSub && minute >= swapAt(slot)){
+        alert(`${first(slot.b)} already came on for ${first(slot.a)} at ${swapAt(slot)}'. Pick an earlier minute, or change that substitution from the player's marker.`);
+        return;
+      }
+      if(!hadSub && subsUsedInQuarter(f, qKey, 'actualLineup') + 1 > f.bench){
+        alert(`Only ${f.bench} substitute${f.bench===1?'':'s'} are allowed per ${periodWord(f).toLowerCase()} (based on this match's bench size). Remove another substitution first.`);
+        return;
+      }
+      slot.b = benchId;
+      slot.subAt = minute;                                          // the pitch marker shows "⇄ Name 6'" from this
+      const ev = {id:uid(), type:'sub', out:outId, in:benchId, quarter:qNum, loggedAt:new Date().toISOString()};
+      if(clockTime) ev.clockTime = clockTime; else ev.minute = minute;
+      f.events.push(ev);
+      markSubReminderHandled(f, qNum, c.pos, slot);                 // you just did it - no reminder needed
+      saveData();
+      closeModal();
+      render();
+      showSubAnimation(first(outId), first(benchId));
+    };
+  };
+  stepWho();
+}
+// ---------- Substitution reminders, phone notifications, keep-screen-on ----------
+function notifSettings(){
+  const n = (typeof DATA!=='undefined' && DATA && DATA.notifications) || {};
+  return {
+    subReminders: n.subReminders !== false,
+    subLeadMinutes: typeof n.subLeadMinutes==='number' ? n.subLeadMinutes : 1,
+    subSound: n.subSound !== false,
+    keepScreenOn: n.keepScreenOn !== false
+  };
+}
+function setNotifSetting(key, value){
+  if(!DATA.notifications) DATA.notifications = {};
+  DATA.notifications[key] = value;
+  saveData();
+}
+function phoneNotifStatus(){ return ('Notification' in window) ? Notification.permission : 'unsupported'; }
+async function requestPhoneNotifications(){
+  if(!('Notification' in window)) return 'unsupported';
+  try{ return await Notification.requestPermission(); }catch(e){ return Notification.permission; }
+}
+async function showPhoneNotification(title, body, tag){
+  if(phoneNotifStatus()!=='granted') return false;
+  try{
+    const reg = ('serviceWorker' in navigator) ? await navigator.serviceWorker.getRegistration() : null;
+    const opts = {body, tag, renotify:true, requireInteraction:true, vibrate:[250,120,250,120,250], icon:'icon-192.png'};
+    if(reg && reg.showNotification){ await reg.showNotification(title, opts); return true; }
+    new Notification(title, opts); return true;           // desktop browsers; Android needs the service worker above
+  }catch(e){ return false; }
+}
+let _audioCtx = null;
+function playReminderBeep(){
+  try{
+    const AC = window.AudioContext || window.webkitAudioContext; if(!AC) return;
+    const ctx = _audioCtx || (_audioCtx = new AC()); const t = ctx.currentTime;
+    [880, 660, 880].forEach((hz,i)=>{
+      const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine'; o.frequency.value = hz;
+      g.gain.setValueAtTime(0.0001, t+i*0.24); g.gain.exponentialRampToValueAtTime(0.35, t+i*0.24+0.02); g.gain.exponentialRampToValueAtTime(0.0001, t+i*0.24+0.2);
+      o.connect(g); g.connect(ctx.destination); o.start(t+i*0.24); o.stop(t+i*0.24+0.22);
+    });
+  }catch(e){}
+}
+function subReminderKey(qNum, pos, slot){ return `${qNum}|${pos}|${slot.a}|${slot.b}|${slot.subAt==null ? 'd' : slot.subAt}`; }
+function markSubReminderHandled(f, qNum, pos, slot){
+  const ls = f.liveState; if(!ls) return;
+  ls.subSeen = ls.subSeen || {}; ls.subAlertsFired = ls.subAlertsFired || {};
+  const k = subReminderKey(qNum, pos, slot); ls.subSeen[k] = true; ls.subAlertsFired[k] = true;
+}
+function showSubReminderCard(info){
+  let root = document.getElementById('sub-alerts');
+  if(!root){ root = document.createElement('div'); root.id = 'sub-alerts'; document.body.appendChild(root); }
+  const card = document.createElement('div');
+  card.className = 'sub-alert'; card.dataset.key = info.key;
+  card.innerHTML = `
+    <div class="sa-head"><span>&#8644;</span><span>${esc(info.title)}</span></div>
+    <div class="sa-main">${info.main}</div>
+    <div class="sa-sub">${esc(info.sub)}</div>
+    <div class="sa-btns">
+      <button type="button" data-sa-ok>Got it</button>
+      ${info.fixtureId ? `<button type="button" class="primary" data-sa-show>Show on pitch</button>` : ''}
+    </div>`;
+  root.appendChild(card);
+  const close = ()=>{ card.remove(); if(root && !root.children.length) root.remove(); };
+  card.querySelector('[data-sa-ok]').onclick = close;
+  const show = card.querySelector('[data-sa-show]');
+  if(show) show.onclick = ()=>{ close(); go('matchday', 'live', {id:info.fixtureId}); liveTab = 'test'; setEnlargedQuarter(info.qNum); render(); };
+  setTimeout(close, 3*60*1000);
+}
+function deliverSubReminder(info){
+  showSubReminderCard(info);
+  const ns = notifSettings();
+  if(ns.subSound){ playReminderBeep(); try{ if(navigator.vibrate) navigator.vibrate([250,120,250,120,250]); }catch(e){} }
+  if(document.hidden || !document.hasFocus()) showPhoneNotification(info.title, info.plain, info.key);   // on screen = the card is enough
+}
+function showSubReminder(f, qNum, pos, slot, swap, elapsed){
+  const first = (id)=> (getPlayer(id) ? getPlayer(id).name.split(' ')[0] : '?');
+  const away = swap - elapsed;
+  const when = away > 0.5 ? `in ${Math.ceil(away)} min` : (elapsed - swap > 1 ? `was due at ${swap}'` : 'now');
+  deliverSubReminder({
+    key: subReminderKey(qNum, pos, slot), fixtureId: f.id, qNum,
+    title: `Substitution ${when}`,
+    main: `<b>${esc(first(slot.b))}</b> on for <b>${esc(first(slot.a))}</b>`,
+    plain: `${first(slot.b)} on for ${first(slot.a)} (${pos})`,
+    sub: `${pos} \u00b7 planned for ${swap}' of ${periodBadgeLabel(f, qNum)}`
+  });
+}
+function liveElapsedNowPure(f){
+  // Minutes into the live period right now, worked out without touching the saved clock state.
+  const ls = f.liveState, mpp = f.minutesPerPeriod || DEFAULT_CONFIG.minutesPerPeriod;
+  let left = ls.secondsLeft;
+  if(ls.running && ls.lastTickAt) left = Math.max(0, left - Math.floor((Date.now() - ls.lastTickAt) / 1000));
+  return Math.min(mpp, Math.max(0, (mpp*60 - left) / 60));
+}
+function checkSubReminders(){
+  if(typeof DATA==='undefined' || !DATA || !DATA.fixtures) return;
+  const f = DATA.fixtures.find(x=>x.status==='live' && x.liveState);
+  if(!f || !notifSettings().subReminders) return;
+  const ls = f.liveState, qNum = ls.quarter;
+  const mpp = f.minutesPerPeriod || DEFAULT_CONFIG.minutesPerPeriod, half = mpp/2;
+  const elapsed = liveElapsedNowPure(f), lead = notifSettings().subLeadMinutes;
+  const lineup = ((f.actualLineup || f.lineup) || {})['q'+qNum] || {};
+  const fired = (ls.subAlertsFired = ls.subAlertsFired || {}), seen = (ls.subSeen = ls.subSeen || {});
+  let changed = false;
+  (f.positions||[]).forEach(pos=>{
+    const slot = lineup[pos];
+    if(!slot || !slot.a || !slot.b || slot.b===slot.a) return;
+    const swap = (slot.subAt!=null && slot.subAt>0 && slot.subAt<mpp) ? slot.subAt : half;
+    const key = subReminderKey(qNum, pos, slot);
+    if(!seen[key]){
+      seen[key] = true; changed = true;
+      if(elapsed >= swap){ fired[key] = true; return; }          // already in the past when first noticed: history, not a reminder
+    }
+    if(fired[key]) return;
+    if(elapsed >= swap - lead){ fired[key] = true; changed = true; showSubReminder(f, qNum, pos, slot, swap, elapsed); }
+  });
+  if(changed) saveData();
+}
+// Keep the screen on while a match is live, so the clock, reminders and notifications keep running.
+let _wakeLock = null;
+async function syncWakeLock(){
+  try{
+    const live = typeof DATA!=='undefined' && DATA && DATA.fixtures && DATA.fixtures.some(x=>x.status==='live');
+    const want = live && notifSettings().keepScreenOn && !document.hidden;
+    if(want && !_wakeLock && 'wakeLock' in navigator){
+      _wakeLock = await navigator.wakeLock.request('screen');
+      _wakeLock.addEventListener('release', ()=>{ _wakeLock = null; });
+    } else if(!want && _wakeLock){ const w = _wakeLock; _wakeLock = null; await w.release(); }
+  }catch(e){ _wakeLock = null; }
+}
+setInterval(()=>{ try{ checkSubReminders(); syncWakeLock(); }catch(e){} }, 1000);
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) syncWakeLock(); });
+if('serviceWorker' in navigator && /^https?:/.test(location.protocol)){
+  window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });   // sw.js sits next to index.html
 }
 function nowHHMM(){
   const d = new Date();
@@ -12395,6 +12771,20 @@ function attachHandlers(){
       render();
     });
   });
+  document.querySelectorAll('[data-notif-toggle]').forEach(el=>{
+    el.addEventListener('change', ()=>{ setNotifSetting(el.dataset.notifToggle, el.checked); syncWakeLock(); });
+  });
+  document.querySelectorAll('[data-sub-lead]').forEach(el=>{
+    el.addEventListener('click', ()=>{ setNotifSetting('subLeadMinutes', parseInt(el.dataset.subLead)); render(); });
+  });
+  document.querySelectorAll('[data-notif-allow]').forEach(el=>{
+    el.addEventListener('click', async ()=>{ await requestPhoneNotifications(); render(); });
+  });
+  document.querySelectorAll('[data-notif-test]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      deliverSubReminder({key:'test-'+Date.now(), fixtureId:null, qNum:1, title:'Test reminder', main:'<b>Louie</b> on for <b>Jude</b>', plain:'Louie on for Jude (RM) - test reminder', sub:'RM \u00b7 this is just a test'});
+    });
+  });
   document.querySelectorAll('[data-open-custom-colour]').forEach(el=>{
     el.addEventListener('click', openCustomColourModal);
   });
@@ -12781,11 +13171,26 @@ function attachHandlers(){
   document.querySelectorAll('[data-view-player-mins]').forEach(btn=>{
     btn.addEventListener('click', ()=> openPlanMinutesReviewModal(btn.dataset.viewPlayerMins, btn.dataset.useActual==='true', undefined, btn.dataset.minsSoFar==='true'));
   });
+  document.querySelectorAll('[data-bench-sub]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const [fid, q, pid] = el.dataset.benchSub.split('|');
+      openBenchSubModal(fid, parseInt(q), pid);
+    });
+  });
   document.querySelectorAll('[data-view-events]').forEach(btn=>{
     btn.addEventListener('click', ()=> openEventsPopup(btn.dataset.viewEvents, btn.dataset.eventsEditable==='true'));
   });
   document.querySelectorAll('[data-open-mins-grid]').forEach(el=>{
     el.addEventListener('click', ()=> openPlanMinutesReviewModal(VIEW.params.id, true, el.dataset.openMinsGrid));
+  });
+  document.querySelectorAll('[data-go-live-row]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const f = DATA.fixtures.find(x=>x.id===VIEW.params.id);
+      if(!f || !f.liveState || gridPitchEnlargedQuarter===f.liveState.quarter) return;
+      pitchQuarterTransitionDir = gridPitchEnlargedQuarter < f.liveState.quarter ? 1 : -1;
+      setEnlargedQuarter(f.liveState.quarter);       // tapping the pulsing live row takes you to the live period's pitch
+      render();
+    });
   });
   document.querySelectorAll('[data-go-live-view]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
