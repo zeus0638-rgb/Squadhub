@@ -52,7 +52,7 @@
     color-scheme: dark;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
-  html,body{margin:0; padding:0; background:transparent;}
+  html,body{margin:0; padding:0; background:transparent; overscroll-behavior-y:none;}   /* stops pull-down-to-refresh */
   body{
     font-family:'Inter',sans-serif;
     color:var(--ink);
@@ -120,6 +120,7 @@
     flex:1;
     padding:16px 16px 90px;
     overflow-y:auto;
+    overscroll-behavior-y:contain;
   }
   .tabbar{
     position:fixed;
@@ -284,6 +285,22 @@
   .custom-colour-btn{ display:inline-flex; align-items:center; gap:8px; height:38px; padding:0 14px 0 5px; border-radius:19px; border:2px solid var(--line); background:var(--panel); color:var(--ink); font-family:'Inter',sans-serif; font-size:14px; font-weight:600; cursor:pointer; }
   .custom-colour-btn.on{ border:3px solid var(--ink); padding-left:4px; }
   .custom-colour-btn .custom-dot{ width:26px; height:26px; border-radius:50%; flex-shrink:0; background:conic-gradient(#ff0040,#ff8c00,#ffee00,#22c55e,#00b4ff,#7c3aed,#ff00c8,#ff0040); }
+  .phone, .modal, .modal-bg, .wheel-scroll{ overscroll-behavior:contain; }
+  /* Pulsing border on the pitch of whichever period is live. A pseudo-element on top that ignores taps and takes
+     no space, so it can't affect the markers, swipes or buttons underneath. */
+  .live-pulse{ position:relative; }
+  .live-pulse::after{ content:''; position:absolute; inset:0; border-radius:inherit; border:4px solid #fff; pointer-events:none; z-index:6; animation:livePitchPulse 1.7s ease-in-out infinite; }
+  @keyframes livePitchPulse{ 0%,100%{ opacity:0.25; box-shadow:0 0 0 0 rgba(255,255,255,0); } 50%{ opacity:1; box-shadow:0 0 16px 3px rgba(255,255,255,0.7); } }
+  @media (prefers-reduced-motion: reduce){ .live-pulse::after{ animation:none; opacity:0.85; } }
+  .stoppage-label{ font-size:12px; font-weight:800; letter-spacing:0.14em; color:#FFD54A; margin-top:-2px; }
+  .tap-here-tag{ position:absolute; top:8px; right:8px; z-index:5; pointer-events:none; background:rgba(0,0,0,0.6); color:#fff; font-size:11px; font-weight:700; padding:3px 9px; border-radius:10px; letter-spacing:0.02em; }
+  .lp-card{ -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
+  .go-live-btn{ background:#fff; color:var(--pitch); border:none; border-radius:22px; padding:10px 28px; font-weight:800; font-size:16px; font-family:'Inter',sans-serif; cursor:pointer; display:inline-flex; align-items:center; gap:8px; }
+  .go-live-btn .dot{ width:9px; height:9px; border-radius:50%; background:var(--loss); animation:pulse 1.6s infinite; }
+  .mins-tab-btn{ display:flex; align-items:center; gap:12px; width:100%; text-align:left; margin-bottom:10px; cursor:pointer; }
+  .mins-tab-btn .t{ font-weight:700; font-size:15px; }
+  .mins-tab-btn .d{ font-size:12.5px; color:var(--ink-soft); margin-top:2px; }
+  .events-popup-list .event-item{ align-items:center; }
   /* Digital time control: big HH : MM digits you can type into, with up/down steppers */
   .dtc{ display:flex; align-items:center; justify-content:center; gap:8px; margin:6px 0 16px; }
   .dtc .dtc-col{ display:flex; flex-direction:column; align-items:center; gap:8px; }
@@ -1230,6 +1247,16 @@ function quarterWatermarkLabel(f, quarterKey){
 }
 function currentEventQuarter(f){
   return getViewingQuarter(f);
+}
+function quarterScoreLines(f, upTo){
+  // Our goals / their goals scored in each period so far (a scored penalty counts as ours, same as the match score).
+  const rows = [];
+  for(let q=1; q<=upTo; q++){
+    const us = (f.events||[]).filter(e=>e.quarter===q && (e.type==='goal' || (e.type==='penalty' && e.outcome==='Scored'))).length;
+    const them = (f.events||[]).filter(e=>e.quarter===q && e.type==='oppogoal').length;
+    rows.push({q, us, them});
+  }
+  return rows;
 }
 function liveTimerDisplay(ls){
   // Shared by every place the live clock is shown (main scoreboard, enlarged pitch
@@ -3617,8 +3644,7 @@ function renderGridPitchEnlargeOverlay(){
   // would be wrong here once more goals have gone in after this quarter finished.
   const cumUsByQ = isPastQuarter ? (f.events||[]).filter(e=>e.type==='goal' && e.quarter<=gridPitchEnlargedQuarter).length : 0;
   const cumThemByQ = isPastQuarter ? (f.events||[]).filter(e=>e.type==='oppogoal' && e.quarter<=gridPitchEnlargedQuarter).length : 0;
-  return `
-  <div class="pitch-enlarge-overlay" id="grid-pitch-enlarge">
+  const headerOld = `
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px;">
       <div style="flex:1; display:flex; align-items:center;">
         ${isThisQuarterLive ? `<div class="live-inline-badge"><span style="width:6px; height:6px; border-radius:50%; background:var(--loss);"></span>LIVE</div>`
@@ -3652,7 +3678,35 @@ function renderGridPitchEnlargeOverlay(){
     </div>
     ${isThisQuarterLive ? `<div class="small" style="text-align:center; font-weight:700; color:${scoreStateColor}; margin-bottom:10px;">${scoreState} ${f.finalScore.us}&ndash;${f.finalScore.them}</div>` : ''}
     ` : ''}
-    <div id="grid-pitch-enlarge-pitch" class="card pitch-holder ${pitchQuarterTransitionDir===1?'pitch-quarter-fwd':pitchQuarterTransitionDir===-1?'pitch-quarter-back':''}" style="padding:0;">${renderPitchFormation(f, qKey, {showSubs:true, tapEnabled:unlocked, showName:true, fitScreen:true, fitScreenOffset:150, allowReset:unlocked, allowAutoGenerate:isPlanningContext, allowPlayerMins:true, allowOppoGoal:(isActuallyLive || (reviewMode && reviewFixtureId===f.id)), showSwipeHints:true, showQuarterWatermark:true, useActual, lockedUntilReview:!unlocked && !isPlanningContext, allowInfoTap:!unlocked && !isPlanningContext})}</div>
+`;
+  // While this period is live the top of the screen is built for reading from arm's length: big period name, clock and
+  // score in the middle, the score of each period so far down the left, close (and End game) on the right.
+  const scoreLines = isThisQuarterLive ? quarterScoreLines(f, f.liveState.quarter).map(r=>
+    `<div style="font-size:15px; font-weight:${r.q===f.liveState.quarter?800:600}; line-height:1.45; white-space:nowrap;">${f.periods===2 ? 'H'+r.q : 'Q'+r.q}&nbsp;&nbsp;${r.us}&ndash;${r.them}</div>`).join('') : '';
+  const headerLive = isThisQuarterLive ? `
+    <div style="display:grid; grid-template-columns:1fr auto 1fr; gap:8px; align-items:start; margin-bottom:10px;">
+      <div style="min-width:0;">
+        <div class="live-inline-badge"><span style="width:6px; height:6px; border-radius:50%; background:var(--loss);"></span>LIVE</div>
+        <div style="margin-top:8px;">${scoreLines}</div>
+      </div>
+      <div style="text-align:center; min-width:0;">
+        <div style="font-weight:700; font-family:'Oswald',sans-serif; font-size:34px; line-height:1.1; color:var(--ink);">${esc(periodFullLabel(f, gridPitchEnlargedQuarter))}</div>
+        <div class="scoreboard" style="background:none; padding:0; margin:0; border-radius:0;"><button type="button" data-enlarge-timer-toggle="${f.id}" title="${f.liveState.running?'Pause':'Start'} clock" class="timer${timerDisplay.stoppage?' stoppage':''}" style="font-family:'Oswald',sans-serif; font-size:48px; font-weight:800; line-height:1.1; margin:2px 0 0; text-align:center; white-space:nowrap; background:none; border:none; padding:0; cursor:pointer;">${timerDisplay.text}</button></div>
+        <div class="stoppage-label" data-stoppage-label style="${timerDisplay.stoppage?'':'display:none;'}">STOPPAGE TIME</div>
+        <div style="font-size:24px; font-weight:800; line-height:1.2; color:${scoreStateColor}; margin-top:2px;">${scoreState} ${f.finalScore.us}&ndash;${f.finalScore.them}</div>
+        ${isLastQuarter ? `<button type="button" class="btn ghost small" data-enlarge-game-ended style="margin:8px 0 0; width:auto; padding:6px 22px; white-space:nowrap; border-color:var(--loss); color:var(--loss);">End game</button>` : ''}
+      </div>
+      <div style="text-align:right; min-width:0;">
+        <button type="button" data-close-grid-pitch-enlarge title="Close" style="background:var(--surface-2); border:none; border-radius:50%; width:36px; height:36px; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; color:var(--ink);">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+    </div>` : '';
+  const headerHtml = isThisQuarterLive ? headerLive : headerOld;
+  return `
+  <div class="pitch-enlarge-overlay" id="grid-pitch-enlarge">
+    ${headerHtml}
+    <div id="grid-pitch-enlarge-pitch" class="card pitch-holder ${isThisQuarterLive?'live-pulse':''} ${pitchQuarterTransitionDir===1?'pitch-quarter-fwd':pitchQuarterTransitionDir===-1?'pitch-quarter-back':''}" style="padding:0;">${renderPitchFormation(f, qKey, {showSubs:true, tapEnabled:unlocked, showName:true, fitScreen:true, fitScreenOffset:150, allowReset:unlocked, allowAutoGenerate:isPlanningContext, allowPlayerMins:true, allowEvents:!isPlanningContext, allowOppoGoal:(isActuallyLive || (reviewMode && reviewFixtureId===f.id)), showSwipeHints:true, showQuarterWatermark:true, useActual, lockedUntilReview:!unlocked && !isPlanningContext, allowInfoTap:!unlocked && !isPlanningContext})}</div>
     ${renderBenchStripForQuarter(f, qKey, useActual)}
     ${(!unlocked && !isPlanningContext) ? `<div class="small" style="color:var(--ink-soft); text-align:center; margin-top:10px;">Tap "Review &amp; edit match" to correct anything here, or tap a marker for their stats this ${periodWord(f).toLowerCase()}.</div>` : ''}
   </div>`;
@@ -3728,9 +3782,202 @@ function openClosePlanPitchFullscreenConfirm(){
     render();
   };
 }
-function openPlanMinutesReviewModal(fixtureId, useActual){
+// ---------- Events pop-up (the timeline, with edit / delete) ----------
+let eventsPopupReturn = null;
+function returnToEventsPopup(eventId){
+  // After an event is edited or deleted from the Events pop-up, come back to the list rather than dropping out of it.
+  const r = eventsPopupReturn; eventsPopupReturn = null;
+  if(r && r.eid===eventId) setTimeout(()=> openEventsPopup(r.fid, true), 0);
+}
+function openEventsPopup(fixtureId, editable){
   const f = DATA.fixtures.find(x=>x.id===fixtureId);
   if(!f) return;
+  const evs = [...(f.events||[])].reverse();
+  const body = `
+    <h3>Events</h3>
+    <button class="icon-x" data-close-modal>&times;</button>
+    <div class="small" style="color:var(--ink-soft); margin:-6px 0 12px;">${editable ? 'Tap the pencil to change a goal or card, or the × to delete an event.' : 'The match timeline.'}</div>
+    <div class="events-popup-list" style="max-height:58vh; overflow-y:auto;">
+      <div class="card" style="margin-bottom:0;">
+        ${evs.length===0 ? '<div class="small" style="color:var(--ink-soft); text-align:center; padding:8px;">No events logged yet</div>'
+          : evs.map(ev=>renderEventItem(ev, editable ? f.id : null)).join('')}
+      </div>
+    </div>`;
+  openModal(body, {floating:true});
+  attachModalHandlers();
+  if(!editable) return;
+  // Cancelling out of an edit comes back to this list too.
+  const cameBack = ()=> document.querySelectorAll('#modal-root [data-close-modal]').forEach(el=> el.onclick = ()=>{ closeModal(); openEventsPopup(fixtureId, true); });
+  const wire = (attr, opener)=>{
+    document.querySelectorAll(`#modal-root [${attr}]`).forEach(el=>{
+      el.addEventListener('click', ()=>{
+        const [fid, eid] = el.getAttribute(attr).split('|');
+        eventsPopupReturn = {fid, eid};
+        opener(fid, eid);
+        cameBack();
+      });
+    });
+  };
+  wire('data-edit-goal', openEditGoalModal);
+  wire('data-edit-card', openEditCardModal);
+  wire('data-delete-event', openDeleteEventConfirm);
+}
+
+// ---------- Long-press on a period's pitch: Manage quarter / half ----------
+function openManageQuarterModal(fixtureId, qNum){
+  const f = DATA.fixtures.find(x=>x.id===fixtureId);
+  if(!f) return;
+  const inReview = reviewMode && reviewFixtureId===f.id;
+  const word = periodWord(f).toLowerCase();
+  const liveQ = (f.liveState && f.status!=='finished' && !inReview) ? f.liveState.quarter : null;
+  const canStart = !inReview && f.status!=='finished' && liveQ!==null && liveQ!==qNum;
+  const body = `
+    <h3>Manage ${word}</h3>
+    <button class="icon-x" data-close-modal>&times;</button>
+    <div class="small" style="color:var(--ink-soft); margin:-6px 0 14px;">${esc(periodFullLabel(f, qNum))} &middot; vs ${esc(f.opponent||'TBC')}</div>
+    ${canStart ? `<button class="btn amber" data-lp-start style="margin-bottom:16px;">Start this ${word}</button>`
+      : (liveQ===qNum ? `<div class="small" style="color:var(--ink-soft); margin-bottom:16px;">This ${word} is live now.</div>` : '')}
+    <div class="small" style="color:var(--ink-soft); font-weight:600; margin-bottom:8px;">Log an event</div>
+    <div style="display:flex; gap:8px;">
+      ${quickEventBtnHtml('goal','data-lp-event','Log a goal')}
+      ${quickEventBtnHtml('yellowcard','data-lp-event','Log a yellow card')}
+      ${quickEventBtnHtml('redcard','data-lp-event','Log a red card')}
+    </div>`;
+  openModal(body, {floating:true});
+  attachModalHandlers();
+  const startBtn = document.querySelector('#modal-root [data-lp-start]');
+  if(startBtn) startBtn.onclick = ()=> openStartQuarterModal(fixtureId, qNum);
+  document.querySelectorAll('#modal-root [data-lp-event]').forEach(el=>{
+    el.addEventListener('click', ()=> openQuarterQuickLog(fixtureId, qNum, el.dataset.lpEvent));
+  });
+}
+// Goal: who scored -> who assisted -> (when) ; card: who -> (when). Same results as logging from a player's own pop-up.
+function openQuarterQuickLog(fixtureId, qNum, type){
+  const f = DATA.fixtures.find(x=>x.id===fixtureId);
+  if(!f) return;
+  const quarterKey = periodKeys(f)[qNum-1];
+  if(!quarterKey) return;
+  if(!f.actualLineup) f.actualLineup = JSON.parse(JSON.stringify(f.lineup));
+  const lineup = f.actualLineup[quarterKey] || {};
+  const ids = [];
+  f.positions.forEach(pos=>{
+    const slot = lineup[pos]; if(!slot) return;
+    [slot.a, slot.b].forEach(id=>{ if(id && !ids.includes(id)) ids.push(id); });
+  });
+  const players = ids.map(id=>getPlayer(id)).filter(Boolean);
+  const word = periodWord(f).toLowerCase();
+  const eventLabel = type==='goal' ? 'goal' : (type==='yellowcard' ? 'yellow card' : 'red card');
+  const needsTimeStep = ()=> (reviewMode && reviewFixtureId===f.id) || !f.liveState || qNum !== f.liveState.quarter;
+  const pulseColor = type==='goal' ? '#2E9E3F' : (type==='yellowcard' ? '#F4C430' : '#E0393E');
+  const playerRows = (list, attr)=> list.map(p=>`
+    <div class="player-row tap" ${attr}="${p.id}">${shirtHtml(p)}<div class="pname" style="flex:1;">${esc(p.name)}</div></div>`).join('');
+
+  const finish = (playerId, assistId, minute, clockTime)=>{
+    const player = getPlayer(playerId); if(!player) return;
+    const evBase = {id:uid(), quarter:qNum, loggedAt:new Date().toISOString()};
+    if(typeof minute === 'number') evBase.minute = minute;
+    if(clockTime) evBase.clockTime = clockTime;
+    if(type==='goal'){
+      f.events.push({...evBase, type:'goal', scorer:playerId, assist:assistId||null});
+      f.finalScore.us += 1;
+    } else {
+      f.events.push({...evBase, type, player:playerId});
+    }
+    const autoRed = type==='yellowcard' ? checkSecondYellowAutoRed(f, playerId, qNum) : false;
+    saveData();
+    closeModal();
+    const where = findPlayerSlotInQuarter(f.actualLineup, f.positions, quarterKey, playerId);
+    justLoggedPulse = where ? {posKey:f.id+'_'+quarterKey, pos:where.pos, color:pulseColor} : null;
+    render();
+    if(type==='goal') showGoalCelebration();
+    else showCardAnimation(player.name, type);
+    if(autoRed) setTimeout(()=> showCardAnimation(player.name, 'redcard'), 1900);
+    setTimeout(()=>{ justLoggedPulse = null; render(); }, 1600);
+  };
+
+  const timeStep = (playerId, assistId)=>{
+    const mpp = f.minutesPerPeriod || DEFAULT_CONFIG.minutesPerPeriod;
+    const player = getPlayer(playerId);
+    const body = `
+      <h3>When did this happen?</h3>
+      <button class="icon-x" data-close-modal>&times;</button>
+      <div class="small" style="color:var(--ink-soft); margin-bottom:10px;">${esc(player.name)} &mdash; ${eventLabel}</div>
+      <div class="toggle-group" id="ql-time-mode" data-selected="quarter">
+        <button type="button" class="on" data-ql-mode="quarter">${esc(periodWord(f))} mins</button>
+        <button type="button" data-ql-mode="clock">Real time</button>
+      </div>
+      <div id="ql-quarter-fields">
+        <div class="wheel-wrap">
+          <div class="wheel-highlight"></div>
+          <div class="wheel-scroll" id="ql-minute-wheel" data-selected="${Math.round(mpp/2)}">
+            ${Array.from({length: mpp+11}, (_,i)=>i).map(m=>`<div class="wheel-item" data-value="${m}">${m<=mpp?m+"'":'+'+(m-mpp)+"'"}</div>`).join('')}
+          </div>
+        </div>
+      </div>
+      <div id="ql-clock-fields" style="display:none;">${renderDigitalTimeControl('ql-dtc', nowHHMM())}</div>
+      <button class="btn amber" data-ql-confirm>Log ${eventLabel}</button>`;
+    openModal(body, {floating:true});
+    attachModalHandlers();
+    setupWheelPicker('ql-minute-wheel');
+    initDigitalTimeControl('ql-dtc');
+    document.querySelectorAll('[data-ql-mode]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const grp = document.getElementById('ql-time-mode');
+        grp.dataset.selected = btn.dataset.qlMode;
+        grp.querySelectorAll('[data-ql-mode]').forEach(b=> b.classList.toggle('on', b===btn));
+        document.getElementById('ql-quarter-fields').style.display = btn.dataset.qlMode==='quarter' ? 'block' : 'none';
+        document.getElementById('ql-clock-fields').style.display = btn.dataset.qlMode==='clock' ? 'block' : 'none';
+      });
+    });
+    document.querySelector('[data-ql-confirm]').onclick = ()=>{
+      if(document.getElementById('ql-time-mode').dataset.selected==='clock') finish(playerId, assistId, undefined, getDigitalTimeValue('ql-dtc'));
+      else finish(playerId, assistId, parseInt(document.getElementById('ql-minute-wheel').dataset.selected));
+    };
+  };
+
+  const assistStep = (scorer)=>{
+    const others = players.filter(p=>p.id!==scorer.id);
+    const body = `
+      <h3>Who assisted? <span style="font-size:13px; color:var(--ink-soft); font-family:'Inter';">(optional)</span></h3>
+      <button class="icon-x" data-close-modal>&times;</button>
+      <div class="small" style="color:var(--ink-soft); margin-bottom:10px;">Goal: <strong style="color:var(--ink);">${esc(scorer.name)}</strong></div>
+      <button class="btn ghost" data-ql-assist="" style="margin-bottom:12px;">No assist — log goal</button>
+      <div class="card" style="max-height:50vh; overflow-y:auto; margin-bottom:0;">${playerRows(others, 'data-ql-assist')}</div>`;
+    openModal(body, {floating:true});
+    attachModalHandlers();
+    document.querySelectorAll('[data-ql-assist]').forEach(el=>{
+      el.addEventListener('click', ()=>{
+        const assistId = el.dataset.qlAssist || null;
+        if(needsTimeStep()) timeStep(scorer.id, assistId); else finish(scorer.id, assistId);
+      });
+    });
+  };
+
+  const playerStep = ()=>{
+    const eligible = players.filter(p=>!hasRedCard(f, p.id));
+    const title = type==='goal' ? 'Who scored?' : (type==='yellowcard' ? 'Who got the yellow card?' : 'Who got the red card?');
+    const body = `
+      <h3>${title}</h3>
+      <button class="icon-x" data-close-modal>&times;</button>
+      <div class="small" style="color:var(--ink-soft); margin:-6px 0 12px;">${esc(periodFullLabel(f, qNum))}</div>
+      ${eligible.length===0 ? `<div class="small" style="color:var(--ink-soft);">No one is recorded on the pitch for this ${word} yet. Open it and set the lineup first.</div>`
+        : `<div class="card" style="max-height:55vh; overflow-y:auto; margin-bottom:0;">${playerRows(eligible, 'data-ql-player')}</div>`}`;
+    openModal(body, {floating:true});
+    attachModalHandlers();
+    document.querySelectorAll('[data-ql-player]').forEach(el=>{
+      el.addEventListener('click', ()=>{
+        const player = getPlayer(el.dataset.qlPlayer);
+        if(type==='goal'){ assistStep(player); return; }
+        if(needsTimeStep()) timeStep(player.id, null); else finish(player.id, null);
+      });
+    });
+  };
+  playerStep();
+}
+function openPlanMinutesReviewModal(fixtureId, useActual, startTab){
+  const f = DATA.fixtures.find(x=>x.id===fixtureId);
+  if(!f) return;
+  if(startTab) reviewMinutesTab = startTab;
   const squad = availablePlayersForFixture(f);
   const renderModal = ()=>{
     const body = `
@@ -4482,7 +4729,8 @@ function renderLive(id){
   // A live match still needs all of them for real-time management.
   const tabs = isReview
     ? [{id:'timeline', label:'Timeline'}, {id:'report', label:'Match report'}, {id:'test', label:'Pitch view'}, {id:'awards', label:'Awards'}]
-    : [{id:'timeline', label:'Timeline'}, {id:'test', label:'Pitch view'}, {id:'lineup', label:'Grid view'}];
+    : [{id:'timeline', label:'Timeline'}, {id:'test', label:'Manage game'}, {id:'mins', label:'Player mins'}];
+  if(!isReview && liveTab==='lineup') liveTab = 'test';      // the Grid view tab no longer exists
   let tabHtml = '';
   if(liveTab==='timeline'){
     if(isReview){
@@ -4537,6 +4785,20 @@ function renderLive(id){
         </div>`;
       }).join('')}
     </div>`}`;
+  } else if(liveTab==='mins'){
+    // The two minutes grids (By period, Total mins) open as floaty pop-ups - the same ones as the Player mins
+    // button on the enlarged pitch, sort control included.
+    const chev = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" style="flex-shrink:0; color:var(--ink-soft);"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    tabHtml = `
+    <div class="section-title" style="margin-top:0;">Player minutes</div>
+    <div class="small" style="color:var(--ink-soft); margin-bottom:12px;">Tap a grid to open it.</div>
+    ${squad.length===0 ? '<div class="card"><div class="small" style="color:var(--ink-soft); padding:12px;">No squad recorded for this match</div></div>' : `
+    <div class="card tap mins-tab-btn" role="button" data-open-mins-grid="byperiod">
+      <div style="flex:1; min-width:0;"><div class="t">By period</div><div class="d">Each player's minutes in every ${periodWord(f).toLowerCase()}, with a sort control</div></div>${chev}
+    </div>
+    <div class="card tap mins-tab-btn" role="button" data-open-mins-grid="total">
+      <div style="flex:1; min-width:0;"><div class="t">Total mins</div><div class="d">Each player's total minutes across the whole match</div></div>${chev}
+    </div>`}`;
   } else if(liveTab==='lineup'){
     tabHtml = `
     <div class="section-title" style="margin-top:0;">Actual lineup <span style="font-weight:400; color:var(--ink-soft);">— what really happened${unlocked?', edit to fix mistakes':''}</span></div>
@@ -4553,12 +4815,13 @@ function renderLive(id){
     const tPeriods = periodKeys(f);
     const liveQuarterNum = (!isReview && f.status!=='finished' && f.liveState) ? f.liveState.quarter : null;
     tabHtml = `
-    <div class="section-title" style="margin-top:0;">Interactive boards <span style="font-weight:400; color:var(--ink-soft);">— tap to enlarge and interact</span></div>
+    <div class="section-title" style="margin-top:0;">Interactive boards <span style="font-weight:400; color:var(--ink-soft);">— tap to enlarge, hold for quick actions</span></div>
     ${squad.length===0 ? '<div class="card"><div class="small" style="color:var(--ink-soft); padding:16px;">No squad recorded</div></div>' : `
     <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px;">
       ${tPeriods.map((qk,i)=>`
-        <div class="card tap ${liveQuarterNum===i+1?'live-cell-border':''}" data-enlarge-grid-pitch="${i+1}" style="padding:0; overflow:hidden; position:relative;">
+        <div class="card tap lp-card ${liveQuarterNum===i+1?'live-cell-border':''}" data-enlarge-grid-pitch="${i+1}" data-lp-quarter="${i+1}" style="padding:0; overflow:hidden; position:relative;">
           ${liveQuarterNum===i+1 ? `<div class="live-corner-badge"><span style="width:5px; height:5px; border-radius:50%; background:var(--loss);"></span>LIVE</div>` : ''}
+          <div class="tap-here-tag">Tap here</div>
           ${renderPitchFormation(f, qk, {showSubs:true, showName:true, fitScreen:false, showQuarterWatermark:true, useActual:true})}
         </div>`).join('')}
     </div>
@@ -4603,7 +4866,7 @@ function renderLive(id){
   <div class="content">
     <div class="scoreboard" style="position:relative;">
       <div class="quarter">${isReview ? 'REVIEW MODE' : periodWord(f).toUpperCase() + ' ' + f.liveState.quarter + ' OF ' + f.periods}</div>
-      ${isReview ? '' : `<div class="timer${timerDisplay.stoppage?' stoppage':''}">${timerDisplay.text}</div>`}
+      ${isReview ? '' : `<div class="timer${timerDisplay.stoppage?' stoppage':''}">${timerDisplay.text}</div><div class="stoppage-label" data-stoppage-label style="${timerDisplay.stoppage?'':'display:none;'}">STOPPAGE TIME</div>`}
       <div class="score">${esc(teamShort().slice(0,10))} ${f.finalScore.us} – ${f.finalScore.them} ${esc((f.opponent||'OPP').slice(0,10))}</div>
       ${isReview ? '' : `<button data-timer-toggle title="${f.liveState.running?'Pause':'Start'} clock" style="position:absolute; top:12px; right:14px; background:none; border:none; padding:0; cursor:pointer; width:40px; height:46px; display:flex; align-items:flex-end; justify-content:center;">
         <div style="position:relative; width:36px; height:36px; border-radius:50%; background:rgba(255,255,255,0.18); border:2.5px solid rgba(255,255,255,0.65); display:flex; align-items:center; justify-content:center;">
@@ -4615,9 +4878,10 @@ function renderLive(id){
       ${isReview ? '' : `
       <div style="text-align:center; margin-top:12px;">
         ${atLive
-              ? (f.liveState.quarter>=f.periods
-                  ? `<button class="btn amber" data-next-quarter style="display:inline-block; width:auto; margin-bottom:0; padding:9px 22px;">End Match</button>`
-                  : `<button data-next-quarter style="background:rgba(255,255,255,0.18); border:1.5px solid rgba(255,255,255,0.65); border-radius:20px; padding:9px 20px; color:#fff; font-weight:700; font-size:13.5px; font-family:'Inter',sans-serif; cursor:pointer;">Start ${esc(periodBadgeLabel(f, f.liveState.quarter+1))} &rarr;</button>`)
+              ? `<div style="display:flex; justify-content:center; align-items:center; gap:10px; flex-wrap:wrap;">
+                  <button type="button" class="go-live-btn" data-go-live-view><span class="dot"></span>Go Live</button>
+                  ${f.liveState.quarter>=f.periods ? `<button class="btn amber" data-next-quarter style="display:inline-block; width:auto; margin-bottom:0; padding:10px 22px;">End Match</button>` : ''}
+                </div>`
               : `<button data-view-next-quarter style="background:rgba(255,255,255,0.18); border:1.5px solid rgba(255,255,255,0.65); border-radius:20px; padding:9px 20px; color:#fff; font-weight:700; font-size:13.5px; font-family:'Inter',sans-serif; cursor:pointer;">Review next ${periodWord(f).toLowerCase()} &rarr;</button>`}
       </div>`}
     </div>
@@ -5039,10 +5303,9 @@ function renderPitchFormation(f, quarterKey, opts){
     <rect x="150" y="570" width="100" height="35" fill="none" stroke="#fff" stroke-width="3"/>
     <path d="M155,515 A45,45 0 0 1 245,515" fill="none" stroke="#fff" stroke-width="3"/>
     <circle cx="200" cy="532" r="2.5" fill="#fff"/>
-    ${opts.showQuarterWatermark ? `<text x="200" y="375" text-anchor="middle" font-family="Oswald,sans-serif" font-weight="700" font-size="190" fill="#ffffff" opacity="0.38" style="pointer-events:none;">${esc(quarterWatermarkLabel(f, quarterKey))}</text>` : ''}
     ${circles}
   </svg>`;
-  if(!opts.allowReset && !opts.allowFullscreen && !opts.allowAutoGenerate && !opts.allowPlayerMins && !opts.showSwipeHints) return svgHtml;
+  if(!opts.allowReset && !opts.allowFullscreen && !opts.allowAutoGenerate && !opts.allowPlayerMins && !opts.allowEvents && !opts.showSwipeHints) return svgHtml;
   const overlayBtnStyle = 'flex:1; min-width:0; background:rgba(0,0,0,0.6); border:1px solid rgba(255,255,255,0.5); border-radius:20px; padding:6px 4px; color:#fff; font-size:11px; font-weight:600; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;';
   // Squarer than the view-toggle pills around it - this one logs a match event rather
   // than just changing what's shown, so it's deliberately a different shape.
@@ -5050,34 +5313,36 @@ function renderPitchFormation(f, quarterKey, opts){
   // match, so this genuinely stands proud above and below them) - this is the one that
   // logs a match event, so it's worth it being easier to spot and tap than the others.
   const oppoGoalBtnStyle = 'flex:1; min-width:0; background:rgba(0,0,0,0.6); border:1px solid rgba(255,255,255,0.5); border-radius:6px; padding:12px 4px; color:#fff; font-size:11px; font-weight:600; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;';
-  const swipeHintStyle = 'position:absolute; top:50%; transform:translateY(-50%); display:flex; flex-direction:column; align-items:center; gap:2px; color:rgba(255,255,255,0.85); pointer-events:none;';
+  const swipeHintStyle = 'position:absolute; top:36%; transform:translateY(-50%); display:flex; flex-direction:column; align-items:center; gap:2px; color:rgba(255,255,255,0.92); pointer-events:none;';
   const quarterNumForOppoGoal = periodKeys(f).indexOf(quarterKey) + 1;
   const overlayButtons = [
     opts.allowFullscreen ? `<button type="button" data-open-plan-pitch-fullscreen ${opts.useActual?'data-use-actual="true"':''} ${opts.lockedUntilReview?'data-locked="true"':''} style="${overlayBtnStyle}">Full screen</button>` : '',
-    opts.allowPlayerMins ? `<button type="button" data-view-player-mins="${f.id}" ${opts.useActual?'data-use-actual="true"':''} style="${overlayBtnStyle}">Player mins</button>` : '',
+    opts.allowPlayerMins ? (opts.allowEvents
+      ? `<div data-overlay-col style="flex:1; min-width:0; display:flex; flex-direction:column; gap:6px;"><button type="button" data-view-player-mins="${f.id}" ${opts.useActual?'data-use-actual="true"':''} style="${overlayBtnStyle} flex:none; width:100%;">Player mins</button><button type="button" data-view-events="${f.id}" data-events-editable="${opts.allowReset?'true':'false'}" style="${overlayBtnStyle} flex:none; width:100%;">Events</button></div>`
+      : `<button type="button" data-view-player-mins="${f.id}" ${opts.useActual?'data-use-actual="true"':''} style="${overlayBtnStyle}">Player mins</button>`) : '',
     opts.allowOppoGoal ? `<button type="button" data-log-oppo-goal-marker="${f.id}|${quarterNumForOppoGoal}" style="${oppoGoalBtnStyle}">🥅 Oppo goal</button>` : '',
     (opts.allowAutoGenerate && !opts.useActual) ? `<button type="button" data-open-spread-minutes="${f.id}" style="${overlayBtnStyle}">Auto-generate</button>` : '',
     opts.allowReset ? `<button type="button" data-reset-pitch-formation="${posKey}" style="${overlayBtnStyle}">Reset markers</button>` : ''
   ].filter(Boolean);
   // A lone button (e.g. just "Full screen" on a locked result) sizes to its own text
   // instead of stretching to fill the row the way several buttons share it evenly.
-  if(overlayButtons.length === 1){
+  if(overlayButtons.length === 1 && !opts.allowEvents){
     const soloBtnStyle = 'flex:0 0 auto; background:rgba(0,0,0,0.6); border:1px solid rgba(255,255,255,0.5); border-radius:20px; padding:6px 16px; color:#fff; font-size:11px; font-weight:600; cursor:pointer; white-space:nowrap;';
     overlayButtons[0] = overlayButtons[0].replace(overlayBtnStyle, soloBtnStyle);
   }
   return `
   <div style="position:relative;">
     ${svgHtml}
-    <div style="position:absolute; top:10px; left:10px; right:10px; display:flex; align-items:center; gap:6px; ${overlayButtons.length===1?'justify-content:center;':''}">
+    <div style="position:absolute; top:10px; left:10px; right:10px; display:flex; align-items:${opts.allowEvents?'flex-start':'center'}; gap:6px; ${overlayButtons.length===1?'justify-content:center;':''}">
       ${overlayButtons.join('')}
     </div>
     ${(opts.showSwipeHints && prevPeriodNum) ? `<div style="${swipeHintStyle} left:2px;">
-      <svg viewBox="0 0 24 24" width="26" height="26" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" opacity="0.55"/><path d="M19 6l-6 6 6 6" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <div style="font-size:12px; font-weight:800; letter-spacing:0.02em; text-shadow:0 1px 3px rgba(0,0,0,0.5);">Swipe</div>
+      <svg viewBox="0 0 24 24" width="44" height="44" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" opacity="0.55"/><path d="M19 6l-6 6 6 6" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div style="font-size:17px; font-weight:800; letter-spacing:0.02em; text-shadow:0 1px 4px rgba(0,0,0,0.6);">Swipe</div>
     </div>` : ''}
     ${(opts.showSwipeHints && nextPeriodNum) ? `<div style="${swipeHintStyle} right:2px;">
-      <svg viewBox="0 0 24 24" width="26" height="26" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" opacity="0.55"/><path d="M5 6l6 6-6 6" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <div style="font-size:12px; font-weight:800; letter-spacing:0.02em; text-shadow:0 1px 3px rgba(0,0,0,0.5);">Swipe</div>
+      <svg viewBox="0 0 24 24" width="44" height="44" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" opacity="0.55"/><path d="M5 6l6 6-6 6" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div style="font-size:17px; font-weight:800; letter-spacing:0.02em; text-shadow:0 1px 4px rgba(0,0,0,0.6);">Swipe</div>
     </div>` : ''}
   </div>`;
 }
@@ -9605,6 +9870,7 @@ function openDeleteEventConfirm(fixtureId, eventId){
     saveData();
     closeModal();
     render();
+    returnToEventsPopup(eventId);
   };
 }
 function openAddQuarterEventModal(fixtureId, quarterNum){
@@ -10375,6 +10641,7 @@ function openEditGoalModal(fixtureId, eventId){
     saveData();
     closeModal();
     render();
+    returnToEventsPopup(eventId);
     showSavedToast();
   };
 }
@@ -10461,6 +10728,7 @@ function openEditCardModal(fixtureId, eventId){
     saveData();
     closeModal();
     render();
+    returnToEventsPopup(eventId);
     showSavedToast();
   };
 }
@@ -12461,6 +12729,37 @@ function attachHandlers(){
   document.querySelectorAll('[data-view-player-mins]').forEach(btn=>{
     btn.addEventListener('click', ()=> openPlanMinutesReviewModal(btn.dataset.viewPlayerMins, btn.dataset.useActual==='true'));
   });
+  document.querySelectorAll('[data-view-events]').forEach(btn=>{
+    btn.addEventListener('click', ()=> openEventsPopup(btn.dataset.viewEvents, btn.dataset.eventsEditable==='true'));
+  });
+  document.querySelectorAll('[data-open-mins-grid]').forEach(el=>{
+    el.addEventListener('click', ()=> openPlanMinutesReviewModal(VIEW.params.id, true, el.dataset.openMinsGrid));
+  });
+  document.querySelectorAll('[data-go-live-view]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const f = DATA.fixtures.find(x=>x.id===VIEW.params.id);
+      if(!f || !f.liveState) return;
+      setEnlargedQuarter(f.liveState.quarter);      // opens the enlarged pitch of the period that's live right now
+      render();
+    });
+  });
+  // Press and hold a period's pitch for Manage quarter / half. A tap still enlarges it; moving the finger cancels the hold.
+  document.querySelectorAll('[data-lp-quarter]').forEach(card=>{
+    let timer = null, fired = false, sx = 0, sy = 0;
+    const clear = ()=>{ clearTimeout(timer); timer = null; };
+    card.addEventListener('pointerdown', (e)=>{
+      fired = false; sx = e.clientX; sy = e.clientY; clear();
+      timer = setTimeout(()=>{
+        timer = null; fired = true;
+        try{ if(navigator.vibrate) navigator.vibrate(25); }catch(err){}
+        openManageQuarterModal(VIEW.params.id, parseInt(card.dataset.lpQuarter));
+      }, 500);
+    });
+    card.addEventListener('pointermove', (e)=>{ if(timer && Math.hypot(e.clientX-sx, e.clientY-sy) > 10) clear(); });
+    ['pointerup','pointercancel','pointerleave'].forEach(ev=> card.addEventListener(ev, clear));
+    card.addEventListener('click', (e)=>{ if(fired){ e.stopImmediatePropagation(); e.preventDefault(); fired = false; } }, true);   // the release after a hold isn't a tap
+    card.addEventListener('contextmenu', (e)=> e.preventDefault());
+  });
   document.querySelectorAll('[data-log-oppo-goal-marker]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const [fixtureId, quarterNum] = btn.dataset.logOppoGoalMarker.split('|');
@@ -12605,6 +12904,7 @@ function paintLiveClock(f, force){
   // Updates every matching element, not just the first - the enlarged pitch view
   // shows its own copy of this same clock, and both need to tick together.
   document.querySelectorAll('.scoreboard .timer').forEach(t=>{ t.textContent = d.text; t.classList.toggle('stoppage', d.stoppage); });
+  document.querySelectorAll('[data-stoppage-label]').forEach(el=>{ el.style.display = d.stoppage ? '' : 'none'; });
   updateLiveMinutesTracker(f);
 }
 function resyncLiveClockNow(){
