@@ -300,6 +300,19 @@
   .live-banner-score .lbs-score{ flex:none; font-size:40px; font-weight:700; line-height:1; white-space:nowrap; }
   .whistle-btn{ position:absolute; top:66px; right:14px; width:40px; height:40px; padding:0; background:none; border:none; display:flex; align-items:center; justify-content:center; cursor:pointer; }
   .whistle-btn .ring{ width:36px; height:36px; border-radius:50%; background:rgba(255,255,255,0.18); border:2.5px solid rgba(255,255,255,0.65); display:flex; align-items:center; justify-content:center; }
+  .mins-grid .mc-name{ width:60px; flex-shrink:0; font-size:12px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .mins-grid .mc-stat{ flex-shrink:0; text-align:right; font-size:12px; font-weight:700; line-height:1.1; }
+  .mins-grid .mc-head{ flex-shrink:0; text-align:right; font-size:8.5px; font-weight:800; color:var(--ink-soft); }
+  .mins-grid .mc-p{ width:32px; } .mins-grid .mc-r{ width:41px; } .mins-grid .mc-t{ width:29px; }
+  .mins-grid .mc-r.mc-stat{ color:var(--ink-soft); }
+  .mins-cell-lbl{ position:absolute; top:0; bottom:0; transform:translateX(-50%); display:flex; align-items:center; font-size:10.5px; font-weight:700; white-space:nowrap; pointer-events:none; z-index:1; }
+  .mins-cell-lbl.p{ color:#fff; text-shadow:0 0 2px rgba(0,0,0,0.65); }
+  .mins-cell-lbl.f{ color:#2B1D00; text-shadow:0 0 2px rgba(255,255,255,0.45); }
+  /* A number on a short stretch of the bar gets its own small coloured tag, so it's always readable */
+  .mins-cell-lbl.pill{ top:50%; bottom:auto; transform:translate(-50%,-50%); height:15px; padding:0 3px; border-radius:4px; text-shadow:none; }
+  .mins-cell-lbl.p.pill{ background:var(--pitch); color:#fff; }
+  .mins-cell-lbl.f.pill{ background:#E3A22B; color:#2B1D00; }
+  @media (max-width:380px){ .mins-grid .mc-name{ width:54px; } .mins-grid .mc-p{ width:30px; } .mins-grid .mc-r{ width:39px; } .mins-grid .mc-t{ width:27px; } }
   .mins-seg-played, .mins-seg-forecast{ position:absolute; top:0; bottom:0; }
   .mins-seg-played{ background:var(--pitch); }
   .mins-seg-forecast{ background:repeating-linear-gradient(135deg, rgba(240,170,40,0.85) 0 5px, rgba(240,170,40,0.5) 5px 10px); }
@@ -440,6 +453,9 @@
      a tapped card) rather than the bottom-sheet style used for longer forms and lists. */
   .modal-bg.floating{ align-items:center; padding:20px; }
   .modal.floating{ width:calc(100% - 20px); max-width:400px; border-radius:18px; padding:22px 20px 24px; max-height:80vh; box-shadow:0 12px 40px rgba(0,0,0,0.35); border:1.5px solid var(--pitch); }
+  /* A wide pop-up (e.g. the minutes grids) uses nearly the full screen width, with less padding, so tables fit. */
+  .modal-bg.floating.wide-bg{ padding:8px; }
+  .modal.floating.wide{ width:100%; max-width:560px; padding:18px 10px 20px; max-height:90vh; }
   .modal h3{margin:0 0 14px; font-size:18px;}
   input[type=range]{width:100%; accent-color:var(--pitch);}
   .player-row{
@@ -486,15 +502,15 @@
   /* Every native <select> is swapped for one of these (see enhanceSelect). The select stays in
      the page, hidden, so all the code that reads/sets it keeps working. */
   select.pick-hidden{ display:none !important; }
-  .pick-select{
+  .pick-select, .time-select{
     display:flex; align-items:center; justify-content:space-between; gap:6px;
     width:100%; padding:10px 11px; border:1px solid var(--line); border-radius:8px;
     background:var(--panel); font-family:'Inter',sans-serif; font-size:14.5px; line-height:1.25;
     color:var(--ink); margin-bottom:14px; text-align:left; cursor:pointer;
     -webkit-tap-highlight-color:transparent;
   }
-  .pick-select .pick-select-label{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .pick-select svg{ width:13px; height:13px; flex-shrink:0; opacity:0.65; }
+  .pick-select .pick-select-label, .time-select .pick-select-label{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pick-select svg, .time-select svg{ width:13px; height:13px; flex-shrink:0; opacity:0.65; }
   .pick-select:disabled{ opacity:0.55; cursor:not-allowed; }
   table.gridtable .pick-select{ margin:0; padding:3px 2px; font-size:10.5px; border-radius:5px; width:100%; justify-content:center; text-align:center; }
   table.gridtable .pick-select svg{ display:none; }
@@ -2980,16 +2996,34 @@ function renderReviewMinutesSection(f, squad, useActual, title, soFar){
   const elapsedNow = soFar ? liveElapsedInPeriod(f) : 0;
   const totalMatch = totalMatchMinutes(f);
   const matchSoFar = soFar ? (curQ-1)*mpp + elapsedNow : 0;
+  const cellGap = soFar ? 4 : 5;
   const nameStyle = 'width:70px; flex-shrink:0; font-size:12.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
   // The thin "now" line. In the by-period grid it sits inside the live period's column at the right fraction of that
   // period; every row draws its own piece, stretched to meet the rows above and below so it reads as one line.
   const periodNowLine = (top, bottom)=> soFar
-    ? `<div class="mins-now-line" style="left:calc(((100% - ${5*(N-1)}px) / ${N}) * ${(curQ-1) + (mpp>0 ? elapsedNow/mpp : 0)} + ${5*(curQ-1)}px); top:${-top}px; bottom:${-bottom}px;"></div>` : '';
+    ? `<div class="mins-now-line" style="left:calc(((100% - ${cellGap*(N-1)}px) / ${N}) * ${(curQ-1) + (mpp>0 ? elapsedNow/mpp : 0)} + ${cellGap*(curQ-1)}px); top:${-top}px; bottom:${-bottom}px;"></div>` : '';
   const totalNowLine = (top, bottom)=> soFar
     ? `<div class="mins-now-line" style="left:${Math.min(100, matchSoFar/totalMatch*100)}%; top:${-top}px; bottom:${-bottom}px;"></div>` : '';
   const legend = soFar ? `<div class="mins-legend"><span><i class="lg lg-played"></i>Played</span><span><i class="lg lg-fore"></i>Forecast (still to come)</span><span><i class="lg lg-now"></i>Now</span></div>` : '';
+  const showTitle = soFar ? !!title : true;
+  // Played / Remaining / Total, the three columns on the right of both grids. Total is always Played + Remaining.
+  const statHead = `<div class="mc-head mc-p">Played</div><div class="mc-head mc-r">Remaining</div><div class="mc-head mc-t">Total</div>`;
+  const statCols = (played, remaining)=> `<div class="mc-stat mc-p">${played}'</div><div class="mc-stat mc-r">${remaining}'</div><div class="mc-stat mc-t">${played+remaining}'</div>`;
+  // One period's bar for one player: played minutes in the team colour with their number on it, minutes still to come
+  // in the amber stripes with THEIR number on that - each number is centred on its own stretch of the bar.
+  const soFarCell = (pp)=>{
+    const centre = (k)=>{ const g = pp.segs.filter(x=>x.k===k); if(!g.length) return null;
+      return (Math.min(...g.map(x=>x.s)) + Math.max(...g.map(x=>x.e))) / 2 / mpp * 100; };
+    const cp = centre('p'), cf = centre('f');
+    const short = (mins)=> (mins / mpp) < 0.3 ? ' pill' : '';
+    return `<div style="flex:1; min-width:0; height:22px; background:var(--surface-2); border-radius:5px; position:relative; overflow:hidden;">
+      ${pp.segs.map(g=>`<div class="${g.k==='p'?'mins-seg-played':'mins-seg-forecast'}" style="left:${g.s/mpp*100}%; width:${(g.e-g.s)/mpp*100}%;"></div>`).join('')}
+      ${cp!==null && pp.mins>0 ? `<span class="mins-cell-lbl p${short(pp.exact)}" style="left:clamp(9px, ${cp}%, calc(100% - 9px));">${pp.mins}'</span>` : ''}
+      ${cf!==null && pp.forecast>0 ? `<span class="mins-cell-lbl f${short(pp.forecastExact)}" style="left:clamp(9px, ${cf}%, calc(100% - 9px));">${pp.forecast}'</span>` : ''}
+    </div>`;
+  };
   return `
-    ${soFar ? '' : `<div class="section-title"${title?' style="margin-top:0;"':''}>${esc(title || 'Review player minutes')}</div>`}
+    ${showTitle ? `<div class="section-title"${title?' style="margin-top:0;"':''}>${esc(title || 'Review player minutes')}</div>` : ''}
     ${soFar ? `<div class="small" style="color:var(--ink-soft); margin:0 0 10px;">Up to now &mdash; ${esc(periodBadgeLabel(f, curQ))}, ${Math.floor(elapsedNow)} of ${mpp} mins in.</div>` : ''}
     <div class="toggle-group">
       <button type="button" class="${reviewMinutesTab==='byperiod'?'on':''}" data-review-minutes-tab="byperiod">By period</button>
@@ -2998,33 +3032,24 @@ function renderReviewMinutesSection(f, squad, useActual, title, soFar){
     ${reviewMinutesTab==='byperiod' ? `
     <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">${reviewMinutesSortChipHtml()}</div>
     ${soFar ? legend : `<div class="small" style="color:var(--ink-soft); margin-bottom:8px;">Bar fills from the left for starters, from the right for subs coming on.</div>`}
-    <div class="card">
-      <div class="row" style="padding-bottom:8px; border-bottom:1px solid var(--line); margin-bottom:6px;">
-        <div style="width:70px; flex-shrink:0;"></div>
-        <div style="display:flex; flex:1; gap:5px; position:relative; align-self:stretch; align-items:center;">
+    <div class="card${soFar?' mins-grid':''}"${soFar?' style="padding:10px 6px;"':''}>
+      <div class="row" style="padding-bottom:8px; border-bottom:1px solid var(--line); margin-bottom:6px;${soFar?' gap:3px;':''}">
+        ${soFar ? '<div class="mc-name"></div>' : '<div style="width:70px; flex-shrink:0;"></div>'}
+        <div style="display:flex; flex:1; min-width:0; gap:${cellGap}px; position:relative; align-self:stretch; align-items:center;">
           ${periodKeys(f).map((pk,i)=>`<div class="small" style="flex:1; text-align:center; font-weight:700; color:var(--ink-soft);">${esc(periodBadgeLabel(f, i+1))}</div>`).join('')}
           ${periodNowLine(-15, 15)}
         </div>
-        <div class="small" style="width:${soFar?52:38}px; flex-shrink:0; text-align:right; font-weight:700; color:var(--ink-soft);">Tot</div>
+        ${soFar ? statHead : '<div class="small" style="width:38px; flex-shrink:0; text-align:right; font-weight:700; color:var(--ink-soft);">Tot</div>'}
       </div>
       ${sortedForReviewMinutes(f, squad, useActual, soFar).map(p=>{
         const perPeriod = soFar ? soFarMinutesByPeriod(f, p.id) : plannedMinutesByPeriod(f, p.id, useActual);
-        const total = soFar ? Math.round(perPeriod.reduce((s,x)=>s+x.exact, 0)) : perPeriod.reduce((s,x)=>s+x.mins, 0);
-        const totalForecast = soFar ? Math.round(perPeriod.reduce((s,x)=>s+x.forecastExact, 0)) : 0;
-        return `<div class="row" style="padding:6px 0; border-bottom:1px solid var(--line); align-items:center;">
-          <div style="${nameStyle}">${esc(p.name.split(' ')[0])}</div>
-          <div style="display:flex; flex:1; gap:5px; position:relative; align-self:stretch; align-items:center;">
-            ${perPeriod.map((pp, qi)=>{
-              if(soFar){
-                const playedPct = mpp>0 ? Math.round((pp.exact/mpp)*100) : 0;
-                const label = pp.mins>0 ? pp.mins+"'" : (pp.forecast>0 ? pp.forecast+"'" : '');
-                // In the live period the "now" line runs through the middle of the cell, so its label sits to the left of it.
-                const isLiveCell = (qi+1)===curQ;
-                return `<div style="flex:1; height:22px; background:var(--surface-2); border-radius:5px; position:relative; overflow:hidden;">
-                  ${pp.segs.map(g=>`<div class="${g.k==='p'?'mins-seg-played':'mins-seg-forecast'}" style="left:${g.s/mpp*100}%; width:${(g.e-g.s)/mpp*100}%;"></div>`).join('')}
-                  <div style="position:relative; z-index:1; height:100%; display:flex; align-items:center; justify-content:${isLiveCell?'flex-start':'center'}; ${isLiveCell?'padding-left:4px; ':''}font-size:10.5px; font-weight:700; color:${(isLiveCell ? playedPct>=35 : playedPct>=50)?'#fff':'var(--ink)'};">${label}</div>
-                </div>`;
-              }
+        const played = soFar ? Math.round(perPeriod.reduce((a,x)=>a+x.exact, 0)) : perPeriod.reduce((a,x)=>a+x.mins, 0);
+        const remaining = soFar ? Math.round(perPeriod.reduce((a,x)=>a+x.forecastExact, 0)) : 0;
+        return `<div class="row" style="padding:6px 0; border-bottom:1px solid var(--line); align-items:center;${soFar?' gap:3px;':''}">
+          ${soFar ? `<div class="mc-name">${esc(p.name.split(' ')[0])}</div>` : `<div style="${nameStyle}">${esc(p.name.split(' ')[0])}</div>`}
+          <div style="display:flex; flex:1; min-width:0; gap:${cellGap}px; position:relative; align-self:stretch; align-items:center;">
+            ${perPeriod.map((pp)=>{
+              if(soFar) return soFarCell(pp);
               const {mins, isSub} = pp;
               const pct = mpp>0 ? Math.min(100, Math.round((mins/mpp)*100)) : 0;
               const side = isSub ? 'right' : 'left';
@@ -3035,19 +3060,16 @@ function renderReviewMinutesSection(f, squad, useActual, title, soFar){
             }).join('')}
             ${periodNowLine(6, 7)}
           </div>
-          <div style="width:${soFar?52:38}px; flex-shrink:0; text-align:right; line-height:1.15;">
-            <div style="font-size:12.5px; font-weight:700;">${total}'</div>
-            ${soFar && totalForecast>0 ? `<div style="font-size:10px; font-weight:600; color:var(--ink-soft);">&rarr;${total+totalForecast}'</div>` : ''}
-          </div>
+          ${soFar ? statCols(played, remaining) : `<div style="width:38px; flex-shrink:0; text-align:right; font-size:12.5px; font-weight:700;">${played}'</div>`}
         </div>`;
       }).join('')}
     </div>` : (soFar ? `
     ${legend}
-    <div class="card">
-      <div class="row" style="padding-bottom:8px; border-bottom:1px solid var(--line); margin-bottom:6px;">
-        <div style="width:70px; flex-shrink:0;"></div>
-        <div style="flex:1; position:relative; align-self:stretch;">${totalNowLine(-4, 15)}</div>
-        <div class="small" style="width:64px; flex-shrink:0; text-align:right; font-weight:700; color:var(--ink-soft);">Mins</div>
+    <div class="card mins-grid" style="padding:10px 6px;">
+      <div class="row" style="padding-bottom:8px; border-bottom:1px solid var(--line); margin-bottom:6px; gap:3px;">
+        <div class="mc-name"></div>
+        <div style="flex:1; min-width:0; position:relative; align-self:stretch;">${totalNowLine(-4, 15)}</div>
+        ${statHead}
       </div>
       ${[...squad].sort((a,b)=> liveMinutesSplit(f,b.id).played - liveMinutesSplit(f,a.id).played).map(p=>{
         const split = liveMinutesSplit(f, p.id);
@@ -3056,19 +3078,16 @@ function renderReviewMinutesSection(f, squad, useActual, title, soFar){
         const nowPct = Math.min(100, matchSoFar/totalMatch*100);
         const foreStart = Math.max(playedPct, nowPct);                     // what's still to come starts from "now"
         const forePct = Math.max(0, Math.min(100-foreStart, forecast/totalMatch*100));
-        return `<div class="row" style="padding:6px 0; border-bottom:1px solid var(--line); align-items:center;">
-          <div style="${nameStyle}">${esc(p.name.split(' ')[0])}</div>
-          <div style="flex:1; position:relative; align-self:stretch;">
+        return `<div class="row" style="padding:6px 0; border-bottom:1px solid var(--line); align-items:center; gap:3px;">
+          <div class="mc-name">${esc(p.name.split(' ')[0])}</div>
+          <div style="flex:1; min-width:0; position:relative; align-self:stretch;">
             <div style="position:absolute; left:0; right:0; top:50%; height:22px; margin-top:-11px; background:var(--surface-2); border-radius:5px; overflow:hidden;">
               <div class="mins-seg-played" style="left:0; width:${playedPct}%;"></div>
               <div class="mins-seg-forecast" style="left:${foreStart}%; width:${forePct}%;"></div>
             </div>
             ${totalNowLine(6, 7)}
           </div>
-          <div style="width:64px; flex-shrink:0; text-align:right; line-height:1.15;">
-            <div style="font-size:12.5px; font-weight:700;">${played}'</div>
-            ${forecast>0 ? `<div style="font-size:10px; font-weight:600; color:var(--ink-soft);">&rarr;${played+forecast}'</div>` : ''}
-          </div>
+          ${statCols(played, forecast)}
         </div>`;
       }).join('')}
     </div>` : `
@@ -4130,11 +4149,11 @@ function openPlanMinutesReviewModal(fixtureId, useActual, startTab, soFar){
     const body = `
       <h3>${soFar ? 'Minutes so far' : 'Player minutes'}</h3>
       <button class="icon-x" data-close-modal>&times;</button>
-      <div style="height:54vh; overflow-y:auto;">
+      <div style="height:${soFar ? '66vh' : '54vh'}; overflow-y:auto;">
         ${squad.length===0 ? '<div class="small" style="color:var(--ink-soft);">No squad selected for this match yet</div>' : renderReviewMinutesSection(f, squad, useActual, null, soFar)}
       </div>
     `;
-    openModal(body, {floating:true});
+    openModal(body, {floating:true, wide:!!soFar});
     attachModalHandlers();
     document.querySelectorAll('[data-review-minutes-tab]').forEach(btn=>{
       btn.addEventListener('click', ()=>{ reviewMinutesTab = btn.dataset.reviewMinutesTab; renderModal(); });
@@ -4535,7 +4554,7 @@ function renderFixtureEditor(id){
     <label>Date &amp; time</label>
     <div style="display:flex; gap:10px;">
       <input type="date" id="f-date" value="${f.dateTime ? f.dateTime.split('T')[0] : ''}" style="flex:1.3; margin-bottom:14px;">
-      <input type="time" id="f-time" value="${f.dateTime && f.dateTime.includes('T') ? f.dateTime.split('T')[1] : ''}" style="flex:1; margin-bottom:14px;">
+      ${kickoffTimeFieldHtml('f-time', f.dateTime && f.dateTime.includes('T') ? f.dateTime.split('T')[1] : '')}
     </div>
     <label>Location</label>
     <div style="position:relative;">
@@ -4738,7 +4757,7 @@ function renderMatchSetup(id){
     <label>Date &amp; time</label>
     <div style="display:flex; gap:10px;">
       <input type="date" id="f-date" value="${f.dateTime ? f.dateTime.split('T')[0] : ''}" style="flex:1.3; margin-bottom:14px;">
-      <input type="time" id="f-time" value="${f.dateTime && f.dateTime.includes('T') ? f.dateTime.split('T')[1] : ''}" style="flex:1; margin-bottom:14px;">
+      ${kickoffTimeFieldHtml('f-time', f.dateTime && f.dateTime.includes('T') ? f.dateTime.split('T')[1] : '')}
     </div>
     <label>Location</label>
     <div style="position:relative;">
@@ -4936,7 +4955,7 @@ function renderLive(id){
     // The real minutes grids, right here: By period / Total mins sub tabs, with the sort control.
     tabHtml = squad.length===0
       ? '<div class="card"><div class="small" style="color:var(--ink-soft); padding:12px;">No squad recorded for this match</div></div>'
-      : renderReviewMinutesSection(f, squad, true, 'Player minutes');
+      : renderReviewMinutesSection(f, squad, true, 'Player minutes', true);
   } else if(liveTab==='lineup'){
     tabHtml = `
     <div class="section-title" style="margin-top:0;">Actual lineup <span style="font-weight:400; color:var(--ink-soft);">— what really happened${unlocked?', edit to fix mistakes':''}</span></div>
@@ -6460,7 +6479,11 @@ function openTeamSwitcherModal(){
       <div class="small" style="color:var(--ink-soft); font-weight:600; margin-bottom:6px;">Text size</div>
       ${textSizeToggleHtml()}
     </div>
-    <button class="btn ghost" data-add-new-team style="margin-top:14px;">+ Add another team</button>
+    <button class="btn ghost" data-open-notifications style="margin-top:14px; display:flex; align-items:center; justify-content:center; gap:8px;">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Notifications
+    </button>
+    <button class="btn ghost" data-add-new-team style="margin-top:10px;">+ Add another team</button>
     ${currentUser ? `<button class="btn ghost" data-log-out style="margin-top:10px; color:var(--loss); border-color:var(--loss); display:flex; align-items:center; justify-content:center; gap:7px;">
       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" style="flex-shrink:0;"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 17l5-5-5-5M21 12H9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
       Log out${currentUser.email ? ` (${esc(currentUser.email)})` : ''}
@@ -6476,6 +6499,8 @@ function openTeamSwitcherModal(){
       switchTeam(el.dataset.switchTeam);
     });
   });
+  const notifBtn = document.querySelector('#modal-root [data-open-notifications]');
+  if(notifBtn) notifBtn.addEventListener('click', ()=>{ closeModal(); openNotificationsPopup(); });
   const logOutBtn = document.querySelector('[data-log-out]');
   if(logOutBtn) logOutBtn.addEventListener('click', ()=>{
     closeModal();
@@ -7306,21 +7331,16 @@ function renderTeamTab(){
 
     <div class="section-title">Phone notifications</div>
     <div class="card">
-      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px;">
-        <div><div style="font-weight:600;">Status</div><div class="small" style="color:var(--ink-soft);" id="notif-perm-text">${permText}</div></div>
-      </div>
-      <button type="button" class="btn amber" data-notif-allow ${perm==='granted'||perm==='unsupported'?'disabled':''} style="margin-bottom:10px;">Allow phone notifications</button>
-      <button type="button" class="btn ghost" data-notif-test style="margin-bottom:12px;">Send a test reminder</button>
-      <div class="small" style="color:var(--ink-soft);">
-        With notifications allowed, a reminder also appears as a phone notification when SquadHub is running but you've switched to another app.
-        A fully locked phone, or an app that's been closed, can't be woken without a push service, so the option below keeps the screen on during a live match.
-      </div>
+      <div style="font-weight:600;">Reminders when the app is closed</div>
+      <div class="small" style="color:var(--ink-soft); margin:2px 0 12px;">Each coach switches this on for their own phone. The reminder is sent from the server, so it arrives even if SquadHub is closed or the phone is locked.</div>
+      <button type="button" class="btn amber" data-open-notifications style="margin-bottom:10px;">Set up this phone</button>
+      <button type="button" class="btn ghost" data-notif-test style="margin-bottom:0;">Show a test reminder here</button>
     </div>
 
     <div class="section-title">Keep the screen on</div>
     <div class="card">
       <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
-        <div><div style="font-weight:600;">Keep the screen on during a live match</div><div class="small" style="color:var(--ink-soft);">Stops the phone locking mid-match, so the clock and reminders stay on time. Uses more battery.</div></div>
+        <div><div style="font-weight:600;">Keep the screen on during a live match</div><div class="small" style="color:var(--ink-soft);">Stops the phone locking mid-match, so the clock stays in front of you. Uses more battery.</div></div>
         ${sw('keepScreenOn', ns.keepScreenOn)}
       </div>
     </div>
@@ -7616,10 +7636,10 @@ function openModal(html, opts){
   closeModal();
   const floating = !!(opts && opts.floating);
   const wrap = document.createElement('div');
-  wrap.className = 'modal-bg' + (floating ? ' floating' : '');
+  wrap.className = 'modal-bg' + (floating ? ' floating' : '') + (opts && opts.wide ? ' wide-bg' : '');
   wrap.id = 'modal-root';
   if(largeTextScope()) wrap.classList.add('fs-area','fs-map');   // popups follow the text size of the screen behind them
-  wrap.innerHTML = `<div class="modal rel-wrap${floating ? ' floating' : ''}">${html}</div>`;
+  wrap.innerHTML = `<div class="modal rel-wrap${floating ? ' floating' : ''}${opts && opts.wide ? ' wide' : ''}">${html}</div>`;
   // Mobile browsers fire a follow-up synthetic "click" shortly after the touch that
   // triggered this modal to open, at the same screen coordinates as that touch. That
   // used to only matter for the backdrop (an unprotected click there closed the modal
@@ -7636,6 +7656,7 @@ function openModal(html, opts){
     if(e.target===wrap) closeModal();
   }, true);
   document.body.appendChild(wrap);
+  wireTimeFields(wrap);
   if(opts && opts.anchorToBanner) anchorModalToBanner(wrap);
   applyViewOnlyLock(wrap);
 }
@@ -7857,11 +7878,12 @@ function getDigitalTimeValue(id){
   const m = Math.max(0, Math.min(59, parseInt(root.querySelector('[data-dtc-unit="m"]').value,10) || 0));
   return pad2(h)+':'+pad2(m);
 }
-function initDigitalTimeControl(id){
+function initDigitalTimeControl(id, onChange){
   const root = document.getElementById(id); if(!root) return;
+  const fire = ()=>{ if(onChange) onChange(getDigitalTimeValue(id)); };
   const hIn = root.querySelector('[data-dtc-unit="h"]'), mIn = root.querySelector('[data-dtc-unit="m"]');
   const read = el => parseInt(el.value,10) || 0;
-  const write = (hh,mm)=>{ hIn.value = pad2(((hh%24)+24)%24); mIn.value = pad2(((mm%60)+60)%60); };
+  const write = (hh,mm)=>{ hIn.value = pad2(((hh%24)+24)%24); mIn.value = pad2(((mm%60)+60)%60); fire(); };
   // Stepping minutes past 59 (or below 00) carries into the hour, like a real clock.
   const stepBy = (unit, dir)=>{
     let hh = read(hIn), mm = read(mIn);
@@ -7882,7 +7904,7 @@ function initDigitalTimeControl(id){
   });
   [hIn, mIn].forEach(inp=>{
     inp.addEventListener('focus', ()=> setTimeout(()=>{ try{ inp.select(); }catch(e){} }, 0));
-    inp.addEventListener('input', ()=>{ inp.value = inp.value.replace(/\D/g,'').slice(0,2); });
+    inp.addEventListener('input', ()=>{ inp.value = inp.value.replace(/\D/g,'').slice(0,2); fire(); });
     inp.addEventListener('blur', ()=> write(Math.min(23, read(hIn)), Math.min(59, read(mIn))));   // typed values clamp to a real time
   });
 }
@@ -8037,7 +8059,7 @@ async function showPhoneNotification(title, body, tag){
   if(phoneNotifStatus()!=='granted') return false;
   try{
     const reg = ('serviceWorker' in navigator) ? await navigator.serviceWorker.getRegistration() : null;
-    const opts = {body, tag, renotify:true, requireInteraction:true, vibrate:[250,120,250,120,250], icon:'icon-192.png'};
+    const opts = {body, tag, renotify:false, requireInteraction:true, vibrate:[250,120,250,120,250], icon:'icon-192.png'};
     if(reg && reg.showNotification){ await reg.showNotification(title, opts); return true; }
     new Notification(title, opts); return true;           // desktop browsers; Android needs the service worker above
   }catch(e){ return false; }
@@ -8066,9 +8088,9 @@ function showSubReminderCard(info){
   const card = document.createElement('div');
   card.className = 'sub-alert'; card.dataset.key = info.key;
   card.innerHTML = `
-    <div class="sa-head"><span>&#8644;</span><span>${esc(info.title)}</span></div>
+    <div class="sa-head"><span>${info.icon || '&#8644;'}</span><span>${esc(info.title)}</span></div>
     <div class="sa-main">${info.main}</div>
-    <div class="sa-sub">${esc(info.sub)}</div>
+    ${info.sub ? `<div class="sa-sub">${esc(info.sub)}</div>` : ''}
     <div class="sa-btns">
       <button type="button" data-sa-ok>Got it</button>
       ${info.fixtureId ? `<button type="button" class="primary" data-sa-show>Show on pitch</button>` : ''}
@@ -8141,11 +8163,295 @@ async function syncWakeLock(){
     } else if(!want && _wakeLock){ const w = _wakeLock; _wakeLock = null; await w.release(); }
   }catch(e){ _wakeLock = null; }
 }
-setInterval(()=>{ try{ checkSubReminders(); syncWakeLock(); }catch(e){} }, 1000);
+// The Player mins tab on the match screen shows live figures, so it refreshes itself every 20 seconds while it's open
+// (and only then: not while a pop-up or picker is on top, or the enlarged pitch is showing).
+let _minsTabRefreshAt = Date.now();
+function refreshMinsTab(){
+  if(typeof VIEW==='undefined' || VIEW.screen!=='live' || liveTab!=='mins' || gridPitchEnlargedQuarter) return;
+  if(document.getElementById('modal-root') || document.getElementById('picker-root')) return;
+  if(Date.now() - _minsTabRefreshAt < 20000) return;
+  _minsTabRefreshAt = Date.now();
+  render();
+}
+setInterval(()=>{ try{ checkSubReminders(); serverRemindersTick(); syncWakeLock(); refreshMinsTab(); }catch(e){} }, 1000);
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) syncWakeLock(); });
 if('serviceWorker' in navigator && /^https?:/.test(location.protocol)){
   window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });   // sw.js sits next to index.html
 }
+// ---------- Phone notifications from the server (arrive even when the app is closed) ----------
+function pushSupported(){ return !!(('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window)); }
+function pushCloudReady(){ return !!(supabaseClient && currentUser); }
+function activeCloudTeamId(){
+  const t = (TEAMS_STORE.teams || []).find(x=>x.id===TEAMS_STORE.activeTeamId);
+  return (t && t.cloudSynced && currentUser) ? t.id : null;
+}
+function urlBase64ToUint8Array(b64){
+  const pad = '='.repeat((4 - b64.length % 4) % 4);
+  const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
+  const out = new Uint8Array(raw.length);
+  for(let i=0; i<raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+function sameBytes(a, b){ if(a.length!==b.length) return false; for(let i=0;i<a.length;i++){ if(a[i]!==b[i]) return false; } return true; }
+function deviceLabel(){
+  const m = (navigator.userAgent || '').match(/\(([^)]+)\)/);
+  return m ? m[1].replace(/\s+/g,' ').slice(0, 70) : 'Phone';
+}
+async function fnErrorText(error){
+  try{ if(error && error.context && error.context.json){ const j = await error.context.json(); if(j && j.error) return j.error; } }catch(e){}
+  return (error && error.message) ? error.message : 'no response';
+}
+async function pushRegistration(){
+  if(!('serviceWorker' in navigator)) return null;
+  // ready never resolves if sw.js isn't installed, so don't wait forever
+  return await Promise.race([navigator.serviceWorker.ready, new Promise(r=> setTimeout(()=>r(null), 4000))]).catch(()=>null);
+}
+async function pushGetState(){
+  const st = {supported: pushSupported(), permission: ('Notification' in window) ? Notification.permission : 'unsupported', subscribed:false, endpoint:null, signedIn: pushCloudReady(), helper:false};
+  if(!st.supported) return st;
+  const reg = await pushRegistration();
+  st.helper = !!reg;
+  if(reg){ const sub = await reg.pushManager.getSubscription(); if(sub){ st.subscribed = true; st.endpoint = sub.endpoint; } }
+  return st;
+}
+async function pushRegisterWithServer(sub){
+  const j = sub.toJSON();
+  const {error} = await supabaseClient.rpc('push_register', {p_endpoint:j.endpoint, p_p256dh:j.keys.p256dh, p_auth:j.keys.auth, p_user_agent:navigator.userAgent, p_device_label:deviceLabel()});
+  if(error) throw new Error(error.message || 'Could not save this phone');
+}
+async function pushEnable(){
+  if(!pushSupported()) throw new Error("This browser can't do phone notifications.");
+  if(!pushCloudReady()) throw new Error('Sign in first, so notifications can be linked to your account.');
+  const perm = await Notification.requestPermission();
+  if(perm!=='granted') throw new Error(perm==='denied' ? "Notifications are blocked for SquadHub. Turn them on in your phone's settings, then try again." : "Notifications weren't allowed.");
+  const reg = await pushRegistration();
+  if(!reg) throw new Error("The notification helper (sw.js) isn't installed yet. Make sure sw.js is uploaded next to index.html, then close and reopen the app.");
+  const {data, error} = await supabaseClient.functions.invoke('push', {body:{mode:'config'}});
+  if(error || !data || !data.publicKey) throw new Error("The notification server isn't set up yet: " + await fnErrorText(error));
+  const key = urlBase64ToUint8Array(data.publicKey);
+  let sub = await reg.pushManager.getSubscription();
+  if(sub){                                            // made for a different server key? start again
+    const cur = sub.options && sub.options.applicationServerKey ? new Uint8Array(sub.options.applicationServerKey) : null;
+    if(!cur || !sameBytes(cur, key)){ await sub.unsubscribe(); sub = null; }
+  }
+  if(!sub) sub = await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:key});
+  await pushRegisterWithServer(sub);
+  try{ localStorage.setItem('squadhub_push_synced', String(Date.now())); }catch(e){}
+  return sub;
+}
+async function pushDisable(){
+  const reg = await pushRegistration();
+  const sub = reg ? await reg.pushManager.getSubscription() : null;
+  if(sub){
+    const endpoint = sub.endpoint;
+    await sub.unsubscribe();
+    if(pushCloudReady()){ try{ await supabaseClient.rpc('push_unregister', {p_endpoint:endpoint}); }catch(e){} }
+  }
+}
+async function pushSyncOnStart(force){
+  // Keeps the server's record of this phone fresh, and re-saves it if the phone changed its own address.
+  try{
+    if(!pushSupported() || !pushCloudReady() || Notification.permission!=='granted') return;
+    const reg = await pushRegistration(); if(!reg) return;
+    const sub = await reg.pushManager.getSubscription(); if(!sub) return;
+    const last = Number(localStorage.getItem('squadhub_push_synced') || 0);
+    if(!force && Date.now() - last < 6*3600*1000) return;
+    await pushRegisterWithServer(sub);
+    localStorage.setItem('squadhub_push_synced', String(Date.now()));
+  }catch(e){ /* best effort */ }
+}
+async function pushTest(delaySeconds, endpoint){
+  const {data, error} = await supabaseClient.functions.invoke('push', {body:{mode:'test', delaySeconds, endpoint}});
+  if(error) return {ok:false, error: await fnErrorText(error)};
+  return data || {ok:false, error:'no response'};
+}
+setTimeout(()=> pushSyncOnStart(false), 8000);
+setInterval(()=> pushSyncOnStart(false), 30*60*1000);
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.addEventListener('message', (e)=>{
+    const m = e.data || {};
+    if(m.type==='push-subscription-changed') pushSyncOnStart(true);
+    // A push that arrives while the app is on screen. Sub reminders are already shown by the live clock itself.
+    if(m.type==='push' && m.payload && m.payload.topic!=='sub_reminders'){
+      showSubReminderCard({key:'push-'+(m.payload.id||Date.now()), title:m.payload.title || 'SquadHub', main:esc(m.payload.body || ''), sub:'', icon:'&#128276;', fixtureId:null});
+    }
+  });
+}
+
+// The app tells the server about the reminders it wants sent, so they still arrive when the phone is locked or the
+// app is closed. Whenever the clock is paused/resumed or a sub is added, moved or made, the list is re-sent and the
+// server cancels, adds or re-times to match.
+const _srv = {sig:'', scope:null, team:null, busy:false, fails:0, backoffUntil:0, debounceSig:'', debounceAt:0};
+function buildServerSubItems(f){
+  const ns = notifSettings(), ls = f.liveState, items = [];
+  if(!ns.subReminders || !ls.running || !ls.lastTickAt) return items;
+  const mpp = f.minutesPerPeriod || DEFAULT_CONFIG.minutesPerPeriod, half = mpp/2, qNum = ls.quarter;
+  const lineup = ((f.actualLineup || f.lineup) || {})['q'+qNum] || {};
+  const fired = ls.subAlertsFired || {}, seen = ls.subSeen || {};
+  const elapsed = liveElapsedNowPure(f);
+  const first = (id)=> (getPlayer(id) ? getPlayer(id).name.split(' ')[0] : '?');
+  (f.positions || []).forEach(pos=>{
+    const slot = lineup[pos];
+    if(!slot || !slot.a || !slot.b || slot.b===slot.a) return;
+    const swap = (slot.subAt!=null && slot.subAt>0 && slot.subAt<mpp) ? slot.subAt : half;
+    const key = subReminderKey(qNum, pos, slot);
+    if(fired[key] || (seen[key] && elapsed >= swap)) return;                  // already reminded, or already history
+    const fireAtMin = Math.max(0, swap - ns.subLeadMinutes);
+    // the wall-clock moment the live clock reaches fireAtMin (it doesn't change while the clock runs)
+    const sendAtMs = ls.lastTickAt + (ls.secondsLeft - (mpp - fireAtMin)*60) * 1000;
+    items.push({
+      dedupe_key: key, topic: 'sub_reminders',
+      title: ns.subLeadMinutes>0 ? `Substitution in ${ns.subLeadMinutes} min` : 'Substitution now',
+      body: `${first(slot.b)} on for ${first(slot.a)} (${pos}) \u00b7 planned for ${swap}' of ${periodBadgeLabel(f, qNum)}`,
+      send_at: new Date(Math.max(sendAtMs, Date.now())).toISOString(), tag: key, url: './',
+      data: {fixtureId: f.id, q: qNum, pos}
+    });
+  });
+  return items;
+}
+function serverRemindersTick(){
+  if(!supabaseClient || !currentUser || typeof DATA==='undefined' || !DATA || !DATA.fixtures) return;
+  const teamId = activeCloudTeamId();
+  const f = teamId ? DATA.fixtures.find(x=>x.status==='live' && x.liveState) : null;
+  let want = null;
+  if(f) want = {team:teamId, scope:`fixture:${f.id}:sub_reminders`, items: buildServerSubItems(f)};
+  else if(_srv.scope && teamId && teamId===_srv.team) want = {team:_srv.team, scope:_srv.scope, items:[]};   // that team's match is over: cancel what's left (switching to another team leaves it alone)
+  if(!want) return;
+  const sig = want.team + '|' + want.scope + '|' + JSON.stringify(want.items.map(i=>[i.dedupe_key, i.send_at.slice(0,19)]));
+  if(sig===_srv.sig || _srv.busy || Date.now()<_srv.backoffUntil) return;
+  if(_srv.debounceSig!==sig){ _srv.debounceSig = sig; _srv.debounceAt = Date.now() + 2500; return; }      // let changes settle first
+  if(Date.now() < _srv.debounceAt) return;
+  _srv.busy = true;
+  supabaseClient.rpc('notification_sync_schedule', {p_team_id:want.team, p_scope:want.scope, p_items:want.items}).then(({error})=>{
+    _srv.busy = false;
+    if(error){ _srv.fails++; _srv.backoffUntil = Date.now() + Math.min(600000, 30000*_srv.fails); console.warn('reminder schedule not saved', error.message); return; }
+    _srv.fails = 0; _srv.sig = sig; _srv.team = want.team; _srv.scope = f ? want.scope : null; if(!f) _srv.sig = '';
+  }, (e)=>{ _srv.busy = false; _srv.fails++; _srv.backoffUntil = Date.now() + Math.min(600000, 30000*_srv.fails); });
+}
+
+// The Notifications pop-up: every signed-in coach can turn notifications on for their own phone and choose what they get.
+async function openNotificationsPopup(){
+  const teamId = activeCloudTeamId();
+  let st = await pushGetState();
+  let prefs = null, prefsNote = '';
+  const loadPrefs = async ()=>{
+    prefs = null; prefsNote = '';
+    if(!st.supported) return;
+    if(!teamId){ prefsNote = 'Choose a synced team to pick what you get.'; return; }
+    try{ const {data, error} = await supabaseClient.rpc('notification_get_prefs', {p_team_id:teamId}); if(error) throw error; prefs = data || []; }
+    catch(e){ prefsNote = "Your choices couldn't be loaded yet."; }
+  };
+  await loadPrefs();
+  const statusText = ()=>{
+    if(!st.supported) return "This browser can't do phone notifications. On an iPhone, add SquadHub to the Home Screen first.";
+    if(!st.signedIn) return 'Sign in and sync your team to use notifications.';
+    if(st.permission==='denied') return "Blocked. Turn notifications on for SquadHub in your phone's settings, then come back.";
+    if(st.subscribed) return 'On. This phone gets reminders even when SquadHub is closed or the screen is locked.';
+    return 'Off on this phone.';
+  };
+  const paint = (msg)=>{
+    const canTurnOn = st.supported && st.signedIn && !st.subscribed && st.permission!=='denied';
+    const body = `
+      <h3>Notifications</h3>
+      <button class="icon-x" data-close-modal>&times;</button>
+      <div class="card" style="margin-bottom:12px;">
+        <div style="font-weight:600;">This phone</div>
+        <div class="small" style="color:var(--ink-soft); margin:2px 0 12px;">${esc(statusText())}</div>
+        ${canTurnOn ? `<button type="button" class="btn amber" data-np-enable style="margin-bottom:0;">Turn on notifications</button>` : ''}
+        ${st.subscribed ? `<button type="button" class="btn ghost" data-np-test style="margin-bottom:10px;">Send a test (arrives in 10 seconds)</button>
+          <button type="button" class="btn ghost" data-np-disable style="margin-bottom:0; color:var(--loss); border-color:var(--loss);">Turn off on this phone</button>` : ''}
+        <div class="small" id="np-msg" style="margin-top:10px; color:var(--ink-soft);">${esc(msg || '')}</div>
+      </div>
+      <div class="section-title" style="margin-top:4px;">What to send me</div>
+      <div class="card" style="margin-bottom:0;">
+        ${prefs ? prefs.map(t=>`
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px 0;">
+            <div style="min-width:0;"><div style="font-weight:600;">${esc(t.label)}</div><div class="small" style="color:var(--ink-soft);">${esc(t.description || '')}</div></div>
+            <label class="switch"><input type="checkbox" role="switch" data-np-pref="${esc(t.topic)}" ${t.enabled?'checked':''}><span class="switch-track"></span></label>
+          </div>`).join('') || '<div class="small" style="color:var(--ink-soft);">Nothing to choose yet.</div>'
+          : `<div class="small" style="color:var(--ink-soft);">${esc(prefsNote || (st.supported ? '' : 'Not available on this device.'))}</div>`}
+      </div>`;
+    openModal(body, {floating:true});
+    attachModalHandlers();
+    const note = (t)=>{ const el = document.getElementById('np-msg'); if(el) el.textContent = t; };
+    const refresh = async (m)=>{ st = await pushGetState(); await loadPrefs(); paint(m); };
+    const enable = document.querySelector('[data-np-enable]');
+    if(enable) enable.onclick = async ()=>{
+      enable.disabled = true; note('Turning on...');
+      try{ await pushEnable(); await refresh('Notifications are on for this phone.'); }
+      catch(e){ enable.disabled = false; note(e.message || String(e)); }
+    };
+    const test = document.querySelector('[data-np-test]');
+    if(test) test.onclick = async ()=>{
+      test.disabled = true; note('Sent. Lock your phone now - it should buzz in about 10 seconds.');
+      const r = await pushTest(10, st.endpoint);
+      test.disabled = false;
+      if(r && r.ok) note("Sent. If nothing buzzed, check this phone's notification settings for SquadHub.");
+      else note((r && r.error) || 'The test could not be sent.');
+    };
+    const off = document.querySelector('[data-np-disable]');
+    if(off) off.onclick = async ()=>{ off.disabled = true; try{ await pushDisable(); }catch(e){} await refresh('Turned off on this phone.'); };
+    document.querySelectorAll('[data-np-pref]').forEach(el=>{
+      el.addEventListener('change', async ()=>{
+        const {error} = await supabaseClient.rpc('notification_set_pref', {p_team_id:teamId, p_topic:el.dataset.npPref, p_enabled:el.checked});
+        if(error){ el.checked = !el.checked; note("That didn't save. Please try again."); }
+      });
+    });
+  };
+  paint('');
+}
+// A drop-in for <input type="time">: the value still lives in an element with the same id (so the code that reads
+// it is unchanged), but it's set with the app's digital control instead of the phone's analog clock dial.
+function timeFieldHtml(id, value){
+  const v = /^\d{1,2}:\d{2}/.test(value||'') ? String(value).slice(0,5) : nowHHMM();
+  return `<div data-timefield="${id}"><input type="hidden" id="${id}" value="${esc(v)}">${renderDigitalTimeControl(id+'-dtc', v)}</div>`;
+}
+function wireTimeFields(root){
+  (root || document).querySelectorAll('[data-timefield]').forEach(box=>{
+    if(box.dataset.wired) return; box.dataset.wired = '1';
+    const id = box.dataset.timefield, hidden = document.getElementById(id);
+    initDigitalTimeControl(id+'-dtc', (val)=>{ if(hidden) hidden.value = val; });
+  });
+}
+// Kick-off time on the fixture forms: a tappable field (it sits beside the date) that opens a digital time pop-up.
+function kickoffTimeFieldHtml(id, value){
+  const v = /^\d{1,2}:\d{2}/.test(value||'') ? String(value).slice(0,5) : '';
+  return `<button type="button" class="time-select" data-open-time-overlay="${id}" style="flex:1; margin-bottom:14px;"><span class="pick-select-label" data-time-label="${id}" style="${v?'':'color:var(--ink-soft);'}">${v ? esc(v) : 'Time'}</span><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="2"/><path d="M12 7.5V12l3 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button><input type="hidden" id="${id}" value="${esc(v)}">`;
+}
+function showTimeOverlay(title, current, onSet, onClear){
+  closePickerOverlay();
+  const wrap = document.createElement('div');
+  wrap.id = 'picker-root'; wrap.className = 'modal-bg floating'; wrap.style.zIndex = '700';
+  wrap.innerHTML = `<div class="modal rel-wrap floating pop-lg"><h3>${esc(title)}</h3><button type="button" class="icon-x" data-picker-close>&times;</button>
+    ${renderDigitalTimeControl('tov-dtc', current || '09:00')}
+    <div style="display:flex; gap:8px; margin-top:4px;">
+      <button type="button" class="btn ghost" data-tov-clear style="flex:1; margin-bottom:0;">Clear</button>
+      <button type="button" class="btn amber" data-tov-set style="flex:1; margin-bottom:0;">Set</button>
+    </div></div>`;
+  const openedAt = Date.now();
+  wrap.addEventListener('click', (e)=>{
+    if(Date.now()-openedAt <= 400){ e.stopPropagation(); e.preventDefault(); return; }
+    if(e.target===wrap || e.target.closest('[data-picker-close]')){ closePickerOverlay(); return; }
+    if(e.target.closest('[data-tov-set]')){ const v = getDigitalTimeValue('tov-dtc'); closePickerOverlay(); onSet(v); return; }
+    if(e.target.closest('[data-tov-clear]')){ closePickerOverlay(); if(onClear) onClear(); }
+  }, true);
+  document.body.appendChild(wrap);
+  initDigitalTimeControl('tov-dtc');
+}
+document.addEventListener('click', (e)=>{
+  const btn = e.target.closest && e.target.closest('[data-open-time-overlay]');
+  if(!btn) return;
+  e.preventDefault(); e.stopPropagation();
+  const id = btn.dataset.openTimeOverlay, input = document.getElementById(id);
+  if(!input) return;
+  const label = btn.querySelector('[data-time-label]');
+  const apply = (val)=>{
+    input.value = val;
+    if(label){ label.textContent = val || 'Time'; label.style.color = val ? '' : 'var(--ink-soft)'; }
+    input.dispatchEvent(new Event('change', {bubbles:true}));        // the forms save on 'change'
+  };
+  showTimeOverlay('Kick-off time', input.value || '09:00', apply, ()=> apply(''));
+}, true);
 function nowHHMM(){
   const d = new Date();
   return `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
@@ -8175,7 +8481,7 @@ function renderNewFixtureWizardStep1(){
     <label>Date &amp; time</label>
     <div style="display:flex; gap:10px;">
       <input type="date" id="nf-date" value="${dPart||''}" style="flex:1.3; margin-bottom:14px;">
-      <input type="time" id="nf-time" value="${tPart||''}" style="flex:1; margin-bottom:14px;">
+      ${kickoffTimeFieldHtml('nf-time', tPart||'')}
     </div>
     <label>Home or away?</label>
     <div class="toggle-group" id="nf-venue">
@@ -8403,9 +8709,9 @@ function openFixtureQuickActionsModal(fixtureId){
     </div>` : ''}
     <div class="small" style="color:var(--ink-soft); margin-bottom:16px;">${esc(competitionDisplayLabel(f))} · ${gameTypeForFixture(f)==='development'?'Development':'Competitive'}</div>
     <div style="display:flex; gap:8px;">
-      <button class="btn ghost small" data-quick-edit-fixture="${fixtureId}" style="flex:1; padding:16px 6px; font-size:12.5px;">Edit details</button>
-      <button class="btn amber small" data-open-match-setup="${fixtureId}" style="flex:1; padding:16px 6px; font-size:12.5px;">Team selection</button>
-      <button class="btn ghost small" data-quick-go-live="${fixtureId}" style="flex:1; padding:16px 6px; font-size:12.5px;">${f.status==='live' ? 'Resume live' : 'Go live'}</button>
+      ${f.status==='live' ? '' : `<button class="btn ghost small" data-quick-edit-fixture="${fixtureId}" style="flex:1; padding:16px 6px; font-size:12.5px;">Edit details</button>
+      <button class="btn amber small" data-open-match-setup="${fixtureId}" style="flex:1; padding:16px 6px; font-size:12.5px;">Team selection</button>`}
+      <button class="btn ${f.status==='live' ? 'amber' : 'ghost'} small" data-quick-go-live="${fixtureId}" style="flex:1; padding:16px 6px; font-size:12.5px;">${f.status==='live' ? 'Resume live' : 'Go live'}</button>
     </div>
   `;
   openModal(body, {floating:true});
@@ -8438,7 +8744,7 @@ function openEditFixtureDetailsModal(fixtureId){
     <label>Date &amp; time</label>
     <div style="display:flex; gap:10px;">
       <input type="date" id="ef-date" value="${dPart||''}" style="flex:1.3; margin-bottom:14px;">
-      <input type="time" id="ef-time" value="${tPart||''}" style="flex:1; margin-bottom:14px;">
+      ${kickoffTimeFieldHtml('ef-time', tPart||'')}
     </div>
     <label>Home or away?</label>
     <div class="toggle-group" id="ef-venue">
@@ -8830,7 +9136,7 @@ function openLogOppoGoalConfirm(fixtureId, quarterNum){
       </div>
     </div>
     <div id="oppo-confirm-clock-mode-fields" style="display:none;">
-      <input type="time" id="oppo-confirm-clock-input" value="${esc(nowHHMM())}">
+      ${timeFieldHtml('oppo-confirm-clock-input', nowHHMM())}
     </div>
     <button class="btn amber" data-confirm-oppo-goal-time>Log opponent goal</button>
   `;
@@ -8846,7 +9152,6 @@ function openLogOppoGoalConfirm(fixtureId, quarterNum){
       document.getElementById('oppo-confirm-clock-mode-fields').style.display = btn.dataset.oppoConfirmTimeModeOpt==='clock' ? 'block' : 'none';
       if(btn.dataset.oppoConfirmTimeModeOpt==='clock'){
         const ci = document.getElementById('oppo-confirm-clock-input');
-        if(ci){ ci.focus(); try{ ci.showPicker(); }catch(e){ /* not supported on this browser */ } }
       }
     });
   });
@@ -8920,7 +9225,7 @@ function openStartQuarterModal(fixtureId, quarterNum){
       </div>
       <div id="start-q-clock-fields" style="display:none;">
         <label>What time did it actually start?</label>
-        <input type="time" id="start-q-clock-input" value="${esc(defaultClock)}">
+        ${timeFieldHtml('start-q-clock-input', defaultClock)}
       </div>
       <button class="btn amber" data-confirm-start-already>Start period</button>
     `;
@@ -8936,7 +9241,6 @@ function openStartQuarterModal(fixtureId, quarterNum){
         document.getElementById('start-q-clock-fields').style.display = btn.dataset.startQModeOpt==='clock' ? 'block' : 'none';
         if(btn.dataset.startQModeOpt==='clock'){
           const clockInput = document.getElementById('start-q-clock-input');
-          if(clockInput){ clockInput.focus(); try{ clockInput.showPicker(); }catch(e){ /* not supported on this browser */ } }
         }
       });
     });
@@ -10353,7 +10657,7 @@ function openOppoGoalMinuteStep(fixtureId){
     </div>
     <div id="oppo-clock-mode-fields" style="display:none;">
       <label>Time</label>
-      <input type="time" id="oppo-clock-input">
+      ${timeFieldHtml('oppo-clock-input', '')}
     </div>
     <button class="btn amber" data-confirm-oppo-minute>Log opponent goal</button>
   `;
@@ -10371,10 +10675,6 @@ function openOppoGoalMinuteStep(fixtureId){
       document.getElementById('oppo-clock-mode-fields').style.display = btn.dataset.oppoTimeModeOpt==='clock' ? 'block' : 'none';
       if(btn.dataset.oppoTimeModeOpt==='clock'){
         const clockInput = document.getElementById('oppo-clock-input');
-        if(clockInput){
-          clockInput.focus();
-          try{ clockInput.showPicker(); }catch(e){ /* not supported on this browser */ }
-        }
       }
     });
   });
@@ -10422,7 +10722,7 @@ function openSubMinuteStep(fixtureId, outId, inId){
     </div>
     <div id="sub-clock-mode-fields" style="display:none;">
       <label>Time</label>
-      <input type="time" id="sub-clock-input">
+      ${timeFieldHtml('sub-clock-input', '')}
     </div>
     <button class="btn amber" data-confirm-sub-minute>Log substitution</button>
   `;
@@ -10440,10 +10740,6 @@ function openSubMinuteStep(fixtureId, outId, inId){
       document.getElementById('sub-clock-mode-fields').style.display = btn.dataset.subTimeModeOpt==='clock' ? 'block' : 'none';
       if(btn.dataset.subTimeModeOpt==='clock'){
         const clockInput = document.getElementById('sub-clock-input');
-        if(clockInput){
-          clockInput.focus();
-          try{ clockInput.showPicker(); }catch(e){ /* not supported on this browser */ }
-        }
       }
     });
   });
@@ -10739,7 +11035,7 @@ function openPlanLineupSubModal(fixtureId, quarterKey, pos, useActual){
           </div>
         </div>
         <div id="quick-log-clock-mode-fields" style="display:none;">
-          <input type="time" id="quick-log-clock-input" value="${esc(nowHHMM())}">
+          ${timeFieldHtml('quick-log-clock-input', nowHHMM())}
         </div>
         <button class="btn amber" data-confirm-quick-log-time>Log ${eventLabel}</button>
       `;
@@ -10755,7 +11051,6 @@ function openPlanLineupSubModal(fixtureId, quarterKey, pos, useActual){
           document.getElementById('quick-log-clock-mode-fields').style.display = btn.dataset.quickLogTimeModeOpt==='clock' ? 'block' : 'none';
           if(btn.dataset.quickLogTimeModeOpt==='clock'){
             const ci = document.getElementById('quick-log-clock-input');
-            if(ci){ ci.focus(); try{ ci.showPicker(); }catch(e){ /* not supported on this browser */ } }
           }
         });
       });
@@ -11016,7 +11311,7 @@ function openEditGoalModal(fixtureId, eventId){
     </div>
     <div id="edit-goal-clock-mode-fields" style="display:${startMode==='clock'?'block':'none'};">
       <label>Time</label>
-      <input type="time" id="edit-goal-clock-input" value="${esc(ev.clockTime||'')}">
+      ${timeFieldHtml('edit-goal-clock-input', ev.clockTime || (ev.loggedAt ? fmtEventTime(ev.loggedAt) : ''))}
     </div>
     <button class="btn amber" data-save-goal-edit="${fixtureId}|${eventId}">Save changes</button>
   `;
@@ -11041,10 +11336,6 @@ function openEditGoalModal(fixtureId, eventId){
       document.getElementById('edit-goal-clock-mode-fields').style.display = btn.dataset.timeModeOpt==='clock' ? 'block' : 'none';
       if(btn.dataset.timeModeOpt==='clock'){
         const clockInput = document.getElementById('edit-goal-clock-input');
-        if(clockInput){
-          clockInput.focus();
-          try{ clockInput.showPicker(); }catch(e){ /* not supported on this browser */ }
-        }
       }
     });
   });
@@ -11108,7 +11399,7 @@ function openEditCardModal(fixtureId, eventId){
     </div>
     <div id="edit-card-clock-mode-fields" style="display:${startMode==='clock'?'block':'none'};">
       <label>Time</label>
-      <input type="time" id="edit-card-clock-input" value="${esc(ev.clockTime||'')}">
+      ${timeFieldHtml('edit-card-clock-input', ev.clockTime || (ev.loggedAt ? fmtEventTime(ev.loggedAt) : ''))}
     </div>
     <button class="btn amber" data-save-card-edit="${fixtureId}|${eventId}">Save changes</button>
   `;
@@ -11133,10 +11424,6 @@ function openEditCardModal(fixtureId, eventId){
       document.getElementById('edit-card-clock-mode-fields').style.display = btn.dataset.timeModeOpt==='clock' ? 'block' : 'none';
       if(btn.dataset.timeModeOpt==='clock'){
         const clockInput = document.getElementById('edit-card-clock-input');
-        if(clockInput){
-          clockInput.focus();
-          try{ clockInput.showPicker(); }catch(e){ /* not supported on this browser */ }
-        }
       }
     });
   });
@@ -11252,7 +11539,7 @@ function openGoalModal(fixtureId){
       </div>
       <div id="goal-clock-mode-fields" style="display:none;">
         <label>Time</label>
-        <input type="time" id="goal-clock-input">
+        ${timeFieldHtml('goal-clock-input', '')}
       </div>
       <button class="btn amber" data-confirm-goal-minute>Log goal</button>
     `;
@@ -11270,10 +11557,6 @@ function openGoalModal(fixtureId){
         document.getElementById('goal-clock-mode-fields').style.display = btn.dataset.goalTimeModeOpt==='clock' ? 'block' : 'none';
         if(btn.dataset.goalTimeModeOpt==='clock'){
           const clockInput = document.getElementById('goal-clock-input');
-          if(clockInput){
-            clockInput.focus();
-            try{ clockInput.showPicker(); }catch(e){ /* not supported on this browser */ }
-          }
         }
       });
     });
@@ -12770,6 +13053,9 @@ function attachHandlers(){
       saveData();
       render();
     });
+  });
+  document.querySelectorAll('#app [data-open-notifications]').forEach(el=>{
+    el.addEventListener('click', openNotificationsPopup);
   });
   document.querySelectorAll('[data-notif-toggle]').forEach(el=>{
     el.addEventListener('change', ()=>{ setNotifSetting(el.dataset.notifToggle, el.checked); syncWakeLock(); });
