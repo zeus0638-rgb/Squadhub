@@ -278,9 +278,9 @@
   .pitch-enlarge-overlay .live-inline-badge span{ background:#fff !important; }
   .pitch-enlarge-overlay .scoreboard .timer.stoppage, .pitch-enlarge-overlay .timer.stoppage{ color:#FFE27A; }
   /* Goal / yellow / red buttons in the player pop-ups: bigger, with the goal ball on a white disc so it stands out */
-  .quick-event-btn{ flex:1; border:none; border-radius:12px; min-height:66px; padding:8px 4px; display:flex; align-items:center; justify-content:center; font-size:30px; line-height:1; cursor:pointer; }
+  .quick-event-btn{ flex:1; border:none; border-radius:12px; min-height:78px; padding:8px 4px; display:flex; align-items:center; justify-content:center; font-size:24px; line-height:1; cursor:pointer; }
   .quick-event-btn:active{ filter:brightness(0.92); }
-  .quick-event-btn .qe-ball{ display:flex; align-items:center; justify-content:center; width:52px; height:52px; border-radius:50%; background:#fff; font-size:36px; line-height:1; box-shadow:0 2px 6px rgba(0,0,0,0.35); }
+  .quick-event-btn .qe-ball{ display:flex; align-items:center; justify-content:center; width:66px; height:66px; border-radius:50%; background:#fff; font-size:48px; line-height:1; box-shadow:0 2px 6px rgba(0,0,0,0.35); }
   /* "Custom" colour button at the end of the quick picks */
   .custom-colour-btn{ display:inline-flex; align-items:center; gap:8px; height:38px; padding:0 14px 0 5px; border-radius:19px; border:2px solid var(--line); background:var(--panel); color:var(--ink); font-family:'Inter',sans-serif; font-size:14px; font-weight:600; cursor:pointer; }
   .custom-colour-btn.on{ border:3px solid var(--ink); padding-left:4px; }
@@ -292,6 +292,14 @@
   .live-pulse::after{ content:''; position:absolute; inset:0; border-radius:inherit; border:4px solid #fff; pointer-events:none; z-index:6; animation:livePitchPulse 1.7s ease-in-out infinite; }
   @keyframes livePitchPulse{ 0%,100%{ opacity:0.25; box-shadow:0 0 0 0 rgba(255,255,255,0); } 50%{ opacity:1; box-shadow:0 0 16px 3px rgba(255,255,255,0.7); } }
   @media (prefers-reduced-motion: reduce){ .live-pulse::after{ animation:none; opacity:0.85; } }
+  /* Team v team score in the middle of the live banner. Home side on the left, away side on the right. */
+  .live-banner-score{ display:flex; justify-content:center; align-items:center; gap:12px; margin:10px 0 2px; font-family:'Oswald',sans-serif; }
+  .live-banner-score .lbs-name{ flex:0 1 auto; max-width:40%; font-size:25px; font-weight:600; line-height:1.1; white-space:normal; overflow-wrap:anywhere; min-width:0; }
+  .live-banner-score .lbs-l{ text-align:right; }
+  .live-banner-score .lbs-r{ text-align:left; }
+  .live-banner-score .lbs-score{ flex:none; font-size:40px; font-weight:700; line-height:1; white-space:nowrap; }
+  .whistle-btn{ position:absolute; top:66px; right:14px; width:40px; height:40px; padding:0; background:none; border:none; display:flex; align-items:center; justify-content:center; cursor:pointer; }
+  .whistle-btn .ring{ width:36px; height:36px; border-radius:50%; background:rgba(255,255,255,0.18); border:2.5px solid rgba(255,255,255,0.65); display:flex; align-items:center; justify-content:center; }
   .stoppage-label{ font-size:12px; font-weight:800; letter-spacing:0.14em; color:#FFD54A; margin-top:-2px; }
   .tap-here-tag{ position:absolute; top:8px; right:8px; z-index:5; pointer-events:none; background:rgba(0,0,0,0.6); color:#fff; font-size:11px; font-weight:700; padding:3px 9px; border-radius:10px; letter-spacing:0.02em; }
   .lp-card{ -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
@@ -2890,9 +2898,9 @@ function wireReviewMinutesSort(afterPick, root){
     });
   });
 }
-function renderReviewMinutesSection(f, squad, useActual){
+function renderReviewMinutesSection(f, squad, useActual, title){
   return `
-    <div class="section-title">Review player minutes</div>
+    <div class="section-title"${title?' style="margin-top:0;"':''}>${esc(title || 'Review player minutes')}</div>
     <div class="toggle-group">
       <button type="button" class="${reviewMinutesTab==='byperiod'?'on':''}" data-review-minutes-tab="byperiod">By period</button>
       <button type="button" class="${reviewMinutesTab==='total'?'on':''}" data-review-minutes-tab="total">Total mins</button>
@@ -3648,7 +3656,8 @@ function renderGridPitchEnlargeOverlay(){
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px;">
       <div style="flex:1; display:flex; align-items:center;">
         ${isThisQuarterLive ? `<div class="live-inline-badge"><span style="width:6px; height:6px; border-radius:50%; background:var(--loss);"></span>LIVE</div>`
-          : isPastQuarter ? `<div style="color:var(--ink-soft); font-size:13px; font-weight:600; line-height:1.35;">${esc(periodWord(f))} finished ${qGoalsUs}&ndash;${qGoalsThem}<br>Agg score ${cumUsByQ}&ndash;${cumThemByQ}</div>`
+          : isPastQuarter ? `<div style="color:var(--ink-soft); font-size:13px; font-weight:600; line-height:1.35;">${esc(periodWord(f))} score ${qGoalsUs}&ndash;${qGoalsThem}<br>Agg score ${cumUsByQ}&ndash;${cumThemByQ}</div>`
+          : isFutureQuarter ? `<div style="color:var(--ink-soft); font-size:14px; font-weight:700; line-height:1.35;">Not yet started</div>`
           : ''}
       </div>
       <div style="font-weight:700; font-family:'Oswald',sans-serif; font-size:24px; color:var(--ink); text-align:center;">${esc(periodFullLabel(f, gridPitchEnlargedQuarter))}</div>
@@ -3659,7 +3668,7 @@ function renderGridPitchEnlargeOverlay(){
       </div>
     </div>
     ${isActuallyLive ? `
-    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; align-items:center; gap:6px; margin-bottom:${isThisQuarterLive?'2px':'10px'};">
+    <div style="display:grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); align-items:center; gap:6px; margin-bottom:${isThisQuarterLive?'2px':'10px'};">
       <div style="display:flex; justify-content:flex-start; min-width:0;">
         ${(!isFutureQuarter && gridPitchEnlargedQuarter>1) ? `<button type="button" class="btn ghost small" data-enlarge-prev-quarter style="margin-bottom:0; width:100%; padding-left:6px; padding-right:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">&larr; Review prev Q</button>`
           : isFutureQuarter ? `<button type="button" class="btn ghost small" data-enlarge-return-to-live style="margin-bottom:0; width:100%; padding-left:6px; padding-right:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Return to live</button>` : ''}
@@ -3667,7 +3676,7 @@ function renderGridPitchEnlargeOverlay(){
       <div style="display:flex; justify-content:center; min-width:0;">
         ${isThisQuarterLive ? `<div class="scoreboard" style="background:none; padding:0;"><button type="button" data-enlarge-timer-toggle="${f.id}" title="${f.liveState.running?'Pause':'Start'} clock" class="timer${timerDisplay.stoppage?' stoppage':''}" style="font-family:'Oswald',sans-serif; font-size:22px; font-weight:800; color:${timerDisplay.stoppage?'#FFD54A':'var(--ink)'}; text-align:center; white-space:nowrap; background:none; border:none; padding:0; cursor:pointer;">${timerDisplay.text}</button></div>`
           : isPastQuarter ? `<button type="button" class="btn ghost small" data-enlarge-return-to-live style="margin-bottom:0; width:100%; padding-left:6px; padding-right:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Return to live</button>`
-          : `<button type="button" class="btn amber small" data-start-this-quarter="${gridPitchEnlargedQuarter}" style="margin-bottom:0; width:100%; padding-left:6px; padding-right:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Go live in this ${f.periods===2?'half':'Q'}</button>`}
+          : `<button type="button" class="btn amber small" data-start-this-quarter="${gridPitchEnlargedQuarter}" style="margin-bottom:0; width:auto; padding-left:14px; padding-right:14px; white-space:nowrap;">Start this ${f.periods===2?'half':'quarter'}</button>`}
       </div>
       <div style="display:flex; justify-content:flex-end; min-width:0;">
         ${isThisQuarterLive && isLastQuarter ? `<button type="button" class="btn ghost small" data-enlarge-game-ended style="margin-bottom:0; width:100%; border-color:var(--loss); color:var(--loss);">End game</button>`
@@ -3682,12 +3691,12 @@ function renderGridPitchEnlargeOverlay(){
   // While this period is live the top of the screen is built for reading from arm's length: big period name, clock and
   // score in the middle, the score of each period so far down the left, close (and End game) on the right.
   const scoreLines = isThisQuarterLive ? quarterScoreLines(f, f.liveState.quarter).map(r=>
-    `<div style="font-size:15px; font-weight:${r.q===f.liveState.quarter?800:600}; line-height:1.45; white-space:nowrap;">${f.periods===2 ? 'H'+r.q : 'Q'+r.q}&nbsp;&nbsp;${r.us}&ndash;${r.them}</div>`).join('') : '';
+    `<div style="font-size:14px; font-weight:${r.q===f.liveState.quarter?800:600}; line-height:1.5; white-space:nowrap;">${f.periods===2 ? 'H'+r.q : 'Q'+r.q}&nbsp;&nbsp;${r.us}&ndash;${r.them}</div>`).join('') : '';
   const headerLive = isThisQuarterLive ? `
-    <div style="display:grid; grid-template-columns:1fr auto 1fr; gap:8px; align-items:start; margin-bottom:10px;">
-      <div style="min-width:0;">
-        <div class="live-inline-badge"><span style="width:6px; height:6px; border-radius:50%; background:var(--loss);"></span>LIVE</div>
-        <div style="margin-top:8px;">${scoreLines}</div>
+    <div style="display:grid; grid-template-columns:minmax(104px,1fr) auto minmax(36px,1fr); gap:6px; align-items:start; margin-bottom:10px;">
+      <div style="min-width:0; display:flex; align-items:flex-start; gap:5px;">
+        <div data-score-lines>${scoreLines}</div>
+        <div class="live-inline-badge" style="margin-top:2px; font-size:10.5px; padding:3px 7px; gap:4px;"><span style="width:6px; height:6px; border-radius:50%; background:var(--loss);"></span>LIVE</div>
       </div>
       <div style="text-align:center; min-width:0;">
         <div style="font-weight:700; font-family:'Oswald',sans-serif; font-size:34px; line-height:1.1; color:var(--ink);">${esc(periodFullLabel(f, gridPitchEnlargedQuarter))}</div>
@@ -3792,16 +3801,25 @@ function returnToEventsPopup(eventId){
 function openEventsPopup(fixtureId, editable){
   const f = DATA.fixtures.find(x=>x.id===fixtureId);
   if(!f) return;
-  const evs = [...(f.events||[])].reverse();
+  // Grouped by period, same boxes and labels as the main timeline: latest period first, latest event first inside it.
+  const inReview = reviewMode && reviewFixtureId===f.id;
+  const liveQ = (f.liveState && f.status!=='finished' && !inReview) ? f.liveState.quarter : periodKeys(f).length;
+  const lastEvQ = Math.max(0, ...(f.events||[]).map(e=>e.quarter||0));
+  const showUpTo = Math.max(liveQ, lastEvQ);
+  const groups = periodKeys(f).map((pk,i)=>({q:i+1, evs:[...sortEventsForDisplay((f.events||[]).filter(ev=>ev.quarter===i+1))].reverse()}))
+    .filter(g=>g.q<=showUpTo).reverse();
   const body = `
     <h3>Events</h3>
     <button class="icon-x" data-close-modal>&times;</button>
     <div class="small" style="color:var(--ink-soft); margin:-6px 0 12px;">${editable ? 'Tap the pencil to change a goal or card, or the × to delete an event.' : 'The match timeline.'}</div>
     <div class="events-popup-list" style="max-height:58vh; overflow-y:auto;">
-      <div class="card" style="margin-bottom:0;">
-        ${evs.length===0 ? '<div class="small" style="color:var(--ink-soft); text-align:center; padding:8px;">No events logged yet</div>'
-          : evs.map(ev=>renderEventItem(ev, editable ? f.id : null)).join('')}
-      </div>
+      ${groups.map((g,i)=>`
+      <div style="border:1.5px solid var(--pitch); border-radius:10px; padding:10px; margin-bottom:${i===groups.length-1?'0':'10px'};">
+        <div class="small" style="font-weight:700; color:var(--ink-soft); margin-bottom:6px;">${esc(periodBadgeLabel(f, g.q))}</div>
+        <div class="card" style="margin-bottom:0;">
+          ${g.evs.length>0 ? g.evs.map(ev=>renderEventItem(ev, editable ? f.id : null)).join('') : '<div class="small" style="color:var(--ink-soft); text-align:center; padding:8px;">No events logged</div>'}
+        </div>
+      </div>`).join('')}
     </div>`;
   openModal(body, {floating:true});
   attachModalHandlers();
@@ -4786,19 +4804,10 @@ function renderLive(id){
       }).join('')}
     </div>`}`;
   } else if(liveTab==='mins'){
-    // The two minutes grids (By period, Total mins) open as floaty pop-ups - the same ones as the Player mins
-    // button on the enlarged pitch, sort control included.
-    const chev = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" style="flex-shrink:0; color:var(--ink-soft);"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-    tabHtml = `
-    <div class="section-title" style="margin-top:0;">Player minutes</div>
-    <div class="small" style="color:var(--ink-soft); margin-bottom:12px;">Tap a grid to open it.</div>
-    ${squad.length===0 ? '<div class="card"><div class="small" style="color:var(--ink-soft); padding:12px;">No squad recorded for this match</div></div>' : `
-    <div class="card tap mins-tab-btn" role="button" data-open-mins-grid="byperiod">
-      <div style="flex:1; min-width:0;"><div class="t">By period</div><div class="d">Each player's minutes in every ${periodWord(f).toLowerCase()}, with a sort control</div></div>${chev}
-    </div>
-    <div class="card tap mins-tab-btn" role="button" data-open-mins-grid="total">
-      <div style="flex:1; min-width:0;"><div class="t">Total mins</div><div class="d">Each player's total minutes across the whole match</div></div>${chev}
-    </div>`}`;
+    // The real minutes grids, right here: By period / Total mins sub tabs, with the sort control.
+    tabHtml = squad.length===0
+      ? '<div class="card"><div class="small" style="color:var(--ink-soft); padding:12px;">No squad recorded for this match</div></div>'
+      : renderReviewMinutesSection(f, squad, true, 'Player minutes');
   } else if(liveTab==='lineup'){
     tabHtml = `
     <div class="section-title" style="margin-top:0;">Actual lineup <span style="font-weight:400; color:var(--ink-soft);">— what really happened${unlocked?', edit to fix mistakes':''}</span></div>
@@ -4854,10 +4863,20 @@ function renderLive(id){
     `;
   }
 
+  // Football convention: the home side is named first (left of the score), the away side last. A fixture with no
+  // venue set is treated as home, as it always has been.
+  const awayGame = f.venue==='away';
+  const usNm = esc(teamShort()), oppNm = esc(f.opponent||'TBC');
+  const bannerScore = `<div class="live-banner-score">
+      <div class="lbs-name lbs-l">${awayGame ? oppNm : usNm}</div>
+      <div class="lbs-score">${awayGame ? f.finalScore.them : f.finalScore.us}&nbsp;&ndash;&nbsp;${awayGame ? f.finalScore.us : f.finalScore.them}</div>
+      <div class="lbs-name lbs-r">${awayGame ? usNm : oppNm}</div>
+    </div>`;
+  const whistleIcon = '<svg viewBox="0 0 100 60" width="24" height="15" fill="none"><ellipse cx="34" cy="30" rx="30" ry="22" fill="#fff"/><circle cx="28" cy="30" r="8" fill="rgba(0,0,0,0.45)"/><rect x="58" y="22" width="30" height="16" rx="8" fill="#fff"/><circle cx="90" cy="30" r="9" fill="none" stroke="#fff" stroke-width="6"/></svg>';
   return `
   <div class="topbar" style="position:relative;">
     <div class="backbar" ${isReview ? `data-open-review-exit="${f.id}"` : `data-back-to-fixture="${f.id}"`}>${BACK_ARROW}<span>${isReview ? 'Exit review' : 'Exit live view'}</span></div>
-    <h1>vs ${esc(f.opponent||'TBC')}</h1>
+    ${bannerScore}
     ${isReview ? `<button data-review-save-now="${f.id}" title="Save" style="position:absolute; top:14px; right:14px; background:rgba(255,255,255,0.15); border:none; border-radius:50%; width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:#fff; cursor:pointer;">
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M4 4.5A1.5 1.5 0 015.5 3H15l5 5v10.5a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.5v-14z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8 3v5h7V3" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><rect x="7" y="13" width="10" height="6.5" stroke="currentColor" stroke-width="1.7"/></svg>
     </button>` : ''}
@@ -4867,7 +4886,6 @@ function renderLive(id){
     <div class="scoreboard" style="position:relative;">
       <div class="quarter">${isReview ? 'REVIEW MODE' : periodWord(f).toUpperCase() + ' ' + f.liveState.quarter + ' OF ' + f.periods}</div>
       ${isReview ? '' : `<div class="timer${timerDisplay.stoppage?' stoppage':''}">${timerDisplay.text}</div><div class="stoppage-label" data-stoppage-label style="${timerDisplay.stoppage?'':'display:none;'}">STOPPAGE TIME</div>`}
-      <div class="score">${esc(teamShort().slice(0,10))} ${f.finalScore.us} – ${f.finalScore.them} ${esc((f.opponent||'OPP').slice(0,10))}</div>
       ${isReview ? '' : `<button data-timer-toggle title="${f.liveState.running?'Pause':'Start'} clock" style="position:absolute; top:12px; right:14px; background:none; border:none; padding:0; cursor:pointer; width:40px; height:46px; display:flex; align-items:flex-end; justify-content:center;">
         <div style="position:relative; width:36px; height:36px; border-radius:50%; background:rgba(255,255,255,0.18); border:2.5px solid rgba(255,255,255,0.65); display:flex; align-items:center; justify-content:center;">
           <div style="position:absolute; top:-9px; left:50%; transform:translateX(-50%); width:2px; height:5px; background:rgba(255,255,255,0.65);"></div>
@@ -4875,14 +4893,10 @@ function renderLive(id){
           ${f.liveState.running ? pauseIcon : playIcon}
         </div>
       </button>`}
-      ${isReview ? '' : `
-      <div style="text-align:center; margin-top:12px;">
-        ${atLive
-              ? `<div style="display:flex; justify-content:center; align-items:center; gap:10px; flex-wrap:wrap;">
-                  <button type="button" class="go-live-btn" data-go-live-view><span class="dot"></span>Go Live</button>
-                  ${f.liveState.quarter>=f.periods ? `<button class="btn amber" data-next-quarter style="display:inline-block; width:auto; margin-bottom:0; padding:10px 22px;">End Match</button>` : ''}
-                </div>`
-              : `<button data-view-next-quarter style="background:rgba(255,255,255,0.18); border:1.5px solid rgba(255,255,255,0.65); border-radius:20px; padding:9px 20px; color:#fff; font-weight:700; font-size:13.5px; font-family:'Inter',sans-serif; cursor:pointer;">Review next ${periodWord(f).toLowerCase()} &rarr;</button>`}
+      ${(isReview || f.status==='finished') ? '' : `
+      <button type="button" class="whistle-btn" data-end-game-whistle title="End the match"><div class="ring">${whistleIcon}</div></button>
+      <div style="text-align:center; margin-top:14px;">
+        <button type="button" class="go-live-btn" data-go-live-view><span class="dot"></span>Go Live</button>
       </div>`}
     </div>
 
@@ -4893,13 +4907,6 @@ function renderLive(id){
 
     ${tabHtml}
 
-    ${isReview ? '' : `
-    <div class="section-title">Finish</div>
-    <div class="small" style="color:var(--ink-soft); margin-bottom:10px;">
-      The score above is tallied live from Goal and Oppo goal events — delete an event from the timeline to correct it if anything was logged wrong, any time during or after the match.
-    </div>
-    <button class="btn amber" data-finish-match="${f.id}">End match</button>
-    `}
   </div>`;
 }
 function usedPlayersInQuarter(lineupData, positions, q){
@@ -5373,7 +5380,7 @@ function sortEventsForDisplay(qEvents){
   return keyed.map(x=>x.ev).reverse();
 }
 function renderEventItem(ev, fixtureId){
-  const tags = {goal:'GOAL', sub:'SUB', penalty:'PEN', comment:'NOTE', oppogoal:'OPP GOAL', yellowcard:'🟨 CARD', redcard:'🟥 CARD'};
+  const tags = {goal:'⚽', sub:'SUB', penalty:'PEN', comment:'NOTE', oppogoal:'OPP ⚽', yellowcard:'🟨 CARD', redcard:'🟥 CARD'};
   const time = ev.clockTime ? ev.clockTime : ((typeof ev.minute === 'number') ? `${ev.minute}'` : fmtEventTime(ev.loggedAt));
   let text = '';
   if(ev.type==='goal'){
@@ -5402,7 +5409,7 @@ function renderEventItem(ev, fixtureId){
     <svg viewBox="0 0 24 24" width="14" height="14" fill="none"><path d="M12 20h9" stroke="currentColor" stroke-width="1.8"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
   </button>` : '';
   const delBtn = fixtureId ? `<button class="icon-x" style="position:static; font-size:16px; padding:0 0 0 8px;" data-delete-event="${fixtureId}|${ev.id}">&times;</button>` : '';
-  return `<div class="event-item"><span class="tag">${tags[ev.type]}</span><span style="flex:1;">${text}</span>${editBtn}${delBtn}</div>`;
+  return `<div class="event-item"><span class="tag"${ev.type==='goal' ? ' style="font-size:17px; line-height:1; padding:3px 8px;"' : ''}>${tags[ev.type]}</span><span style="flex:1;">${text}</span>${editBtn}${delBtn}</div>`;
 }
 
 // ---------- RESULTS TAB ----------
@@ -10143,8 +10150,8 @@ function openMarkerInfoModal(fixtureId, quarterKey, pos, useActual){
         // Reusing the exact same event-item look (and tag labels) as the timeline.
         let tag, text;
         const time = (typeof ev.minute === 'number') ? `${ev.minute}'` : '';
-        if(ev.type==='goal' && ev.scorer===p.id){ tag='GOAL'; text = `Scored${time?' — '+time:''}`; }
-        else if(ev.type==='goal' && ev.assist===p.id){ tag='GOAL'; text = `Assisted${time?' — '+time:''}`; }
+        if(ev.type==='goal' && ev.scorer===p.id){ tag='⚽'; text = `Scored${time?' — '+time:''}`; }
+        else if(ev.type==='goal' && ev.assist===p.id){ tag='⚽'; text = `Assisted${time?' — '+time:''}`; }
         else if(ev.type==='yellowcard'){ tag='🟨 CARD'; text = `Yellow card${time?' — '+time:''}`; }
         else if(ev.type==='redcard'){ tag='🟥 CARD'; text = `Red card${time?' — '+time:''}`; }
         else return '';
@@ -12620,7 +12627,7 @@ function attachHandlers(){
       }
     });
   });
-  document.querySelectorAll('[data-enlarge-game-ended]').forEach(btn=>{
+  document.querySelectorAll('[data-enlarge-game-ended], [data-end-game-whistle]').forEach(btn=>{
     btn.addEventListener('click', ()=> openEndGameConfirm(VIEW.params.id));
   });
   document.querySelectorAll('[data-enlarge-return-to-live]').forEach(btn=>{
