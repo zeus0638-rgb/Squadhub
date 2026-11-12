@@ -300,7 +300,15 @@
   .live-banner-score .lbs-score{ flex:none; font-size:40px; font-weight:700; line-height:1; white-space:nowrap; }
   .whistle-btn{ position:absolute; top:66px; right:14px; width:40px; height:40px; padding:0; background:none; border:none; display:flex; align-items:center; justify-content:center; cursor:pointer; }
   .whistle-btn .ring{ width:36px; height:36px; border-radius:50%; background:rgba(255,255,255,0.18); border:2.5px solid rgba(255,255,255,0.65); display:flex; align-items:center; justify-content:center; }
-  .stoppage-label{ font-size:12px; font-weight:800; letter-spacing:0.14em; color:#FFD54A; margin-top:-2px; }
+  .qs-list{ display:flex; flex-direction:column; gap:4px; margin-left:-9px; }   /* the pill's outline hangs out to the left only, so the text lines up with the page edge and nothing pokes into the title */
+  .qs-row{ display:flex; align-items:center; gap:7px; font-size:14px; font-weight:700; line-height:1; padding:4px 7px; border:2px solid transparent; border-radius:999px; white-space:nowrap; }
+  .qs-row .qs-q{ width:22px; }
+  .qs-row .qs-sc{ display:inline-grid; grid-template-columns:minmax(13px,auto) 9px minmax(13px,auto); align-items:center; font-variant-numeric:tabular-nums; }
+  .qs-row .qs-us{ text-align:right; } .qs-row .qs-dash{ text-align:center; } .qs-row .qs-them{ text-align:left; }
+  .qs-row.qs-live{ font-weight:800; border-color:#fff; animation:qsLivePulse 1.7s ease-in-out infinite; }
+  .qs-row .qs-chip{ margin:0; font-size:9.5px; padding:2px 6px; gap:4px; }
+  @keyframes qsLivePulse{ 0%,100%{ border-color:rgba(255,255,255,0.3); box-shadow:0 0 0 0 rgba(255,255,255,0); } 50%{ border-color:#fff; box-shadow:0 0 12px 1px rgba(255,255,255,0.65); } }
+  @media (prefers-reduced-motion: reduce){ .qs-row.qs-live{ animation:none; } }
   .tap-here-tag{ position:absolute; top:8px; right:8px; z-index:5; pointer-events:none; background:rgba(0,0,0,0.6); color:#fff; font-size:11px; font-weight:700; padding:3px 9px; border-radius:10px; letter-spacing:0.02em; }
   .lp-card{ -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
   .go-live-btn{ background:#fff; color:var(--pitch); border:none; border-radius:22px; padding:10px 28px; font-weight:800; font-size:16px; font-family:'Inter',sans-serif; cursor:pointer; display:inline-flex; align-items:center; gap:8px; }
@@ -1256,6 +1264,23 @@ function quarterWatermarkLabel(f, quarterKey){
 function currentEventQuarter(f){
   return getViewingQuarter(f);
 }
+// Every period, one per line: played ones show their score, the live one pulses with LIVE beside it, the rest show #-#.
+function renderPeriodScoreList(f){
+  const liveQ = f.liveState ? f.liveState.quarter : 0;
+  const goals = (q)=>({
+    us: (f.events||[]).filter(e=>e.quarter===q && (e.type==='goal' || (e.type==='penalty' && e.outcome==='Scored'))).length,
+    them: (f.events||[]).filter(e=>e.quarter===q && e.type==='oppogoal').length
+  });
+  return `<div class="qs-list" data-score-lines>${periodKeys(f).map((pk,i)=>{
+    const q = i+1, isLive = q===liveQ, notYet = q>liveQ;
+    const g = goals(q);
+    return `<div class="qs-row${isLive?' qs-live':''}">
+      <span class="qs-q">${f.periods===2 ? 'H'+q : 'Q'+q}</span>
+      <span class="qs-sc"><span class="qs-us">${notYet?'#':g.us}</span><span class="qs-dash">&ndash;</span><span class="qs-them">${notYet?'#':g.them}</span></span>
+      ${isLive ? `<span class="live-inline-badge qs-chip"><span style="width:5px; height:5px; border-radius:50%; background:var(--loss);"></span>LIVE</span>` : ''}
+    </div>`;
+  }).join('')}</div>`;
+}
 function quarterScoreLines(f, upTo){
   // Our goals / their goals scored in each period so far (a scored penalty counts as ours, same as the match score).
   const rows = [];
@@ -1267,16 +1292,11 @@ function quarterScoreLines(f, upTo){
   return rows;
 }
 function liveTimerDisplay(ls){
-  // Shared by every place the live clock is shown (main scoreboard, enlarged pitch
-  // view) so the regular-time and stoppage-time formats never drift apart between them.
-  if(!ls || ls.secondsLeft>0){
-    const secondsLeft = ls ? ls.secondsLeft : 0;
-    const m=Math.floor(secondsLeft/60), s=(secondsLeft%60).toString().padStart(2,'0');
-    return {text:`${m}m ${s}s`, stoppage:false};
-  }
-  const stoppage = ls.stoppageSeconds||0;
-  const sm=Math.floor(stoppage/60), ss=(stoppage%60).toString().padStart(2,'0');
-  return {text:`+${sm}m ${ss}s`, stoppage:true};
+  // Shared by every place the live clock is shown (main scoreboard, enlarged pitch view). There is no
+  // stoppage time: the clock counts down and stops at 0m 00s, the period length set in the match format.
+  const secondsLeft = Math.max(0, ls ? ls.secondsLeft : 0);
+  const m=Math.floor(secondsLeft/60), s=(secondsLeft%60).toString().padStart(2,'0');
+  return {text:`${m}m ${s}s`, stoppage:false};
 }
 function hasRedCard(f, playerId){
   return !!playerId && (f.events||[]).some(e=>e.type==='redcard' && e.player===playerId);
@@ -2863,6 +2883,35 @@ function plannedMinutesByPeriod(fixture, playerId, useActual){
     return {mins, isSub};
   });
 }
+// Minutes each player has actually played in each period right now: finished periods in full, the live period
+// pro-rated by how far into it we are (sub-aware: a starter stops at the sub time, the sub starts from it),
+// periods still to come at nothing. Same sub timing rules as liveMinutesSplit, so the two always agree.
+function liveElapsedInPeriod(f){
+  syncLiveClock(f);
+  const mpp = f.minutesPerPeriod || DEFAULT_CONFIG.minutesPerPeriod;
+  return Math.min(mpp, Math.max(0, (mpp*60 - f.liveState.secondsLeft) / 60));
+}
+function soFarMinutesByPeriod(f, playerId){
+  const mpp = f.minutesPerPeriod || DEFAULT_CONFIG.minutesPerPeriod, half = mpp/2;
+  const curQ = f.liveState.quarter, elapsed = liveElapsedInPeriod(f);
+  const lineup = f.actualLineup || f.lineup;
+  return periodKeys(f).map((q,idx)=>{
+    const qNum = idx+1; let exact = 0, isSub = false;
+    f.positions.forEach(pos=>{
+      const slot = lineup[q] && lineup[q][pos]; if(!slot) return;
+      const a = slot.a, b = (!slot.b || slot.b===slot.a) ? slot.a : slot.b;
+      const swap = (slot.subAt!=null && slot.subAt>0 && slot.subAt<mpp) ? slot.subAt : half;
+      const bDur = mpp - swap;
+      let aMins, bMins;
+      if(qNum < curQ){ aMins = swap; bMins = bDur; }
+      else if(qNum === curQ){ aMins = Math.min(swap, elapsed); bMins = Math.min(bDur, Math.max(0, elapsed - swap)); }
+      else { aMins = 0; bMins = 0; }
+      if(a===playerId) exact += aMins;
+      if(b===playerId){ exact += bMins; if(b!==a) isSub = true; }
+    });
+    return {mins: Math.round(exact), exact, isSub};
+  });
+}
 const REVIEW_MINUTES_SORTS = [
   {value:'minutes-asc',  label:'Minutes: min to max', short:'Min–Max'},
   {value:'minutes-desc', label:'Minutes: max to min', short:'Max–Min'},
@@ -2870,8 +2919,9 @@ const REVIEW_MINUTES_SORTS = [
   {value:'name-desc',    label:'Name: Z–A',           short:'Z–A'}
 ];
 let reviewMinutesSort = 'name-asc';
-function sortedForReviewMinutes(f, squad, useActual){
-  const total = p => plannedMinutesByPeriod(f, p.id, useActual).reduce((a,x)=>a+x.mins, 0);
+function sortedForReviewMinutes(f, squad, useActual, soFar){
+  const total = p => soFar ? Math.round(soFarMinutesByPeriod(f, p.id).reduce((a,x)=>a+x.exact, 0))
+                           : plannedMinutesByPeriod(f, p.id, useActual).reduce((a,x)=>a+x.mins, 0);
   const byName = (a,b)=> (a.name||'').localeCompare(b.name||'', undefined, {sensitivity:'base', numeric:true});
   const list = [...squad];
   switch(reviewMinutesSort){
@@ -2898,9 +2948,13 @@ function wireReviewMinutesSort(afterPick, root){
     });
   });
 }
-function renderReviewMinutesSection(f, squad, useActual, title){
+function renderReviewMinutesSection(f, squad, useActual, title, soFar){
+  const mppNow = f.minutesPerPeriod || DEFAULT_CONFIG.minutesPerPeriod;
+  const elapsedNow = soFar ? liveElapsedInPeriod(f) : 0;
+  const matchSoFar = soFar ? Math.max(1, (f.liveState.quarter-1)*mppNow + elapsedNow) : 0;
   return `
     <div class="section-title"${title?' style="margin-top:0;"':''}>${esc(title || 'Review player minutes')}</div>
+    ${soFar ? `<div class="small" style="color:var(--ink-soft); margin:-4px 0 10px;">Up to now &mdash; ${esc(periodBadgeLabel(f, f.liveState.quarter))}, ${Math.floor(elapsedNow)} of ${mppNow} mins in.</div>` : ''}
     <div class="toggle-group">
       <button type="button" class="${reviewMinutesTab==='byperiod'?'on':''}" data-review-minutes-tab="byperiod">By period</button>
       <button type="button" class="${reviewMinutesTab==='total'?'on':''}" data-review-minutes-tab="total">Total mins</button>
@@ -2916,10 +2970,10 @@ function renderReviewMinutesSection(f, squad, useActual, title){
         </div>
         <div class="small" style="width:38px; flex-shrink:0; text-align:right; font-weight:700; color:var(--ink-soft);">Tot</div>
       </div>
-      ${sortedForReviewMinutes(f, squad, useActual).map(p=>{
-        const perPeriod = plannedMinutesByPeriod(f, p.id, useActual);
+      ${sortedForReviewMinutes(f, squad, useActual, soFar).map(p=>{
+        const perPeriod = soFar ? soFarMinutesByPeriod(f, p.id) : plannedMinutesByPeriod(f, p.id, useActual);
         const mpp = f.minutesPerPeriod || DEFAULT_CONFIG.minutesPerPeriod;
-        const total = perPeriod.reduce((s,x)=>s+x.mins, 0);
+        const total = soFar ? Math.round(perPeriod.reduce((s,x)=>s+x.exact, 0)) : perPeriod.reduce((s,x)=>s+x.mins, 0);
         return `<div class="row" style="padding:6px 0; border-bottom:1px solid var(--line); align-items:center;">
           <div style="width:70px; flex-shrink:0; font-size:12.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(p.name.split(' ')[0])}</div>
           <div style="display:flex; flex:1; gap:5px;">
@@ -2937,9 +2991,9 @@ function renderReviewMinutesSection(f, squad, useActual, title){
       }).join('')}
     </div>` : `
     <div class="card">
-      ${[...squad].sort((a,b)=> computePlannedMinutes(f,b.id,useActual) - computePlannedMinutes(f,a.id,useActual)).map(p=>{
-        const m = computePlannedMinutes(f,p.id,useActual);
-        const total = totalMatchMinutes(f);
+      ${[...squad].sort((a,b)=> soFar ? (liveMinutesSplit(f,b.id).played - liveMinutesSplit(f,a.id).played) : (computePlannedMinutes(f,b.id,useActual) - computePlannedMinutes(f,a.id,useActual))).map(p=>{
+        const m = soFar ? Math.round(liveMinutesSplit(f,p.id).played) : computePlannedMinutes(f,p.id,useActual);
+        const total = soFar ? Math.round(matchSoFar) : totalMatchMinutes(f);
         const pct = Math.min(100, Math.round((m/total)*100));
         const cls = m<total/2?'low':(m>total*0.75?'high':'');
         return `<div class="attr-bar-row">
@@ -3653,15 +3707,13 @@ function renderGridPitchEnlargeOverlay(){
   const cumUsByQ = isPastQuarter ? (f.events||[]).filter(e=>e.type==='goal' && e.quarter<=gridPitchEnlargedQuarter).length : 0;
   const cumThemByQ = isPastQuarter ? (f.events||[]).filter(e=>e.type==='oppogoal' && e.quarter<=gridPitchEnlargedQuarter).length : 0;
   const headerOld = `
-    <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px;">
-      <div style="flex:1; display:flex; align-items:center;">
-        ${isThisQuarterLive ? `<div class="live-inline-badge"><span style="width:6px; height:6px; border-radius:50%; background:var(--loss);"></span>LIVE</div>`
-          : isPastQuarter ? `<div style="color:var(--ink-soft); font-size:13px; font-weight:600; line-height:1.35;">${esc(periodWord(f))} score ${qGoalsUs}&ndash;${qGoalsThem}<br>Agg score ${cumUsByQ}&ndash;${cumThemByQ}</div>`
-          : isFutureQuarter ? `<div style="color:var(--ink-soft); font-size:14px; font-weight:700; line-height:1.35;">Not yet started</div>`
-          : ''}
+    <div style="display:grid; grid-template-columns:minmax(max-content,1fr) auto minmax(36px,1fr); gap:6px; align-items:start; margin-bottom:6px;">
+      <div style="min-width:0;">${isActuallyLive ? renderPeriodScoreList(f) : ''}</div>
+      <div style="text-align:center; min-width:0;">
+        <div style="font-weight:700; font-family:'Oswald',sans-serif; font-size:24px; color:var(--ink);">${esc(periodFullLabel(f, gridPitchEnlargedQuarter))}</div>
+        ${isFutureQuarter ? `<div class="small" style="color:var(--ink-soft); font-weight:700; margin-top:2px;">Not yet started</div>` : ''}
       </div>
-      <div style="font-weight:700; font-family:'Oswald',sans-serif; font-size:24px; color:var(--ink); text-align:center;">${esc(periodFullLabel(f, gridPitchEnlargedQuarter))}</div>
-      <div style="flex:1; text-align:right;">
+      <div style="text-align:right; min-width:0;">
         <button type="button" data-close-grid-pitch-enlarge title="Close" style="background:var(--surface-2); border:none; border-radius:50%; width:32px; height:32px; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; color:var(--ink);">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         </button>
@@ -3690,18 +3742,12 @@ function renderGridPitchEnlargeOverlay(){
 `;
   // While this period is live the top of the screen is built for reading from arm's length: big period name, clock and
   // score in the middle, the score of each period so far down the left, close (and End game) on the right.
-  const scoreLines = isThisQuarterLive ? quarterScoreLines(f, f.liveState.quarter).map(r=>
-    `<div style="font-size:14px; font-weight:${r.q===f.liveState.quarter?800:600}; line-height:1.5; white-space:nowrap;">${f.periods===2 ? 'H'+r.q : 'Q'+r.q}&nbsp;&nbsp;${r.us}&ndash;${r.them}</div>`).join('') : '';
   const headerLive = isThisQuarterLive ? `
-    <div style="display:grid; grid-template-columns:minmax(104px,1fr) auto minmax(36px,1fr); gap:6px; align-items:start; margin-bottom:10px;">
-      <div style="min-width:0; display:flex; align-items:flex-start; gap:5px;">
-        <div data-score-lines>${scoreLines}</div>
-        <div class="live-inline-badge" style="margin-top:2px; font-size:10.5px; padding:3px 7px; gap:4px;"><span style="width:6px; height:6px; border-radius:50%; background:var(--loss);"></span>LIVE</div>
-      </div>
+    <div style="display:grid; grid-template-columns:minmax(max-content,1fr) auto minmax(36px,1fr); gap:6px; align-items:start; margin-bottom:10px;">
+      <div style="min-width:0;">${renderPeriodScoreList(f)}</div>
       <div style="text-align:center; min-width:0;">
         <div style="font-weight:700; font-family:'Oswald',sans-serif; font-size:34px; line-height:1.1; color:var(--ink);">${esc(periodFullLabel(f, gridPitchEnlargedQuarter))}</div>
         <div class="scoreboard" style="background:none; padding:0; margin:0; border-radius:0;"><button type="button" data-enlarge-timer-toggle="${f.id}" title="${f.liveState.running?'Pause':'Start'} clock" class="timer${timerDisplay.stoppage?' stoppage':''}" style="font-family:'Oswald',sans-serif; font-size:48px; font-weight:800; line-height:1.1; margin:2px 0 0; text-align:center; white-space:nowrap; background:none; border:none; padding:0; cursor:pointer;">${timerDisplay.text}</button></div>
-        <div class="stoppage-label" data-stoppage-label style="${timerDisplay.stoppage?'':'display:none;'}">STOPPAGE TIME</div>
         <div style="font-size:24px; font-weight:800; line-height:1.2; color:${scoreStateColor}; margin-top:2px;">${scoreState} ${f.finalScore.us}&ndash;${f.finalScore.them}</div>
         ${isLastQuarter ? `<button type="button" class="btn ghost small" data-enlarge-game-ended style="margin:8px 0 0; width:auto; padding:6px 22px; white-space:nowrap; border-color:var(--loss); color:var(--loss);">End game</button>` : ''}
       </div>
@@ -3715,7 +3761,7 @@ function renderGridPitchEnlargeOverlay(){
   return `
   <div class="pitch-enlarge-overlay" id="grid-pitch-enlarge">
     ${headerHtml}
-    <div id="grid-pitch-enlarge-pitch" class="card pitch-holder ${isThisQuarterLive?'live-pulse':''} ${pitchQuarterTransitionDir===1?'pitch-quarter-fwd':pitchQuarterTransitionDir===-1?'pitch-quarter-back':''}" style="padding:0;">${renderPitchFormation(f, qKey, {showSubs:true, tapEnabled:unlocked, showName:true, fitScreen:true, fitScreenOffset:150, allowReset:unlocked, allowAutoGenerate:isPlanningContext, allowPlayerMins:true, allowEvents:!isPlanningContext, allowOppoGoal:(isActuallyLive || (reviewMode && reviewFixtureId===f.id)), showSwipeHints:true, showQuarterWatermark:true, useActual, lockedUntilReview:!unlocked && !isPlanningContext, allowInfoTap:!unlocked && !isPlanningContext})}</div>
+    <div id="grid-pitch-enlarge-pitch" class="card pitch-holder ${isThisQuarterLive?'live-pulse':''} ${pitchQuarterTransitionDir===1?'pitch-quarter-fwd':pitchQuarterTransitionDir===-1?'pitch-quarter-back':''}" style="padding:0;">${renderPitchFormation(f, qKey, {showSubs:true, tapEnabled:unlocked, showName:true, fitScreen:true, fitScreenOffset:150, allowReset:unlocked, allowAutoGenerate:isPlanningContext, allowPlayerMins:true, minsSoFar:isActuallyLive, allowEvents:!isPlanningContext, allowOppoGoal:(isActuallyLive || (reviewMode && reviewFixtureId===f.id)), showSwipeHints:true, showQuarterWatermark:true, useActual, lockedUntilReview:!unlocked && !isPlanningContext, allowInfoTap:!unlocked && !isPlanningContext})}</div>
     ${renderBenchStripForQuarter(f, qKey, useActual)}
     ${(!unlocked && !isPlanningContext) ? `<div class="small" style="color:var(--ink-soft); text-align:center; margin-top:10px;">Tap "Review &amp; edit match" to correct anything here, or tap a marker for their stats this ${periodWord(f).toLowerCase()}.</div>` : ''}
   </div>`;
@@ -3992,17 +4038,17 @@ function openQuarterQuickLog(fixtureId, qNum, type){
   };
   playerStep();
 }
-function openPlanMinutesReviewModal(fixtureId, useActual, startTab){
+function openPlanMinutesReviewModal(fixtureId, useActual, startTab, soFar){
   const f = DATA.fixtures.find(x=>x.id===fixtureId);
   if(!f) return;
   if(startTab) reviewMinutesTab = startTab;
   const squad = availablePlayersForFixture(f);
   const renderModal = ()=>{
     const body = `
-      <h3>Player minutes</h3>
+      <h3>${soFar ? 'Minutes so far' : 'Player minutes'}</h3>
       <button class="icon-x" data-close-modal>&times;</button>
       <div style="height:54vh; overflow-y:auto;">
-        ${squad.length===0 ? '<div class="small" style="color:var(--ink-soft);">No squad selected for this match yet</div>' : renderReviewMinutesSection(f, squad, useActual)}
+        ${squad.length===0 ? '<div class="small" style="color:var(--ink-soft);">No squad selected for this match yet</div>' : renderReviewMinutesSection(f, squad, useActual, null, soFar)}
       </div>
     `;
     openModal(body, {floating:true});
@@ -4885,7 +4931,7 @@ function renderLive(id){
   <div class="content">
     <div class="scoreboard" style="position:relative;">
       <div class="quarter">${isReview ? 'REVIEW MODE' : periodWord(f).toUpperCase() + ' ' + f.liveState.quarter + ' OF ' + f.periods}</div>
-      ${isReview ? '' : `<div class="timer${timerDisplay.stoppage?' stoppage':''}">${timerDisplay.text}</div><div class="stoppage-label" data-stoppage-label style="${timerDisplay.stoppage?'':'display:none;'}">STOPPAGE TIME</div>`}
+      ${isReview ? '' : `<div class="timer${timerDisplay.stoppage?' stoppage':''}">${timerDisplay.text}</div>`}
       ${isReview ? '' : `<button data-timer-toggle title="${f.liveState.running?'Pause':'Start'} clock" style="position:absolute; top:12px; right:14px; background:none; border:none; padding:0; cursor:pointer; width:40px; height:46px; display:flex; align-items:flex-end; justify-content:center;">
         <div style="position:relative; width:36px; height:36px; border-radius:50%; background:rgba(255,255,255,0.18); border:2.5px solid rgba(255,255,255,0.65); display:flex; align-items:center; justify-content:center;">
           <div style="position:absolute; top:-9px; left:50%; transform:translateX(-50%); width:2px; height:5px; background:rgba(255,255,255,0.65);"></div>
@@ -5325,8 +5371,8 @@ function renderPitchFormation(f, quarterKey, opts){
   const overlayButtons = [
     opts.allowFullscreen ? `<button type="button" data-open-plan-pitch-fullscreen ${opts.useActual?'data-use-actual="true"':''} ${opts.lockedUntilReview?'data-locked="true"':''} style="${overlayBtnStyle}">Full screen</button>` : '',
     opts.allowPlayerMins ? (opts.allowEvents
-      ? `<div data-overlay-col style="flex:1; min-width:0; display:flex; flex-direction:column; gap:6px;"><button type="button" data-view-player-mins="${f.id}" ${opts.useActual?'data-use-actual="true"':''} style="${overlayBtnStyle} flex:none; width:100%;">Player mins</button><button type="button" data-view-events="${f.id}" data-events-editable="${opts.allowReset?'true':'false'}" style="${overlayBtnStyle} flex:none; width:100%;">Events</button></div>`
-      : `<button type="button" data-view-player-mins="${f.id}" ${opts.useActual?'data-use-actual="true"':''} style="${overlayBtnStyle}">Player mins</button>`) : '',
+      ? `<div data-overlay-col style="flex:1; min-width:0; display:flex; flex-direction:column; gap:6px;"><button type="button" data-view-player-mins="${f.id}" ${opts.useActual?'data-use-actual="true"':''} ${opts.minsSoFar?'data-mins-so-far="true"':''} style="${overlayBtnStyle} flex:none; width:100%;">Player mins</button><button type="button" data-view-events="${f.id}" data-events-editable="${opts.allowReset?'true':'false'}" style="${overlayBtnStyle} flex:none; width:100%;">Events</button></div>`
+      : `<button type="button" data-view-player-mins="${f.id}" ${opts.useActual?'data-use-actual="true"':''} ${opts.minsSoFar?'data-mins-so-far="true"':''} style="${overlayBtnStyle}">Player mins</button>`) : '',
     opts.allowOppoGoal ? `<button type="button" data-log-oppo-goal-marker="${f.id}|${quarterNumForOppoGoal}" style="${oppoGoalBtnStyle}">🥅 Oppo goal</button>` : '',
     (opts.allowAutoGenerate && !opts.useActual) ? `<button type="button" data-open-spread-minutes="${f.id}" style="${overlayBtnStyle}">Auto-generate</button>` : '',
     opts.allowReset ? `<button type="button" data-reset-pitch-formation="${posKey}" style="${overlayBtnStyle}">Reset markers</button>` : ''
@@ -7661,8 +7707,8 @@ function commitMatchStart(fixtureId, quarter, secondsLeft, actualStartTime, stop
   if(!f.actualLineup) f.actualLineup = JSON.parse(JSON.stringify(f.lineup));
   f.liveState.quarter = quarter;
   f.liveState.secondsLeft = secondsLeft;
-  f.liveState.stoppageSeconds = stoppageSeconds || 0;
-  setLiveRunning(f, true);
+  f.liveState.stoppageSeconds = 0;
+  setLiveRunning(f, secondsLeft > 0);
   f.liveState.actualStartTime = actualStartTime || null;
   saveData();
   closeModal();
@@ -8196,10 +8242,9 @@ function goLiveFromTime(fixtureId, quarter, timeVal, exactElapsedSeconds){
   if(rawElapsed < 0) timeVal = nowHHMM();                       // a start time in the future just means "starting now"
   const elapsed = Math.max(0, rawElapsed);
   const secondsLeft = Math.max(0, mpp*60 - elapsed);
-  const stoppage = Math.max(0, elapsed - mpp*60);            // already past the end of regular time
   closeModal();
   showKickoffAnimation();
-  setTimeout(()=>{ commitMatchStart(fixtureId, quarter, secondsLeft, timeVal, stoppage); }, 350);
+  setTimeout(()=>{ commitMatchStart(fixtureId, quarter, secondsLeft, timeVal); }, 350);
 }
 // "Match is starting now": did it kick off at the scheduled time? -> Go live?  /  No -> set the time -> Go live?
 function openKickoffTimeConfirm(fixtureId, step, chosenTime){
@@ -12734,7 +12779,7 @@ function attachHandlers(){
   const fixtureEditorLink = document.querySelector('[data-open-fixture-editor-link]');
   if(fixtureEditorLink) fixtureEditorLink.addEventListener('click', ()=> go(VIEW.tab,'fixtureEditor',{id:fixtureEditorLink.dataset.openFixtureEditorLink}));
   document.querySelectorAll('[data-view-player-mins]').forEach(btn=>{
-    btn.addEventListener('click', ()=> openPlanMinutesReviewModal(btn.dataset.viewPlayerMins, btn.dataset.useActual==='true'));
+    btn.addEventListener('click', ()=> openPlanMinutesReviewModal(btn.dataset.viewPlayerMins, btn.dataset.useActual==='true', undefined, btn.dataset.minsSoFar==='true'));
   });
   document.querySelectorAll('[data-view-events]').forEach(btn=>{
     btn.addEventListener('click', ()=> openEventsPopup(btn.dataset.viewEvents, btn.dataset.eventsEditable==='true'));
@@ -12889,14 +12934,15 @@ let _lastPaintedClock = '';
 function syncLiveClock(f){
   const ls = f && f.liveState;
   if(!ls || !ls.running) return false;
+  ls.stoppageSeconds = 0;                                           // stoppage time no longer exists (older saved matches may still carry some)
+  if(ls.secondsLeft <= 0){ ls.secondsLeft = 0; ls.running = false; ls.lastTickAt = null; return true; }
   const now = Date.now();
   if(!ls.lastTickAt || now < ls.lastTickAt){ ls.lastTickAt = now; return false; }   // first run, or the phone's clock was set back
-  let delta = Math.floor((now - ls.lastTickAt) / 1000);
+  const delta = Math.floor((now - ls.lastTickAt) / 1000);
   if(delta <= 0) return false;
   ls.lastTickAt += delta * 1000;                                    // keep the sub-second remainder for next time
-  const used = Math.min(ls.secondsLeft, delta);
-  ls.secondsLeft -= used; delta -= used;
-  if(delta > 0) ls.stoppageSeconds = (ls.stoppageSeconds || 0) + delta;   // regular time is up: count stoppage time
+  ls.secondsLeft = Math.max(0, ls.secondsLeft - delta);
+  if(ls.secondsLeft === 0){ ls.running = false; ls.lastTickAt = null; }   // time is up: the clock stops itself at the format's length
   return true;
 }
 function setLiveRunning(f, on){
@@ -12911,13 +12957,15 @@ function paintLiveClock(f, force){
   // Updates every matching element, not just the first - the enlarged pitch view
   // shows its own copy of this same clock, and both need to tick together.
   document.querySelectorAll('.scoreboard .timer').forEach(t=>{ t.textContent = d.text; t.classList.toggle('stoppage', d.stoppage); });
-  document.querySelectorAll('[data-stoppage-label]').forEach(el=>{ el.style.display = d.stoppage ? '' : 'none'; });
   updateLiveMinutesTracker(f);
 }
 function resyncLiveClockNow(){
   // Called when the app comes back to the front (screen unlocked, app switched back to, page restored).
   const f = timerFixtureId ? DATA.fixtures.find(x=>x.id===timerFixtureId) : null;
-  if(f && f.liveState && f.liveState.running){ syncLiveClock(f); paintLiveClock(f, true); }
+  if(f && f.liveState && f.liveState.running){
+    syncLiveClock(f); paintLiveClock(f, true);
+    if(!f.liveState.running){ saveData(); stopTimer(); render(); }      // the period's time ran out while the app was away
+  }
 }
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) resyncLiveClockNow(); });
 window.addEventListener('focus', resyncLiveClockNow);
@@ -12931,6 +12979,7 @@ function startTimer(fixtureId){
     if(!f || !f.liveState || !f.liveState.running){ stopTimer(); return; }
     syncLiveClock(f);
     paintLiveClock(f);
+    if(!f.liveState.running){ saveData(); stopTimer(); render(); return; }   // time's up: the clock has stopped itself at 0m 00s
     if(Date.now() - lastSavedAt >= 10000){ lastSavedAt = Date.now(); saveData(); }
   };
   tick();                                    // catch up and paint straight away
