@@ -4019,7 +4019,7 @@ function openManageQuarterModal(fixtureId, qNum){
   const inReview = reviewMode && reviewFixtureId===f.id;
   const word = periodWord(f).toLowerCase();
   const liveQ = (f.liveState && f.status!=='finished' && !inReview) ? f.liveState.quarter : null;
-  const canStart = !inReview && f.status!=='finished' && liveQ!==null && liveQ!==qNum;
+  const canStart = !inReview && f.status!=='finished' && liveQ!==null && qNum>liveQ;
   const body = `
     <h3>Manage ${word}</h3>
     <button class="icon-x" data-close-modal>&times;</button>
@@ -4150,11 +4150,14 @@ function openQuarterQuickLog(fixtureId, qNum, type){
     const body = `
       <h3>${title}</h3>
       <button class="icon-x" data-close-modal>&times;</button>
+      ${type==='goal' ? `<button type="button" data-ql-oppo-goal style="position:absolute; top:16px; right:54px; background:var(--surface-2); color:var(--ink); border:1px solid var(--line); border-radius:16px; padding:6px 12px; font-size:13px; font-weight:700; cursor:pointer;">&#129349; Oppo goal</button>` : ''}
       <div class="small" style="color:var(--ink-soft); margin:-6px 0 12px;">${esc(periodFullLabel(f, qNum))}</div>
       ${eligible.length===0 ? `<div class="small" style="color:var(--ink-soft);">No one is recorded on the pitch for this ${word} yet. Open it and set the lineup first.</div>`
         : `<div class="card" style="max-height:55vh; overflow-y:auto; margin-bottom:0;">${playerRows(eligible, 'data-ql-player')}</div>`}`;
     openModal(body, {floating:true});
     attachModalHandlers();
+    const oppoBtn = document.querySelector('#modal-root [data-ql-oppo-goal]');
+    if(oppoBtn) oppoBtn.onclick = ()=>{ closeModal(); openLogOppoGoalConfirm(fixtureId, qNum); };
     document.querySelectorAll('[data-ql-player]').forEach(el=>{
       el.addEventListener('click', ()=>{
         const player = getPlayer(el.dataset.qlPlayer);
@@ -4828,7 +4831,8 @@ function renderMatchSetup(id){
     ${squad.length===0 ? `<div class="small" style="color:var(--ink-soft);">No one's marked available for this match yet — mark players in the <span data-match-setup-tab="availability" style="color:var(--pitch); text-decoration:underline; cursor:pointer;">Player availability</span> tab first.</div>` : `
     <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px;">
       ${gPeriods.map((qk,i)=>`
-        <div class="card tap" data-enlarge-grid-pitch="${i+1}" style="padding:0; overflow:hidden;">
+        <div class="card tap" data-enlarge-grid-pitch="${i+1}" style="padding:0; overflow:hidden; position:relative;">
+          <div class="pitch-cover"><span class="pitch-cover-label">Open ${esc(periodBadgeLabel(f, i+1))}</span></div>
           ${renderPitchFormation(f, qk, {showSubs:true, showName:true, fitScreen:false, showQuarterWatermark:true})}
         </div>`).join('')}
     </div>
@@ -4886,9 +4890,9 @@ function renderMatchSetup(id){
   </div>
   <div class="content">
     <div class="toggle-group">
-      <button type="button" class="${tab==='details'?'on':''}" data-match-setup-tab="details">Match details</button>
-      <button type="button" class="${tab==='gridpitch'?'on':''}" data-match-setup-tab="gridpitch">Pitch view</button>
-      <button type="button" class="${tab==='availability'?'on':''}" data-match-setup-tab="availability">Player availability</button>
+      <button type="button" class="${tab==='details'?'on':''}" data-match-setup-tab="details">1. Match details</button>
+      <button type="button" class="${tab==='availability'?'on':''}" data-match-setup-tab="availability">2. Player availability</button>
+      <button type="button" class="${tab==='gridpitch'?'on':''}" data-match-setup-tab="gridpitch">3. Pitch view</button>
     </div>
     <div id="match-setup-tabs-area" style="touch-action:pan-y;">
       ${tabHtml}
@@ -4929,7 +4933,6 @@ function renderLive(id){
     ? [{id:'timeline', label:'Timeline'}, {id:'report', label:'Match report'}, {id:'test', label:'Pitch view'}, {id:'awards', label:'Awards'}]
     : [{id:'timeline', label:'Timeline'}, {id:'test', label:'Manage game'}, {id:'mins', label:'Player mins'}];
   if(!isReview && liveTab==='lineup') liveTab = 'test';      // the Grid view tab no longer exists
-  subTabsHtml = `<div class="toggle-group subtabs-row">${tabs.map(t=>`<button type="button" class="${liveTab===t.id?'on':''}" data-live-tab="${t.id}">${t.label}</button>`).join('')}</div>`;
   let tabHtml = '';
   if(liveTab==='timeline'){
     if(isReview){
@@ -5063,7 +5066,7 @@ function renderLive(id){
     </button>` : ''}
   </div>
   ${isReview ? `<div style="background:var(--amber-soft); padding:9px 20px; font-size:12.5px; color:var(--ink); text-align:center;">Reviewing a finished match — nothing here is live. Changes save as you make them; tap "Exit review" above when you're done.</div>` : ''}
-  <div class="content has-subtabs">
+  <div class="content">
     <div class="scoreboard" style="position:relative;">
       <div class="quarter">${isReview ? 'REVIEW MODE' : periodWord(f).toUpperCase() + ' ' + f.liveState.quarter + ' OF ' + f.periods}</div>
       ${isReview ? '' : `<div class="timer${timerDisplay.stoppage?' stoppage':''}">${timerDisplay.text}</div>`}
@@ -5799,6 +5802,10 @@ function renderResultDetail(id){
     </div>
 
     <div class="${(tab==='timeline' || tab==='report') ? 'fs-area fs-map' : ''}">
+    <div class="toggle-group">
+      ${tabs.map(t=>`<button type="button" class="${liveTab===t.id?'on':''}" data-live-tab="${t.id}">${t.label}</button>`).join('')}
+    </div>
+
     ${tabHtml}
     </div>
   </div>`;
@@ -13474,8 +13481,8 @@ function attachHandlers(){
         if(!msTrackingOk) return;
         const dx = e.clientX - msStartX, dy = e.clientY - msStartY;
         if(Math.abs(dx) > 60 && Math.abs(dy) < 60){
-          if(dx < 0 && matchSetupTab==='gridpitch'){ matchSetupTab = 'availability'; render(); }
-          else if(dx > 0 && matchSetupTab==='availability'){ matchSetupTab = 'gridpitch'; render(); }
+          if(dx < 0 && matchSetupTab==='availability'){ matchSetupTab = 'gridpitch'; render(); }
+          else if(dx > 0 && matchSetupTab==='gridpitch'){ matchSetupTab = 'availability'; render(); }
         }
       });
     }
