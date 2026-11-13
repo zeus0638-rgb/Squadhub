@@ -5084,6 +5084,9 @@ function renderLive(id){
       </div>`}
     </div>
 
+    <div class="toggle-group">
+      ${tabs.map(t=>`<button type="button" class="${liveTab===t.id?'on':''}" data-live-tab="${t.id}">${t.label}</button>`).join('')}
+    </div>
 
     ${tabHtml}
 
@@ -5802,10 +5805,6 @@ function renderResultDetail(id){
     </div>
 
     <div class="${(tab==='timeline' || tab==='report') ? 'fs-area fs-map' : ''}">
-    <div class="toggle-group">
-      ${tabs.map(t=>`<button type="button" class="${liveTab===t.id?'on':''}" data-live-tab="${t.id}">${t.label}</button>`).join('')}
-    </div>
-
     ${tabHtml}
     </div>
   </div>`;
