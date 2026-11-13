@@ -4534,7 +4534,7 @@ function renderHomeTab(){
           </div>`).join('')}
       </div>`}
     </div>
-    <div style="margin-top:22px; padding:14px 16px; border-radius:12px; background:var(--surface-2); text-align:center; font-size:16px; line-height:1.45; color:var(--ink);"><strong>Tip:</strong> everything is 'tappable' &mdash; names, icons, banners &mdash; give it a try!</div>`;
+    <div style="margin-top:26px; padding:0 8px; text-align:center; font-size:16px; line-height:1.55; color:var(--ink);"><div><strong>Tip:</strong></div><div>Everything across the app is 'tappable'</div><div style="color:var(--ink-soft);">Next match, tiles, form guide, matches, player names etc</div><div>Give it a try!</div></div>`;
   } else if(tab==='playerstats'){
     tabHtml = renderPlayerStatsContent(seasonFixtures);
   }
@@ -8195,7 +8195,26 @@ function refreshMinsTab(){
 setInterval(()=>{ try{ checkSubReminders(); serverRemindersTick(); syncWakeLock(); refreshMinsTab(); }catch(e){} }, 1000);
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) syncWakeLock(); });
 if('serviceWorker' in navigator && /^https?:/.test(location.protocol)){
-  window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });   // sw.js sits next to index.html
+  window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
+  // Stale-page guard: installed/Play Store copies can hold on to an old index.html. Ask the
+  // server (bypassing every cache) which build is live and reload once if this isn't it.
+  const BUILD_ID = '2026-11-13-2214';
+  const checkForNewBuild = async ()=>{
+    try{
+      if(!navigator.onLine) return;
+      const r = await fetch('index.html?cb=' + Date.now(), {cache:'no-store'});
+      if(!r.ok) return;
+      const m = (await r.text()).match(/const BUILD_ID = '([^']+)'/);
+      if(m && m[1] !== BUILD_ID){
+        const k = 'squadhub_reloaded_for_' + m[1];
+        if(sessionStorage.getItem(k)) return;
+        sessionStorage.setItem(k, '1');
+        location.replace(location.pathname + '?v=' + encodeURIComponent(m[1]));
+      }
+    }catch(e){}
+  };
+  window.addEventListener('load', ()=> setTimeout(checkForNewBuild, 1500));
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) checkForNewBuild(); });   // sw.js sits next to index.html
 }
 // ---------- Phone notifications from the server (arrive even when the app is closed) ----------
 function pushSupported(){ return !!(('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window)); }
