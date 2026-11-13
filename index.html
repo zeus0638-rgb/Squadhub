@@ -135,6 +135,10 @@
     z-index:30;
     transition:transform 0.25s ease;
   }
+  .tabbar{ flex-wrap:wrap; }
+  .tabbar .subtabs-row{ flex:0 0 100%; margin:0; border-radius:0; border-width:0 0 1px 0; }
+  .tabbar .subtabs-row button{ padding:11px 4px; }
+  .content.has-subtabs{ padding-bottom:150px; }
   .tabbar.tabbar-hidden{
     transform:translateX(-50%) translateY(100%);
   }
@@ -429,6 +433,8 @@
   .scoreboard .timer{font-size:48px; font-weight:600; margin:4px 0;}
   .scoreboard .timer.stoppage{color:#FFD54A;}
   .scoreboard .score{font-size:22px; font-weight:600; margin-top:4px;}
+  .scoreboard.result-banner .score{font-size:44px !important;}
+  html.text-large .fs-area .scoreboard.result-banner .score{font-size:52px !important;}
   .clockbtns{display:flex; gap:8px; margin-bottom:16px;}
   .clockbtns .btn{flex:1;}
   .eventbtns{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:16px;}
@@ -3261,12 +3267,7 @@ function showPeriodAnimation(fixture){
 function showFullTimeAnimation(){
   const overlay = document.createElement('div');
   overlay.className = 'celebration-overlay';
-  const whistleSvg = `<svg class="whistle-icon" viewBox="0 0 100 60" width="66" height="40" fill="none">
-    <ellipse cx="34" cy="30" rx="30" ry="22" fill="#fff"/>
-    <circle cx="28" cy="30" r="8" fill="#333"/>
-    <rect x="58" y="22" width="30" height="16" rx="8" fill="#fff"/>
-    <circle cx="90" cy="30" r="9" fill="none" stroke="#fff" stroke-width="6"/>
-  </svg>`;
+  const whistleSvg = `<svg class="whistle-icon" viewBox="0 0 100 60" width="66" height="40" fill="none"><path d="M6 24h46l8-6h22c9 0 16 8 16 17 0 10-8 18-18 18-9 0-16-5-19-12H6z" fill="#fff"/><path d="M6 24h46v8H6z" fill="#fff"/><circle cx="76" cy="36" r="9" fill="#333"/><path d="M52 24l8-6" stroke="#333" stroke-width="2"/><rect x="26" y="28" width="16" height="3" rx="1.5" fill="#333"/><circle cx="86" cy="12" r="6" fill="none" stroke="#fff" stroke-width="3.5"/></svg>`;
   overlay.innerHTML = `<div class="period-text">${whistleSvg}<div>FULL TIME</div></div>`;
   document.body.appendChild(overlay);
   setTimeout(()=>{ overlay.classList.add('fade-out'); }, 1800);
@@ -3832,9 +3833,8 @@ function renderGridPitchEnlargeOverlay(){
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         </button>
       </div>
-      ${isActuallyLive && (isFutureQuarter || gridPitchEnlargedQuarter>1) ? `
+      ${isActuallyLive && isFutureQuarter ? `
       <div style="grid-column:2 / span 2; grid-row:2; align-self:end; margin-bottom:2px; display:flex; flex-wrap:wrap; justify-content:flex-start; gap:6px; min-width:0;">
-        ${!isFutureQuarter ? `<button type="button" class="btn ghost small" data-enlarge-prev-quarter style="margin:0; width:auto; padding:7px 10px; font-size:12.5px; white-space:nowrap;">&larr; Review prev Q</button>` : ''}
         ${isFutureQuarter ? `<button type="button" class="btn amber small" data-start-this-quarter="${gridPitchEnlargedQuarter}" style="margin:0; width:auto; padding:7px 10px; font-size:12.5px; white-space:nowrap;">Start this ${f.periods===2?'half':'quarter'}</button>` : ''}
         ${(isFutureQuarter && isLastQuarter) ? `<button type="button" class="btn ghost small" data-enlarge-game-ended style="margin:0; width:auto; padding:7px 10px; font-size:12.5px; white-space:nowrap; border-color:var(--loss); color:var(--loss);">End game</button>` : ''}
       </div>` : ''}
@@ -4291,10 +4291,18 @@ const TAB_DEFS = [
   {id:'coaches', label:'Coaches', icon:'<circle cx="12" cy="9" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M9 13l-2 7 5-3 5 3-2-7" fill="none" stroke="currentColor" stroke-width="1.6"/>'},
   {id:'team', label:'Settings', icon:'<circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M19.4 13a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V19a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H4a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H10a1.65 1.65 0 001-1.51V4a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V10a1.65 1.65 0 001.51 1H20a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z" fill="none" stroke="currentColor" stroke-width="1.6"/>'}
 ];
+const HOME_SUBTABS = [
+  {id:'teamstats', label:'Season stats'},
+  {id:'fixtures', label:'Fixtures'},
+  {id:'results', label:'Results'},
+  {id:'playerstats', label:'Player stats'}
+];
 function renderTabBar(){
   const hasPendingMatchToday = todaysFixtures().some(f=>f.status!=='finished');
   const visibleTabs = myEffectivePermission()==='admin' ? TAB_DEFS : TAB_DEFS.filter(t=>t.id!=='team');
-  return `<div class="tabbar">${visibleTabs.map(t=>{
+  const showSubTabs = !VIEW.screen && (VIEW.tab==='home' || VIEW.tab==='fixtures' || VIEW.tab==='results');
+  const subTabsHtml = showSubTabs ? `<div class="toggle-group subtabs-row">${HOME_SUBTABS.map(t=>`<button type="button" class="${homeTab===t.id?'on':''}" data-home-tab="${t.id}">${t.label}</button>`).join('')}</div>` : '';
+  return `<div class="tabbar${showSubTabs?' has-subtabs':''}">${subTabsHtml}${visibleTabs.map(t=>{
     const isActive = VIEW.tab===t.id || (t.id==='home' && (VIEW.tab==='fixtures' || VIEW.tab==='results'));
     const vibrate = (t.id==='matchday' && hasPendingMatchToday) ? 'icon-vibrate' : '';
     return `
@@ -4521,10 +4529,7 @@ function renderHomeTab(){
       <div class="nm-date" style="margin-top:1px;">${fmtDate(nextMatch.dateTime)}</div>
     </div>` : ''}
   </div>
-  <div class="content fs-area">
-    <div class="toggle-group">
-      ${tabs.map(t=>`<button type="button" class="${tab===t.id?'on':''}" data-home-tab="${t.id}">${t.label}</button>`).join('')}
-    </div>
+  <div class="content fs-area has-subtabs">
     <div class="season-chip-wrap">${seasonChipHtml('home', homeSeasonFilter)}</div>
     ${tabHtml}
   </div>`;
@@ -5020,7 +5025,7 @@ function renderLive(id){
       <div class="lbs-score">${awayGame ? f.finalScore.them : f.finalScore.us}&nbsp;&ndash;&nbsp;${awayGame ? f.finalScore.us : f.finalScore.them}</div>
       <div class="lbs-name lbs-r">${awayGame ? usNm : oppNm}</div>
     </div>`;
-  const whistleIcon = '<svg viewBox="0 0 100 60" width="24" height="15" fill="none"><ellipse cx="34" cy="30" rx="30" ry="22" fill="#fff"/><circle cx="28" cy="30" r="8" fill="rgba(0,0,0,0.45)"/><rect x="58" y="22" width="30" height="16" rx="8" fill="#fff"/><circle cx="90" cy="30" r="9" fill="none" stroke="#fff" stroke-width="6"/></svg>';
+  const whistleIcon = '<svg viewBox="0 0 100 60" width="26" height="16" fill="none"><path d="M6 24h46l8-6h22c9 0 16 8 16 17 0 10-8 18-18 18-9 0-16-5-19-12H6z" fill="#fff"/><path d="M6 24h46v8H6z" fill="#fff"/><circle cx="76" cy="36" r="9" fill="rgba(0,0,0,0.45)"/><path d="M52 24l8-6" stroke="rgba(0,0,0,0.45)" stroke-width="2"/><rect x="26" y="28" width="16" height="3" rx="1.5" fill="rgba(0,0,0,0.45)"/><circle cx="86" cy="12" r="6" fill="none" stroke="#fff" stroke-width="3.5"/></svg>';
   return `
   <div class="topbar" style="position:relative;">
     <div class="backbar" ${isReview ? `data-open-review-exit="${f.id}"` : `data-back-to-fixture="${f.id}"`}>${BACK_ARROW}<span>${isReview ? 'Exit review' : 'Exit live view'}</span></div>
@@ -5756,13 +5761,12 @@ function renderResultDetail(id){
   </div>
   <div class="content">
     <div class="fs-area fs-map">
-    <div class="scoreboard" style="padding:14px 16px;">
-      <div class="quarter">FULL TIME</div>
-      <div class="score" style="font-size:28px;">${f.finalScore.us} – ${f.finalScore.them}</div>
-      <div style="margin-top:6px; display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap;">
-        <span class="pill ${res}">${res.toUpperCase()}</span>
-        <span style="font-size:11px; color:rgba(255,255,255,0.85); font-weight:600;">${periodKeys(f).map((q,i)=>`${periodBadgeLabel(f, i+1)} ${stats.goalsByQuarter[i+1]}-${stats.oppoGoalsByQuarter[i+1]}`).join(' · ')}</span>
-      </div>
+    <div class="scoreboard result-banner" style="padding:18px 16px 16px; position:relative;">
+      <span class="pill ${res}" style="position:absolute; top:12px; right:12px; font-size:13px; padding:5px 12px;">${res.toUpperCase()}</span>
+      <div class="quarter" style="font-size:22px;">FULL TIME</div>
+      <div class="score" style="font-size:44px; line-height:1.1; margin-top:6px;">${f.venue==='away' ? `${f.finalScore.them} – ${f.finalScore.us}` : `${f.finalScore.us} – ${f.finalScore.them}`}</div>
+      <div style="margin-top:8px; font-size:15px; color:rgba(255,255,255,0.92); font-weight:700;">${periodKeys(f).map((q,i)=>`${periodBadgeLabel(f, i+1)} ${f.venue==='away' ? `${stats.oppoGoalsByQuarter[i+1]}-${stats.goalsByQuarter[i+1]}` : `${stats.goalsByQuarter[i+1]}-${stats.oppoGoalsByQuarter[i+1]}`}`).join(' · ')}</div>
+    </div>
     </div>
 
     <div class="toggle-group" style="margin-bottom:12px;">
@@ -6373,11 +6377,12 @@ function renderCoachesTab(){
     const displayedCoaches = seasonCoaches;
     const activity = qualificationActivity();
     tabHtml = `
+    <div class="section-title" style="margin-top:0;">Coach Qualifications Status</div>
     <div class="stat-grid" style="grid-template-columns:repeat(2,1fr);">
       <div class="stat-box tap" data-open-expired-quals style="cursor:pointer;"><div class="v" style="color:var(--loss);">${qs.expired}</div><div class="l">EXPIRED</div></div>
-      <div class="stat-box"><div class="v" style="color:var(--draw);">${qs.expiring}</div><div class="l">EXPIRING ≤6MO</div></div>
+      <div class="stat-box tap" data-open-qual-status="expiring" style="cursor:pointer;"><div class="v" style="color:var(--draw);">${qs.expiring}</div><div class="l">EXPIRING ≤6MO</div></div>
       <div class="stat-box tap" data-open-missing-quals style="cursor:pointer;"><div class="v" style="color:var(--loss);">${qs.missing}</div><div class="l">MISSING</div></div>
-      <div class="stat-box"><div class="v" style="color:var(--win);">${qs.valid}</div><div class="l">VALID</div></div>
+      <div class="stat-box tap" data-open-qual-status="valid" style="cursor:pointer;"><div class="v" style="color:var(--win);">${qs.valid}</div><div class="l">VALID</div></div>
     </div>
 
     <div class="season-chip-wrap">${seasonChipHtml('coaches', coachesSeasonFilter)}</div>
@@ -6386,15 +6391,13 @@ function renderCoachesTab(){
       ${displayedCoaches.length===0 ? `<div class="small" style="color:var(--ink-soft);">No coaches to show.</div>` :
         displayedCoaches.map(c=>`
         <div style="padding:6px 0; border-bottom:1px solid var(--line);">
-          <div class="player-row tap" data-open-coach-quals-modal="${c.id}" style="border:none; padding:0;">
+          <div class="player-row tap" data-open-coach-edit="${c.id}" style="border:none; padding:0;">
             ${coachAvatarHtml(c)}
             <div style="flex:1; min-width:0;">
               <div class="pname" style="display:flex; align-items:center; justify-content:space-between; gap:8px;"><span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(c.name || 'Unnamed coach')}</span>${qualifiedIdSet===null ? '' : `<span class="pill ${qualifiedIdSet.has(c.id)?'win':'loss'}" style="flex-shrink:0;">${qualifiedIdSet.has(c.id)?'Qualified':'Unqualified'}</span>`}</div>
               <div class="ppos">${esc(c.role || 'No role set')}</div>
             </div>
-            <button type="button" data-open-coach-edit="${c.id}" title="Edit coach" style="background:none; border:none; padding:7px; margin:-7px; cursor:pointer; color:var(--ink-soft); display:flex; align-items:center; flex-shrink:0;">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M12 20h9" stroke="currentColor" stroke-width="1.8"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
-            </button>
+            <button type="button" data-open-coach-edit="${c.id}" title="Edit coach" style="background:none; border:none; padding:7px; margin:-7px; cursor:pointer; color:var(--ink-soft); font:inherit; font-size:13px; font-weight:700; flex-shrink:0;">Edit</button>
           </div>
         </div>`).join('')}
     </div>
@@ -9343,46 +9346,46 @@ function openDeletePlayerConfirm(playerId){
     go('players',null,{});
   };
 }
-function openExpiredQualsModal(){
-  const list = expiredQualDetails();
+function qualDetailsByStatus(status){
+  const list = [];
+  seasonFilteredCoaches().forEach(c=>{
+    (c.quals||[]).forEach(link=>{
+      if(qualStatus(link.expiryDate, link.dateObtained)===status){
+        const q = DATA.qualifications.find(x=>x.id===link.qualificationId);
+        list.push({coach:c, qualName: q ? q.name : 'Unknown qualification', expiryDate: link.expiryDate});
+      }
+    });
+  });
+  return list.sort((a,b)=> a.qualName.localeCompare(b.qualName) || (a.coach.name||'').localeCompare(b.coach.name||''));
+}
+function openQualStatusModal(status){
+  const cfg = {
+    expired:{title:'Expired qualifications', none:'Nothing expired right now.', note:x=>`expired ${shortDate(x.expiryDate)}`},
+    expiring:{title:'Expiring within 6 months', none:'Nothing expiring soon.', note:x=>`expires ${shortDate(x.expiryDate)}`},
+    missing:{title:'Missing qualifications', none:'Nothing missing right now.', note:x=>'not recorded'},
+    valid:{title:'Valid qualifications', none:'No valid qualifications yet.', note:x=>x.expiryDate ? `valid until ${shortDate(x.expiryDate)}` : 'no expiry'}
+  }[status];
+  const list = qualDetailsByStatus(status);
   const body = `
-    <h3>Expired qualifications</h3>
+    <h3>${cfg.title}</h3>
     <button class="icon-x" data-close-modal>&times;</button>
     <div class="card">
-      ${list.length===0 ? '<div class="small" style="color:var(--ink-soft);">Nothing expired right now.</div>' :
+      ${list.length===0 ? `<div class="small" style="color:var(--ink-soft);">${cfg.none}</div>` :
         list.map(x=>`
           <div class="player-row">
             ${coachAvatarHtml(x.coach)}
             <div style="flex:1;">
-              <div class="pname">${esc(x.coach.name || 'Unnamed coach')}</div>
-              <div class="ppos">${esc(x.qualName)} · expired ${shortDate(x.expiryDate)}</div>
+              <div class="pname">${esc(x.qualName)}</div>
+              <div class="ppos">${esc(x.coach.name || 'Unnamed coach')} · ${cfg.note(x)}</div>
             </div>
           </div>`).join('')}
     </div>
   `;
-  openModal(body);
+  openModal(body,{floating:true});
   attachModalHandlers();
 }
-function openMissingQualsModal(){
-  const list = missingQualDetails();
-  const body = `
-    <h3>Missing qualifications</h3>
-    <button class="icon-x" data-close-modal>&times;</button>
-    <div class="card">
-      ${list.length===0 ? '<div class="small" style="color:var(--ink-soft);">Nothing missing right now.</div>' :
-        list.map(x=>`
-          <div class="player-row">
-            ${coachAvatarHtml(x.coach)}
-            <div style="flex:1;">
-              <div class="pname">${esc(x.coach.name || 'Unnamed coach')}</div>
-              <div class="ppos">${esc(x.qualName)} · not recorded</div>
-            </div>
-          </div>`).join('')}
-    </div>
-  `;
-  openModal(body);
-  attachModalHandlers();
-}
+function openExpiredQualsModal(){ openQualStatusModal('expired'); }
+function openMissingQualsModal(){ openQualStatusModal('missing'); }
 function openAddSeasonModal(seasonId){
   const editing = seasonId ? DATA.seasons.find(s=>s.id===seasonId) : null;
   let defaultStartYear;
@@ -9660,7 +9663,7 @@ function renderResultSharePreviewBody(f, sel){
     <div class="scoreboard" style="padding:14px 16px; border-radius:10px;">
       <div class="quarter">FULL TIME</div>
       <div style="font-weight:700; font-family:'Oswald',sans-serif; font-size:15px; color:#fff; margin-bottom:2px;">vs ${esc(f.opponent||'TBC')}</div>
-      <div class="score" style="font-size:28px;">${f.finalScore.us} – ${f.finalScore.them}</div>
+      <div class="score" style="font-size:28px;">${f.venue==='away' ? `${f.finalScore.them} – ${f.finalScore.us}` : `${f.finalScore.us} – ${f.finalScore.them}`}</div>
       <div style="margin-top:6px; display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap;">
         <span class="pill ${res}">${res.toUpperCase()}</span>
         <span style="font-size:11px; color:rgba(255,255,255,0.85); font-weight:600;">${fmtDate(f.dateTime)}</span>
@@ -13166,13 +13169,11 @@ function attachHandlers(){
       go(VIEW.tab,'coachEditor',{id:el.dataset.openCoachEdit});
     });
   });
-  document.querySelectorAll('[data-open-coach-quals-modal]').forEach(el=>{
-    el.addEventListener('click', ()=> openCoachQualsModal(el.dataset.openCoachQualsModal));
-  });
   const expiredQualsBtn = document.querySelector('[data-open-expired-quals]');
   if(expiredQualsBtn) expiredQualsBtn.addEventListener('click', openExpiredQualsModal);
   const missingQualsBtn = document.querySelector('[data-open-missing-quals]');
   if(missingQualsBtn) missingQualsBtn.addEventListener('click', openMissingQualsModal);
+  document.querySelectorAll('[data-open-qual-status]').forEach(el=>el.addEventListener('click', ()=>openQualStatusModal(el.dataset.openQualStatus)));
   const saveCoachBtn = document.querySelector('[data-save-coach]');
   if(saveCoachBtn) saveCoachBtn.addEventListener('click', ()=>{
     const id = saveCoachBtn.dataset.saveCoach;
@@ -13376,15 +13377,6 @@ function attachHandlers(){
   setupPitchQuarterSwipe('result-pitch-holder');
   setupPitchQuarterSwipe('test-pitch-holder');
   setupPitchQuarterSwipe('grid-pitch-enlarge-pitch', ()=>gridPitchEnlargedQuarter, setEnlargedQuarter);
-  document.querySelectorAll('[data-enlarge-prev-quarter]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      if(gridPitchEnlargedQuarter > 1){
-        pitchQuarterTransitionDir = -1;
-        setEnlargedQuarter(gridPitchEnlargedQuarter - 1);
-        render();
-      }
-    });
-  });
   document.querySelectorAll('[data-enlarge-next-quarter]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const f = DATA.fixtures.find(x=>x.id===VIEW.params.id);
