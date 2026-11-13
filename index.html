@@ -130,7 +130,7 @@
     width:100%;
     max-width:480px;
     background:var(--panel);
-    border-top:1px solid var(--line);
+    border-top:3px solid var(--pitch);
     display:flex;
     z-index:30;
     transition:transform 0.25s ease;
@@ -164,7 +164,7 @@
   .tabbtn svg{width:20px; height:20px;}
   .fab{
     position:fixed;
-    bottom:74px;
+    bottom:calc(var(--tabbar-h, 64px) + 12px);
     left:50%;
     transform:translateX(170px);
     width:52px;
@@ -848,7 +848,7 @@
   html.text-large .content{ padding-bottom:100px; }
   html.text-large .tabbtn{ padding:9px 2px 11px; gap:4px; font-size:12.5px; }
   html.text-large .tabbtn svg{ width:24px; height:24px; }
-  html.text-large .fab{ bottom:84px; }
+  html.text-large .fab{ bottom:calc(var(--tabbar-h, 64px) + 14px); }
   html.text-large .topbar.topbar-main h1{ font-size:30px; margin:0; letter-spacing:.015em; }
   html.text-large .topbar.topbar-main .sub{ font-size:15.5px; margin-top:4px; }
   html.text-large .team-switch{ gap:7px; margin-bottom:4px; }
@@ -3686,6 +3686,7 @@ function render(){
   const tabBarHtml = (VIEW.screen === 'teamSetupWizard') ? '' : renderTabBar();
   app.innerHTML = html + tabBarHtml + (planPitchFullscreenOpen ? renderPlanPitchFullscreenOverlay() : '') + (reportViewOpen ? renderReportViewOverlay() : '') + (gridPitchEnlargedQuarter ? renderGridPitchEnlargeOverlay() : '');
   attachHandlers();
+  syncTabbarHeight();
   const newContent = app.querySelector('.content');
   if(newContent) newContent.scrollTop = prevScroll;
   setupTabBarScrollBehavior();
@@ -3707,6 +3708,15 @@ function renderViewOnlyBadge(){
   badge.textContent = 'View only';
   badge.style.cssText = 'position:fixed; top:env(safe-area-inset-top,0px); left:50%; transform:translateX(-50%); z-index:999; background:rgba(0,0,0,0.78); color:#fff; font-size:11px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; padding:4px 12px; border-radius:0 0 8px 8px; pointer-events:none;';
   document.body.appendChild(badge);
+}
+let tabbarRO = null;
+function syncTabbarHeight(){
+  const tb = document.querySelector('.tabbar');
+  if(!tb) return;
+  const set = ()=>{ const h = tb.getBoundingClientRect().height; if(h) document.documentElement.style.setProperty('--tabbar-h', h + 'px'); };
+  set();
+  requestAnimationFrame(set);
+  try{ if(tabbarRO) tabbarRO.disconnect(); if(window.ResizeObserver){ tabbarRO = new ResizeObserver(set); tabbarRO.observe(tb); } }catch(e){}
 }
 function setupTabBarScrollBehavior(){
   const contentEl = document.querySelector('.content');
@@ -4321,8 +4331,9 @@ function renderTabBar(){
     ${(!VIEW.screen && (VIEW.tab==='fixtures' || (VIEW.tab==='home' && homeTab==='fixtures'))) ? '<button class="fab" data-new-fixture>+</button>' : ''}
     ${(!VIEW.screen && VIEW.tab==='players') ? '<button class="fab" data-new-player>+</button>' : ''}
     ${(!VIEW.screen && VIEW.tab==='coaches' && DATA.coaches.length<10) ? '<button class="fab" data-add-coach>+</button>' : ''}
-    ${(!VIEW.screen && VIEW.tab==='team' && teamTab==='awards' && awardsViewMode==='edit' && DATA.teamSetupCompleted) ? '<button class="fab" data-add-award-type>+</button>' : ''}
-    ${(!VIEW.screen && VIEW.tab==='team' && teamTab==='qualifications' && qualificationsViewMode==='edit' && DATA.teamSetupCompleted) ? '<button class="fab" data-add-qual>+</button>' : ''}
+    ${(!VIEW.screen && VIEW.tab==='team' && teamTab==='awards' && DATA.teamSetupCompleted) ? '<button class="fab" data-add-award-type>+</button>' : ''}
+    ${(!VIEW.screen && VIEW.tab==='team' && teamTab==='qualifications' && DATA.teamSetupCompleted) ? '<button class="fab" data-add-qual>+</button>' : ''}
+    ${(!VIEW.screen && VIEW.tab==='team' && teamTab==='seasons') ? '<button class="fab" data-add-season>+</button>' : ''}
   `;
 }
 
@@ -7289,7 +7300,6 @@ function renderTeamTab(){
     tabHtml = `
     <div class="row" style="margin:0 0 8px; align-items:center;">
       <div class="section-title" style="margin:0;">Seasons</div>
-      <button type="button" class="icon-add-btn" data-add-season title="Add season"><svg viewBox="0 0 24 24" width="18" height="18" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
     </div>
     <div class="small" style="color:var(--ink-soft); margin-bottom:10px;">
       New seasons are created automatically from your fixture dates (August to June by default). Exactly one is current at a time — that's the default shown throughout the app. Tap the radio to switch it.
