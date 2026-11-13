@@ -8185,6 +8185,10 @@ function activeCloudTeamId(){
   const t = (TEAMS_STORE.teams || []).find(x=>x.id===TEAMS_STORE.activeTeamId);
   return (t && t.cloudSynced && currentUser) ? t.id : null;
 }
+function permissionWord(){
+  const p = ('Notification' in window) ? Notification.permission : 'unsupported';
+  return p==='granted' ? 'allowed' : p==='denied' ? 'blocked' : p==='default' ? 'not allowed yet' : p;
+}
 function urlBase64ToUint8Array(b64){
   const pad = '='.repeat((4 - b64.length % 4) % 4);
   const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
@@ -8222,7 +8226,8 @@ async function pushRegisterWithServer(sub){
 async function pushEnable(){
   if(!pushSupported()) throw new Error("This browser can't do phone notifications.");
   if(!pushCloudReady()) throw new Error('Sign in first, so notifications can be linked to your account.');
-  const perm = await Notification.requestPermission();
+  let perm = Notification.permission;
+  if(perm === 'default') perm = await Notification.requestPermission();          // ask once, and only if it hasn't been decided
   if(perm!=='granted') throw new Error(perm==='denied' ? "Notifications are blocked for SquadHub. Turn them on in your phone's settings, then try again." : "Notifications weren't allowed.");
   const reg = await pushRegistration();
   if(!reg) throw new Error("The notification helper (sw.js) isn't installed yet. Make sure sw.js is uploaded next to index.html, then close and reopen the app.");
@@ -8235,6 +8240,7 @@ async function pushEnable(){
     if(!cur || !sameBytes(cur, key)){ await sub.unsubscribe(); sub = null; }
   }
   if(!sub) sub = await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:key});
+  if(Notification.permission !== 'granted') throw new Error("You tapped Allow, but Chrome didn't keep the permission for SquadHub (it says: " + permissionWord() + "). Try allowing it from Chrome itself - see the steps from the developer.");
   await pushRegisterWithServer(sub);
   try{ localStorage.setItem('squadhub_push_synced', String(Date.now())); }catch(e){}
   return sub;
@@ -8349,6 +8355,7 @@ function serverRemindersTick(){
 async function openNotificationsPopup(){
   const teamId = activeCloudTeamId();
   let st = await pushGetState();
+  let healed = false;                  // the automatic repair is tried once per visit to this pop-up, never in a loop
   let prefs = null, prefsNote = '';
   const loadPrefs = async ()=>{
     prefs = null; prefsNote = '';
@@ -8416,10 +8423,15 @@ async function openNotificationsPopup(){
         else note("Google accepted it, but it did not reach SquadHub on this phone within 8 seconds. Try again with the app closed and the phone locked, and see if it arrives.");
       }
       else if(r && (r.removed > 0 || codes.includes(404) || codes.includes(410))){
-        // This phone's notification address has expired (Android does this when notification settings are reset). Make a fresh one.
-        note('This phone\u2019s notification address had expired. Setting it up again...');
-        try{ await pushDisable(); await pushEnable(); await refresh('Set up again. Tap "Send a test" once more.'); }
-        catch(e){ note(e.message || String(e)); }
+        if(healed || Notification.permission !== 'granted'){
+          note('This phone\u2019s notification address keeps expiring straight after it is set up. That means Chrome is not keeping the notification permission for SquadHub (Chrome says: ' + permissionWord() + ').');
+        } else {
+          // This phone's notification address has expired (Android does this when notification settings are reset). Make a fresh one.
+          healed = true;
+          note('This phone\u2019s notification address had expired. Setting it up again...');
+          try{ await pushDisable(); await pushEnable(); await refresh('Set up again. Tap "Send a test" once more.'); }
+          catch(e){ note(e.message || String(e)); }
+        }
       }
       else if(r && r.error) note(r.error);
       else if(codes.length) note('The push service refused the message (code ' + codes.join(', ') + '). Please send that code to the developer.');
@@ -8435,7 +8447,7 @@ async function openNotificationsPopup(){
       }catch(e){ note('Android would not show it: ' + (e.message || e)); }
     };
     const helperEl = document.getElementById('np-helper');
-    if(helperEl) pushHelperVersion().then(v=>{ helperEl.textContent = v ? 'Notification helper: version ' + v : 'Notification helper: an older version is still running. Close SquadHub completely and reopen it.'; });
+    if(helperEl) pushHelperVersion().then(v=>{ helperEl.textContent = (v ? 'Notification helper: version ' + v : 'Notification helper: an older version is still running. Close SquadHub completely and reopen it.') + ' \u00b7 Chrome says notifications are: ' + permissionWord(); });
     const off = document.querySelector('[data-np-disable]');
     if(off) off.onclick = async ()=>{ off.disabled = true; try{ await pushDisable(); }catch(e){} await refresh('Turned off on this phone.'); };
     document.querySelectorAll('[data-np-pref]').forEach(el=>{
