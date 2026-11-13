@@ -3886,7 +3886,7 @@ function renderGridPitchEnlargeOverlay(){
   return `
   <div class="pitch-enlarge-overlay" id="grid-pitch-enlarge">
     ${headerHtml}
-    <div id="grid-pitch-enlarge-pitch" class="card pitch-holder ${isThisQuarterLive?'live-pulse':''} ${pitchQuarterTransitionDir===1?'pitch-quarter-fwd':pitchQuarterTransitionDir===-1?'pitch-quarter-back':''}" style="padding:0;">${renderPitchFormation(f, qKey, {showSubs:true, tapEnabled:unlocked, showName:true, fitScreen:true, fitScreenOffset:150, allowReset:unlocked, allowAutoGenerate:isPlanningContext, allowPlayerMins:true, minsSoFar:isActuallyLive, allowEvents:!isPlanningContext, allowOppoGoal:(isActuallyLive || (reviewMode && reviewFixtureId===f.id)), showSwipeHints:true, showQuarterWatermark:true, useActual, lockedUntilReview:!unlocked && !isPlanningContext, allowInfoTap:!unlocked && !isPlanningContext})}</div>
+    <div id="grid-pitch-enlarge-pitch" class="card pitch-holder ${isThisQuarterLive?'live-pulse':''} ${pitchQuarterTransitionDir===1?'pitch-quarter-fwd':pitchQuarterTransitionDir===-1?'pitch-quarter-back':''}" style="padding:0;">${renderPitchFormation(f, qKey, {showSubs:true, tapEnabled:unlocked, showName:true, fitScreen:true, fitScreenOffset:150, allowReset:unlocked, allowPlayerMins:true, minsSoFar:isActuallyLive, allowEvents:!isPlanningContext, allowOppoGoal:(isActuallyLive || (reviewMode && reviewFixtureId===f.id)), showSwipeHints:true, showQuarterWatermark:true, useActual, lockedUntilReview:!unlocked && !isPlanningContext, allowInfoTap:!unlocked && !isPlanningContext})}</div>
     ${renderBenchStripForQuarter(f, qKey, useActual, unlocked && !isPlanningContext)}
     ${(!unlocked && !isPlanningContext) ? `<div class="small" style="color:var(--ink-soft); text-align:center; margin-top:10px;">Tap "Review &amp; edit match" to correct anything here, or tap a marker for their stats this ${periodWord(f).toLowerCase()}.</div>` : ''}
   </div>`;
@@ -4824,9 +4824,11 @@ function renderMatchSetup(id){
   } else if(tab==='gridpitch'){
     const gPeriods = periodKeys(f);
     tabHtml = `
-    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:0; margin-bottom:10px;">
-      <div class="section-title" style="margin:0;">Interactive boards <span style="font-weight:400; color:var(--ink-soft);">— tap to enlarge and interact</span></div>
-      ${squad.length>0 ? `<button type="button" data-view-player-mins="${f.id}" class="btn ghost small" style="margin-bottom:0; flex-shrink:0; padding:6px 12px; font-size:11.5px;">Player mins</button>` : ''}
+    <div class="section-title" style="margin:0 0 8px;">Interactive boards <span style="font-weight:400; color:var(--ink-soft);">— tap to enlarge and interact</span></div>
+    <div style="display:flex; gap:6px; margin-bottom:10px;">
+      ${squad.length>0 ? `<button type="button" data-open-spread-minutes="${f.id}" class="btn ghost small" style="margin:0; flex:1; min-width:0; padding:8px 2px; font-size:10.5px; white-space:nowrap;">Auto-fill wizard</button>` : ''}
+      <button type="button" data-open-copy-prev="${f.id}" class="btn ghost small" style="margin:0; flex:1; min-width:0; padding:8px 2px; font-size:10.5px; white-space:nowrap;">Copy from prev match</button>
+      ${squad.length>0 ? `<button type="button" data-view-player-mins="${f.id}" class="btn ghost small" style="margin:0; flex:1; min-width:0; padding:8px 2px; font-size:10.5px; white-space:nowrap;">Player mins</button>` : ''}
     </div>
     ${squad.length===0 ? `<div class="small" style="color:var(--ink-soft);">No one's marked available for this match yet — mark players in the <span data-match-setup-tab="availability" style="color:var(--pitch); text-decoration:underline; cursor:pointer;">Player availability</span> tab first.</div>` : `
     <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px;">
@@ -8756,6 +8758,59 @@ function renderNewFixtureWizardStep2(){
   const createBtn = document.getElementById('nf-create-btn');
   if(createBtn) createBtn.onclick = ()=> commitNewFixtureFromWizard();
 }
+let copyPrevSel = null;
+function openCopyFromPrevModal(fixtureId, keepSel){
+  const f = getEditingFixture(fixtureId);
+  if(!f) return;
+  if(!keepSel) copyPrevSel = null;
+  const prev = [...DATA.fixtures].filter(x=>x.id!==f.id).sort((a,b)=> new Date(b.dateTime)-new Date(a.dateTime)).slice(0,10);
+  const body = `
+    <div style="display:flex; flex-direction:column; max-height:70vh;">
+      <div style="flex-shrink:0;">
+        <h3>Copy from prev match</h3>
+        <button class="icon-x" data-close-modal>&times;</button>
+        <div class="small" style="color:var(--ink-soft); margin-top:-6px; margin-bottom:14px;">Copies the squad, positions, ${esc(periodWord(f).toLowerCase())} appearances, minutes and subs from a recent match. This replaces what's set up for this match now.</div>
+      </div>
+      <div style="flex:1; min-height:0; overflow-y:auto; padding-bottom:2px;">
+        ${prev.length===0 ? '<div class="small" style="color:var(--ink-soft);">No other matches to copy from yet.</div>' : prev.map(x=>{
+          const res = fixtureResultLabel(x);
+          const right = res ? `<div style="text-align:right; flex-shrink:0;"><div class="num" style="font-size:14px; font-weight:600;">${x.finalScore.us} – ${x.finalScore.them}</div><span class="pill ${res}" style="font-size:10px; padding:2px 7px;">${res.toUpperCase()}</span></div>` : '';
+          return `<div class="tap" data-cp-pick="${x.id}" style="min-height:48px; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; border:1.5px solid ${copyPrevSel===x.id?'var(--pitch)':'var(--line)'}; border-radius:10px; margin-bottom:8px; cursor:pointer;">
+            <div><div style="font-weight:600; font-size:14px; color:var(--ink);">vs ${esc(x.opponent||'TBC')}</div><div class="small" style="color:var(--ink-soft); margin-top:2px;">${shortDate(x.dateTime)}</div></div>${right}</div>`;
+        }).join('')}
+      </div>
+      <div style="flex-shrink:0; display:flex; gap:8px; margin-top:12px; padding-top:14px; border-top:1px solid var(--line);">
+        <button type="button" class="btn ghost" data-close-modal style="flex:1; margin-bottom:0;">Cancel</button>
+        <button type="button" class="btn amber" data-cp-confirm ${copyPrevSel?'':'disabled'} style="flex:1; margin-bottom:0;">Copy</button>
+      </div>
+    </div>`;
+  openModal(body, {floating:true});
+  attachModalHandlers();
+  document.querySelectorAll('[data-cp-pick]').forEach(row=>{
+    row.addEventListener('click', ()=>{ copyPrevSel = row.dataset.cpPick; closeModal(); openCopyFromPrevModal(fixtureId, true); });
+  });
+  const ok = document.querySelector('[data-cp-confirm]');
+  if(ok) ok.onclick = ()=>{
+    const src = DATA.fixtures.find(x=>x.id===copyPrevSel);
+    if(!src) return;
+    f.positions = JSON.parse(JSON.stringify(src.positions));
+    f.onField = src.onField;
+    f.bench = src.bench;
+    f.periods = src.periods || DEFAULT_CONFIG.periods;
+    f.minutesPerPeriod = src.minutesPerPeriod || DEFAULT_CONFIG.minutesPerPeriod;
+    if(f.status==='planned' && f.liveState) f.liveState.secondsLeft = f.minutesPerPeriod * 60;
+    f.lineup = JSON.parse(JSON.stringify(src.lineup));
+    if(f.status==='planned') delete f.actualLineup;
+    f.playerAvailability = src.playerAvailability ? JSON.parse(JSON.stringify(src.playerAvailability)) : {};
+    f.coachAvailability = src.coachAvailability ? JSON.parse(JSON.stringify(src.coachAvailability)) : {};
+    (src.coachIds||[]).forEach(cid=>{ if(!f.coachAvailability[cid]) f.coachAvailability[cid] = 'available'; });
+    copyPrevSel = null;
+    saveData();
+    closeModal();
+    render();
+    showSavedToast();
+  };
+}
 function commitNewFixtureFromWizard(){
   const w = newFixtureWizard;
   if(!w) return;
@@ -12419,6 +12474,9 @@ function attachHandlers(){
       liveTab = 'test';
       go(VIEW.tab, 'live', {id:fid});
     });
+  });
+  document.querySelectorAll('[data-open-copy-prev]').forEach(el=>{
+    el.addEventListener('click', ()=> openCopyFromPrevModal(el.dataset.openCopyPrev));
   });
   document.querySelectorAll('[data-open-spread-minutes]').forEach(el=>{
     el.addEventListener('click', ()=> openAutoGenerateWizard(el.dataset.openSpreadMinutes));
