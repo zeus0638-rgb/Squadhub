@@ -138,6 +138,8 @@
   .tabbar{ flex-wrap:wrap; }
   .tabbar .subtabs-row{ flex:0 0 100%; margin:0; border-radius:0; border-width:0 0 1px 0; }
   .tabbar .subtabs-row button{ padding:11px 4px; }
+  .tabbar .toggle-group-scroll.subtabs-row{ border-radius:0; border-width:0 0 1px 0; }
+  .tabbar .toggle-group-scroll.subtabs-row button{ padding:11px 14px; font-size:12.5px; }
   .content.has-subtabs{ padding-bottom:150px; }
   .tabbar.tabbar-hidden{
     transform:translateX(-50%) translateY(100%);
@@ -348,6 +350,9 @@
   .qs-row .qs-chip{ margin:0; font-size:9.5px; padding:2px 6px; gap:4px; }
   @keyframes qsLivePulse{ 0%,100%{ border-color:rgba(255,255,255,0.3); box-shadow:0 0 0 0 rgba(255,255,255,0); } 50%{ border-color:#fff; box-shadow:0 0 12px 1px rgba(255,255,255,0.65); } }
   @media (prefers-reduced-motion: reduce){ .qs-row.qs-live{ animation:none; } }
+  .pitch-cover{ position:absolute; inset:0; z-index:5; pointer-events:none; display:flex; align-items:center; justify-content:center; background:rgba(128,128,128,0.5); }
+  .pitch-cover.is-live{ background:none; }
+  .pitch-cover-label{ background:rgba(0,0,0,0.72); color:#fff; font-size:13px; font-weight:800; padding:7px 14px; border-radius:18px; letter-spacing:0.02em; white-space:nowrap; }
   .tap-here-tag{ position:absolute; top:8px; right:8px; z-index:5; pointer-events:none; background:rgba(0,0,0,0.6); color:#fff; font-size:11px; font-weight:700; padding:3px 9px; border-radius:10px; letter-spacing:0.02em; }
   .lp-card{ -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
   .go-live-btn{ background:#fff; color:var(--pitch); border:none; border-radius:22px; padding:10px 28px; font-weight:800; font-size:16px; font-family:'Inter',sans-serif; cursor:pointer; display:inline-flex; align-items:center; gap:8px; }
@@ -1008,6 +1013,7 @@ let reportViewFixtureId = null;
 let lastSpreadParams = {};
 let resultDetailTab = 'timeline';
 let liveTab = 'timeline';
+let subTabsHtml = '';   // set by whichever screen wants a sub-tab row docked above the main tab bar
 let liveViewingQuarter = null;
 const APP_VERSION = 2;
 function getViewingQuarter(f){
@@ -3640,6 +3646,7 @@ function render(){
   document.title = teamShort();
   const app = document.getElementById('app');
   const prevScroll = app.querySelector('.content') ? app.querySelector('.content').scrollTop : 0;
+  subTabsHtml = '';
   let html = '';
   if(VIEW.screen === 'fixtureEditor'){
     html = renderFixtureEditor(VIEW.params.id);
@@ -4300,8 +4307,7 @@ const HOME_SUBTABS = [
 function renderTabBar(){
   const hasPendingMatchToday = todaysFixtures().some(f=>f.status!=='finished');
   const visibleTabs = myEffectivePermission()==='admin' ? TAB_DEFS : TAB_DEFS.filter(t=>t.id!=='team');
-  const showSubTabs = !VIEW.screen && (VIEW.tab==='home' || VIEW.tab==='fixtures' || VIEW.tab==='results');
-  const subTabsHtml = showSubTabs ? `<div class="toggle-group subtabs-row">${HOME_SUBTABS.map(t=>`<button type="button" class="${homeTab===t.id?'on':''}" data-home-tab="${t.id}">${t.label}</button>`).join('')}</div>` : '';
+  const showSubTabs = !!subTabsHtml;
   return `<div class="tabbar${showSubTabs?' has-subtabs':''}">${subTabsHtml}${visibleTabs.map(t=>{
     const isActive = VIEW.tab===t.id || (t.id==='home' && (VIEW.tab==='fixtures' || VIEW.tab==='results'));
     const vibrate = (t.id==='matchday' && hasPendingMatchToday) ? 'icon-vibrate' : '';
@@ -4434,6 +4440,7 @@ function renderHomeTab(){
   const s = teamSeasonStats(seasonFixtures);
   const form = recentFormList(5, seasonFixtures);
   const tab = homeTab;
+  subTabsHtml = `<div class="toggle-group subtabs-row">${HOME_SUBTABS.map(t=>`<button type="button" class="${homeTab===t.id?'on':''}" data-home-tab="${t.id}">${t.label}</button>`).join('')}</div>`;
   const tabs = [
     {id:'teamstats', label:'Season stats'},
     {id:'fixtures', label:'Fixtures'},
@@ -4493,7 +4500,7 @@ function renderHomeTab(){
       }).join('')}`;
   } else if(tab==='teamstats'){
     tabHtml = `
-    <div class="section-title" style="margin-top:0;">Season record</div>
+    <div class="section-title" style="margin-top:0;">Season record <span style="font-weight:400; color:var(--ink-soft);">— tap a tile for more info</span></div>
     <div class="stat-grid">
       <div class="stat-box tap" data-open-team-stat="win" style="cursor:pointer;"><div class="v" style="color:var(--win);">${s.w}</div><div class="l">WINS</div></div>
       <div class="stat-box tap" data-open-team-stat="draw" style="cursor:pointer;"><div class="v" style="color:var(--draw);">${s.d}</div><div class="l">DRAWS</div></div>
@@ -4503,7 +4510,7 @@ function renderHomeTab(){
       <div class="stat-box tap" data-open-team-stat="cleansheet" style="cursor:pointer;"><div class="v">${teamStatMatches('cleansheet', seasonFixtures).length}</div><div class="l">CLEAN SHEETS</div></div>
     </div>
 
-    <div class="section-title">Form guide <span style="font-weight:400; color:var(--ink-soft);">— last 5 matches</span></div>
+    <div class="section-title">Form guide <span style="font-weight:400; color:var(--ink-soft);">— last 5 matches · tap one to open it</span></div>
     <div class="card">
       ${form.length===0 ? `<div class="small" style="color:var(--ink-soft);">No matches played yet</div>` : `
       <div class="hm-form-row" style="display:flex; justify-content:center;">
@@ -4902,6 +4909,7 @@ function renderLive(id){
     ? [{id:'timeline', label:'Timeline'}, {id:'report', label:'Match report'}, {id:'test', label:'Pitch view'}, {id:'awards', label:'Awards'}]
     : [{id:'timeline', label:'Timeline'}, {id:'test', label:'Manage game'}, {id:'mins', label:'Player mins'}];
   if(!isReview && liveTab==='lineup') liveTab = 'test';      // the Grid view tab no longer exists
+  subTabsHtml = `<div class="toggle-group subtabs-row">${tabs.map(t=>`<button type="button" class="${liveTab===t.id?'on':''}" data-live-tab="${t.id}">${t.label}</button>`).join('')}</div>`;
   let tabHtml = '';
   if(liveTab==='timeline'){
     if(isReview){
@@ -4983,7 +4991,7 @@ function renderLive(id){
       ${tPeriods.map((qk,i)=>`
         <div class="card tap lp-card ${liveQuarterNum===i+1?'live-cell-border':''}" data-enlarge-grid-pitch="${i+1}" data-lp-quarter="${i+1}" style="padding:0; overflow:hidden; position:relative;">
           ${liveQuarterNum===i+1 ? `<div class="live-corner-badge"><span style="width:5px; height:5px; border-radius:50%; background:var(--loss);"></span>LIVE</div>` : ''}
-          <div class="tap-here-tag">Tap here</div>
+          <div class="pitch-cover${liveQuarterNum===i+1?' is-live':''}"><span class="pitch-cover-label">${liveQuarterNum===i+1 ? 'Open live view' : 'Open ' + esc(periodBadgeLabel(f, i+1))}</span></div>
           ${renderPitchFormation(f, qk, {showSubs:true, showName:true, fitScreen:false, showQuarterWatermark:true, useActual:true})}
         </div>`).join('')}
     </div>
@@ -5028,14 +5036,14 @@ function renderLive(id){
   const whistleIcon = '<svg viewBox="0 0 100 60" width="26" height="16" fill="none"><path d="M6 24h46l8-6h22c9 0 16 8 16 17 0 10-8 18-18 18-9 0-16-5-19-12H6z" fill="#fff"/><path d="M6 24h46v8H6z" fill="#fff"/><circle cx="76" cy="36" r="9" fill="rgba(0,0,0,0.45)"/><path d="M52 24l8-6" stroke="rgba(0,0,0,0.45)" stroke-width="2"/><rect x="26" y="28" width="16" height="3" rx="1.5" fill="rgba(0,0,0,0.45)"/><circle cx="86" cy="12" r="6" fill="none" stroke="#fff" stroke-width="3.5"/></svg>';
   return `
   <div class="topbar" style="position:relative;">
-    <div class="backbar" ${isReview ? `data-open-review-exit="${f.id}"` : `data-back-to-fixture="${f.id}"`}>${BACK_ARROW}<span>${isReview ? 'Exit review' : 'Exit live view'}</span></div>
+    <div class="backbar" ${isReview ? `data-open-review-exit="${f.id}"` : `data-back-to-fixture="${f.id}"`}>${BACK_ARROW}<span>${isReview ? 'Exit review' : 'Exit live match'}</span></div>
     ${bannerScore}
     ${isReview ? `<button data-review-save-now="${f.id}" title="Save" style="position:absolute; top:14px; right:14px; background:rgba(255,255,255,0.15); border:none; border-radius:50%; width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:#fff; cursor:pointer;">
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M4 4.5A1.5 1.5 0 015.5 3H15l5 5v10.5a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.5v-14z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8 3v5h7V3" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><rect x="7" y="13" width="10" height="6.5" stroke="currentColor" stroke-width="1.7"/></svg>
     </button>` : ''}
   </div>
   ${isReview ? `<div style="background:var(--amber-soft); padding:9px 20px; font-size:12.5px; color:var(--ink); text-align:center;">Reviewing a finished match — nothing here is live. Changes save as you make them; tap "Exit review" above when you're done.</div>` : ''}
-  <div class="content">
+  <div class="content has-subtabs">
     <div class="scoreboard" style="position:relative;">
       <div class="quarter">${isReview ? 'REVIEW MODE' : periodWord(f).toUpperCase() + ' ' + f.liveState.quarter + ' OF ' + f.periods}</div>
       ${isReview ? '' : `<div class="timer${timerDisplay.stoppage?' stoppage':''}">${timerDisplay.text}</div>`}
@@ -5049,14 +5057,10 @@ function renderLive(id){
       ${(isReview || f.status==='finished') ? '' : `
       <button type="button" class="whistle-btn" data-end-game-whistle title="End the match"><div class="ring">${whistleIcon}</div></button>
       <div style="text-align:center; margin-top:14px;">
-        <button type="button" class="go-live-btn" data-go-live-view><span class="dot"></span>Go Live</button>
+        <button type="button" class="go-live-btn" data-go-live-view><span class="dot"></span>Open live view</button>
       </div>`}
     </div>
 
-
-    <div class="toggle-group">
-      ${tabs.map(t=>`<button type="button" class="${liveTab===t.id?'on':''}" data-live-tab="${t.id}">${t.label}</button>`).join('')}
-    </div>
 
     ${tabHtml}
 
@@ -7036,6 +7040,8 @@ function renderSetupRequiredNotice(sectionLabel){
 }
 function renderTeamTab(){
   const tab = teamTab;
+  const teamTabsDef = [{id:'identity',label:'Identity'},{id:'colour',label:'Colour'},{id:'format',label:'Format'},{id:'awards',label:'Awards'},{id:'qualifications',label:'Qualifications'},{id:'seasons',label:'Seasons'},{id:'notifications',label:'Notifications'},{id:'backup',label:'Backup'}];
+  subTabsHtml = `<div class="toggle-group-scroll subtabs-row">${teamTabsDef.map(t=>`<button type="button" class="${tab===t.id?'on':''}" data-team-tab="${t.id}">${t.label}</button>`).join('')}</div>`;
   const tabs = [
     {id:'identity', label:'Identity'},
     {id:'colour', label:'Colour'},
@@ -7087,8 +7093,8 @@ function renderTeamTab(){
       tabHtml = `
       <div class="row" style="margin:0 0 10px; align-items:center;">
         <div class="section-title" style="margin:0;">Team identity</div>
-        <button type="button" data-identity-edit title="Edit identity" style="background:none; border:none; padding:6px; cursor:pointer; color:var(--pitch); display:flex; align-items:center;">
-          <svg viewBox="0 0 24 24" width="17" height="17" fill="none"><path d="M12 20h9" stroke="currentColor" stroke-width="1.8"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+        <button type="button" data-identity-edit title="Edit identity" style="background:none; border:none; padding:6px 8px; font:inherit; font-size:13px; font-weight:700; cursor:pointer; color:var(--pitch); display:flex; align-items:center;">
+          Edit
         </button>
       </div>
       <div class="card">
@@ -7167,8 +7173,8 @@ function renderTeamTab(){
       tabHtml = `
       <div class="row" style="margin:0 0 10px; align-items:center;">
         <div class="section-title" style="margin:0;">Match format</div>
-        <button type="button" data-format-edit title="Edit format" style="background:none; border:none; padding:6px; cursor:pointer; color:var(--pitch); display:flex; align-items:center;">
-          <svg viewBox="0 0 24 24" width="17" height="17" fill="none"><path d="M12 20h9" stroke="currentColor" stroke-width="1.8"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+        <button type="button" data-format-edit title="Edit format" style="background:none; border:none; padding:6px 8px; font:inherit; font-size:13px; font-weight:700; cursor:pointer; color:var(--pitch); display:flex; align-items:center;">
+          Edit
         </button>
       </div>
       ` + renderFormatSummary();
@@ -7198,8 +7204,8 @@ function renderTeamTab(){
             <label style="display:flex; align-items:center; margin:0 10px 0 0;">
               <input type="checkbox" data-toggle-award-active="${a.id}" ${a.active?'checked':''} style="width:auto; margin:0;">
             </label>
-            <button type="button" data-edit-award-type="${a.id}" title="Edit" style="background:none; border:none; padding:6px; cursor:pointer; color:var(--ink-soft); display:flex; align-items:center;">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M12 20h9" stroke="currentColor" stroke-width="1.8"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+            <button type="button" data-edit-award-type="${a.id}" title="Edit" style="background:none; border:none; padding:6px 8px; font:inherit; font-size:13px; font-weight:700; cursor:pointer; color:var(--ink-soft); display:flex; align-items:center;">
+              Edit
             </button>
             <button type="button" data-remove-award-type="${a.id}" title="Remove" style="background:none; border:none; padding:6px; cursor:pointer; color:var(--loss); display:flex; align-items:center;">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -7211,8 +7217,8 @@ function renderTeamTab(){
       tabHtml = `
       <div class="row" style="margin:0 0 10px; align-items:center;">
         <div class="section-title" style="margin:0;">Match awards</div>
-        <button type="button" data-awards-edit title="Edit awards" style="background:none; border:none; padding:6px; cursor:pointer; color:var(--pitch); display:flex; align-items:center;">
-          <svg viewBox="0 0 24 24" width="17" height="17" fill="none"><path d="M12 20h9" stroke="currentColor" stroke-width="1.8"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+        <button type="button" data-awards-edit title="Edit awards" style="background:none; border:none; padding:6px 8px; font:inherit; font-size:13px; font-weight:700; cursor:pointer; color:var(--pitch); display:flex; align-items:center;">
+          Edit
         </button>
       </div>
       <div class="card">
@@ -7247,8 +7253,8 @@ function renderTeamTab(){
               <div style="font-weight:600; font-size:14px; color:var(--ink);">${esc(q.name)}</div>
               <div class="small" style="color:var(--ink-soft); margin-top:2px;">Valid for ${q.validityYears} year${q.validityYears===1?'':'s'}${q.mandatory ? ' · Mandatory' : ''}</div>
             </div>
-            <button type="button" data-edit-qual="${q.id}" title="Edit" style="background:none; border:none; padding:6px; cursor:pointer; color:var(--ink-soft); display:flex; align-items:center;">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M12 20h9" stroke="currentColor" stroke-width="1.8"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+            <button type="button" data-edit-qual="${q.id}" title="Edit" style="background:none; border:none; padding:6px 8px; font:inherit; font-size:13px; font-weight:700; cursor:pointer; color:var(--ink-soft); display:flex; align-items:center;">
+              Edit
             </button>
             <button type="button" data-remove-qual="${q.id}" title="Remove" style="background:none; border:none; padding:6px; cursor:pointer; color:var(--loss); display:flex; align-items:center;">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -7260,8 +7266,8 @@ function renderTeamTab(){
       tabHtml = `
       <div class="row" style="margin:0 0 10px; align-items:center;">
         <div class="section-title" style="margin:0;">Qualifications library</div>
-        <button type="button" data-qualifications-edit title="Edit qualifications" style="background:none; border:none; padding:6px; cursor:pointer; color:var(--pitch); display:flex; align-items:center;">
-          <svg viewBox="0 0 24 24" width="17" height="17" fill="none"><path d="M12 20h9" stroke="currentColor" stroke-width="1.8"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+        <button type="button" data-qualifications-edit title="Edit qualifications" style="background:none; border:none; padding:6px 8px; font:inherit; font-size:13px; font-weight:700; cursor:pointer; color:var(--pitch); display:flex; align-items:center;">
+          Edit
         </button>
       </div>
       <div class="card">
@@ -7299,8 +7305,8 @@ function renderTeamTab(){
             <div class="small" style="color:var(--ink-soft); margin-top:1px;">${formatSeasonRange(s)}</div>
             ${(s.leagueName || s.division) ? `<div class="small" style="color:var(--ink-soft); margin-top:1px;">${[s.leagueName, s.division].filter(Boolean).join(' · ')}</div>` : ''}
           </div>
-          <button type="button" data-edit-season="${s.id}" title="Edit" style="background:none; border:none; cursor:pointer; padding:6px; color:var(--ink-soft); flex-shrink:0;">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M12 20h9" stroke="currentColor" stroke-width="1.8"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          <button type="button" data-edit-season="${s.id}" title="Edit" style="background:none; border:none; cursor:pointer; padding:6px 8px; font:inherit; font-size:13px; font-weight:700; color:var(--ink-soft); flex-shrink:0;">
+            Edit
           </button>
           <button type="button" data-remove-season="${s.id}" title="Remove" style="background:none; border:none; cursor:pointer; padding:6px; flex-shrink:0; color:var(--ink-soft);">
             <svg viewBox="0 0 24 24" width="17" height="17" fill="none"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -7394,10 +7400,7 @@ function renderTeamTab(){
       Finish setup
     </button>` : ''}
   </div>
-  <div class="content fs-area fs-map">
-    <div class="toggle-group-scroll">
-      ${tabs.map(t=>`<button type="button" class="${tab===t.id?'on':''}" data-team-tab="${t.id}">${t.label}</button>`).join('')}
-    </div>
+  <div class="content fs-area fs-map has-subtabs">
     ${tabHtml}
   </div>`;
 }
