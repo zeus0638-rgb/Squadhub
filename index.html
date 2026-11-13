@@ -4882,9 +4882,6 @@ function renderMatchSetup(id){
     <h1 style="padding-right:70px; word-wrap:break-word;">${f.opponent ? 'vs '+esc(f.opponent) : 'Match setup'}${venueBadge(f)}</h1>
     <div class="sub" style="display:flex; align-items:center; flex-wrap:wrap;">${fmtDate(f.dateTime)}${f.location?` · <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(f.location)}" target="_blank" rel="noopener" style="color:inherit; text-decoration:none; display:inline-flex; align-items:center; gap:3px; white-space:nowrap;">${esc(f.location)}<svg viewBox="0 0 24 24" width="13" height="13" fill="none" style="flex-shrink:0;"><path d="M12 22s7-7.2 7-12a7 7 0 10-14 0c0 4.8 7 12 7 12z" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="10" r="2.5" stroke="currentColor" stroke-width="1.8"/></svg></a>`:''}</div>
     <div style="position:absolute; top:14px; right:14px; display:flex; gap:8px;">
-      ${f.status==='planned' ? `<button data-start-match="${f.id}" title="Go live" style="background:rgba(255,255,255,0.15); border:none; border-radius:50%; width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:#fff; cursor:pointer;">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M6 4l14 8-14 8V4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" fill="currentColor"/></svg>
-      </button>` : ''}
       <button data-save-match-setup="${f.id}" title="Save" style="background:rgba(255,255,255,0.15); border:none; border-radius:50%; width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:#fff; cursor:pointer;">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M4 4.5A1.5 1.5 0 015.5 3H15l5 5v10.5a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.5v-14z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8 3v5h7V3" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><rect x="7" y="13" width="10" height="6.5" stroke="currentColor" stroke-width="1.7"/></svg>
       </button>
@@ -8758,6 +8755,28 @@ function renderNewFixtureWizardStep2(){
   const createBtn = document.getElementById('nf-create-btn');
   if(createBtn) createBtn.onclick = ()=> commitNewFixtureFromWizard();
 }
+// Players/coaches to carry over when copying a match's setup. Uses the match's recorded availability when it has
+// any; older or finished matches that never recorded it fall back to who was actually in the lineup (planned or as played).
+function copiedAvailability(src){
+  const out = {};
+  const rec = src.playerAvailability || {};
+  Object.keys(rec).forEach(id=>{ out[id] = rec[id]; });
+  if(!Object.values(out).includes('available')){
+    [src.lineup, src.actualLineup].forEach(lu=>{
+      if(!lu) return;
+      Object.values(lu).forEach(q=>{ Object.values(q||{}).forEach(slot=>{
+        if(!slot) return;
+        [slot.a, slot.b].forEach(id=>{ if(id) out[id] = 'available'; });
+      }); });
+    });
+  }
+  return out;
+}
+function copiedCoachAvailability(src){
+  const out = src.coachAvailability ? JSON.parse(JSON.stringify(src.coachAvailability)) : {};
+  (src.coachIds||[]).forEach(cid=>{ if(!out[cid]) out[cid] = 'available'; });
+  return out;
+}
 let copyPrevSel = null;
 function openCopyFromPrevModal(fixtureId, keepSel){
   const f = getEditingFixture(fixtureId);
@@ -8801,9 +8820,8 @@ function openCopyFromPrevModal(fixtureId, keepSel){
     if(f.status==='planned' && f.liveState) f.liveState.secondsLeft = f.minutesPerPeriod * 60;
     f.lineup = JSON.parse(JSON.stringify(src.lineup));
     if(f.status==='planned') delete f.actualLineup;
-    f.playerAvailability = src.playerAvailability ? JSON.parse(JSON.stringify(src.playerAvailability)) : {};
-    f.coachAvailability = src.coachAvailability ? JSON.parse(JSON.stringify(src.coachAvailability)) : {};
-    (src.coachIds||[]).forEach(cid=>{ if(!f.coachAvailability[cid]) f.coachAvailability[cid] = 'available'; });
+    f.playerAvailability = copiedAvailability(src);
+    f.coachAvailability = copiedCoachAvailability(src);
     copyPrevSel = null;
     saveData();
     closeModal();
@@ -8836,9 +8854,8 @@ function commitNewFixtureFromWizard(){
       nf.minutesPerPeriod = src.minutesPerPeriod || DEFAULT_CONFIG.minutesPerPeriod;
       nf.liveState.secondsLeft = nf.minutesPerPeriod * 60;
       nf.lineup = JSON.parse(JSON.stringify(src.lineup));
-      nf.playerAvailability = src.playerAvailability ? JSON.parse(JSON.stringify(src.playerAvailability)) : {};
-      nf.coachAvailability = src.coachAvailability ? JSON.parse(JSON.stringify(src.coachAvailability)) : {};
-      (src.coachIds||[]).forEach(cid=>{ if(!nf.coachAvailability[cid]) nf.coachAvailability[cid] = 'available'; });
+      nf.playerAvailability = copiedAvailability(src);
+      nf.coachAvailability = copiedCoachAvailability(src);
     }
   }
   DATA.fixtures.push(nf);
@@ -13554,6 +13571,9 @@ function attachHandlers(){
   });
   document.querySelectorAll('[data-match-setup-tab]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
+      // Leaving a sub tab saves whatever is on it (including a text field still being typed in).
+      try{ if(typeof commitPendingFixtureFields==='function') commitPendingFixtureFields(VIEW.params.id); }catch(e){}
+      saveData();
       matchSetupTab = btn.dataset.matchSetupTab;
       render();
       const content = document.querySelector('.content');
