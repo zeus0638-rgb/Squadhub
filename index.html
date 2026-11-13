@@ -160,7 +160,7 @@
     white-space:nowrap;
     cursor:pointer;
   }
-  .tabbtn.active{color:var(--pitch);}
+  .tabbtn.active{ background:var(--pitch); color:#fff; }
   .tabbtn svg{width:20px; height:20px;}
   .fab{
     position:fixed;
@@ -307,8 +307,8 @@
   .whistle-btn{ position:absolute; top:66px; right:14px; width:40px; height:40px; padding:0; background:none; border:none; display:flex; align-items:center; justify-content:center; cursor:pointer; }
   .whistle-btn .ring{ width:36px; height:36px; border-radius:50%; background:rgba(255,255,255,0.18); border:2.5px solid rgba(255,255,255,0.65); display:flex; align-items:center; justify-content:center; }
   .mins-grid .mc-name{ width:60px; flex-shrink:0; font-size:12px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .mins-grid .mc-stat{ flex-shrink:0; text-align:right; font-size:12px; font-weight:700; line-height:1.1; }
-  .mins-grid .mc-head{ flex-shrink:0; text-align:right; font-size:8.5px; font-weight:800; color:var(--ink-soft); }
+  .mins-grid .mc-stat{ flex-shrink:0; text-align:center; font-size:12px; font-weight:700; line-height:1.1; }
+  .mins-grid .mc-head{ flex-shrink:0; text-align:center; font-size:8.5px; font-weight:800; color:var(--ink-soft); }
   .mins-grid .mc-p{ width:32px; } .mins-grid .mc-r{ width:41px; } .mins-grid .mc-t{ width:29px; }
   .mins-grid .mc-r.mc-stat{ color:var(--ink-soft); }
   .mins-cell-lbl{ position:absolute; top:0; bottom:0; transform:translateX(-50%); display:flex; align-items:center; font-size:10.5px; font-weight:700; white-space:nowrap; pointer-events:none; z-index:1; }
@@ -340,14 +340,19 @@
   @keyframes subAlertPulse{ 0%,100%{ box-shadow:0 8px 28px rgba(0,0,0,0.45), 0 0 0 0 rgba(255,255,255,0); } 50%{ box-shadow:0 8px 28px rgba(0,0,0,0.45), 0 0 14px 2px var(--pitch); } }
   .bench-chip.tap{ cursor:pointer; -webkit-tap-highlight-color:transparent; }
   .bench-chip.tap:active{ filter:brightness(0.85); }
+  .pitch-enlarge-overlay .bench-label, .pitch-enlarge-overlay .bench-hint{ color:#fff !important; font-size:15px; font-weight:700; }
+  .live-icon{ display:inline-flex; align-items:center; gap:5px; font-family:'Inter',sans-serif; font-size:11px; font-weight:800; letter-spacing:.04em; color:#fff; }
+  .live-icon i{ width:13px; height:13px; border-radius:50%; background:#fff; box-shadow:0 0 0 0 rgba(255,255,255,.8); animation:liveIconPulse 1.3s ease-out infinite; }
+  @keyframes liveIconPulse{ 0%{ box-shadow:0 0 0 0 rgba(255,255,255,.8); opacity:1; } 70%{ box-shadow:0 0 0 6px rgba(255,255,255,0); opacity:.55; } 100%{ box-shadow:0 0 0 0 rgba(255,255,255,0); opacity:1; } }
+  @media (prefers-reduced-motion: reduce){ .live-icon i{ animation:none; } }
   .qs-list{ display:flex; flex-direction:column; gap:4px; margin-left:-9px; }   /* the pill's outline hangs out to the left only, so the text lines up with the page edge and nothing pokes into the title */
-  .qs-row{ display:flex; align-items:center; gap:7px; font-size:14px; font-weight:700; line-height:1; padding:4px 7px; border:2px solid transparent; border-radius:999px; white-space:nowrap; }
+  .qs-row{ display:flex; align-items:center; gap:5px; font-size:14px; font-weight:700; line-height:1; padding:4px 5px; border:2px solid transparent; border-radius:999px; white-space:nowrap; }
   .qs-row .qs-q{ width:22px; }
   .qs-row .qs-sc{ display:inline-grid; grid-template-columns:minmax(13px,auto) 9px minmax(13px,auto); align-items:center; font-variant-numeric:tabular-nums; }
   .qs-row .qs-us{ text-align:right; } .qs-row .qs-dash{ text-align:center; } .qs-row .qs-them{ text-align:left; }
   .qs-row.qs-live{ font-weight:800; border-color:#fff; animation:qsLivePulse 1.7s ease-in-out infinite; cursor:pointer; -webkit-tap-highlight-color:transparent; }
   .qs-row.qs-live:active{ background:rgba(255,255,255,0.18); }
-  .qs-row .qs-chip{ margin:0; font-size:9.5px; padding:2px 6px; gap:4px; }
+  .qs-row .qs-chip{ margin:0; font-size:8.5px; padding:2px 4px; gap:3px; }
   @keyframes qsLivePulse{ 0%,100%{ border-color:rgba(255,255,255,0.3); box-shadow:0 0 0 0 rgba(255,255,255,0); } 50%{ border-color:#fff; box-shadow:0 0 12px 1px rgba(255,255,255,0.65); } }
   @media (prefers-reduced-motion: reduce){ .qs-row.qs-live{ animation:none; } }
   .pitch-cover{ position:absolute; inset:0; z-index:5; pointer-events:none; display:flex; align-items:center; justify-content:center; background:rgba(128,128,128,0.5); }
@@ -3021,7 +3026,7 @@ function renderReviewMinutesSection(f, squad, useActual, title, soFar){
   const legend = soFar ? `<div class="mins-legend"><span><i class="lg lg-played"></i>Played</span><span><i class="lg lg-fore"></i>Forecast (still to come)</span><span><i class="lg lg-now"></i>Now</span></div>` : '';
   const showTitle = soFar ? !!title : true;
   // Played / Remaining / Total, the three columns on the right of both grids. Total is always Played + Remaining.
-  const statHead = `<div class="mc-head mc-p">Played</div><div class="mc-head mc-r">Remaining</div><div class="mc-head mc-t">Total</div>`;
+  const statHead = `<div class="mc-head mc-p">Played</div><div class="mc-head mc-r">Remain</div><div class="mc-head mc-t">Total</div>`;
   const statCols = (played, remaining)=> `<div class="mc-stat mc-p">${played}'</div><div class="mc-stat mc-r">${remaining}'</div><div class="mc-stat mc-t">${played+remaining}'</div>`;
   // One period's bar for one player: played minutes in the team colour with their number on it, minutes still to come
   // in the amber stripes with THEIR number on that - each number is centred on its own stretch of the bar.
@@ -3787,8 +3792,8 @@ function renderBenchStripForQuarter(f, quarterKey, useActual, subTap){
   return `
   <div style="margin-top:12px;">
     <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom:6px;">
-      <div class="small" style="color:var(--ink-soft); font-weight:600;">Bench</div>
-      ${subTap ? `<div class="small" style="color:var(--ink-soft);">Tap a player to make a sub</div>` : ''}
+      <div class="small bench-label" style="color:var(--ink-soft); font-weight:600;">Bench</div>
+      ${subTap ? `<div class="small bench-hint" style="color:var(--ink-soft);">Tap a player to make a sub</div>` : ''}
     </div>
     <div style="display:flex; flex-wrap:wrap; gap:8px;">
       ${benchPlayers.map(p=>{
@@ -3846,6 +3851,7 @@ function renderGridPitchEnlargeOverlay(){
       <div style="grid-column:2; grid-row:1; text-align:center; min-width:0;">
         <div style="font-weight:700; font-family:'Oswald',sans-serif; font-size:24px; color:var(--ink);">${esc(periodFullLabel(f, gridPitchEnlargedQuarter))}</div>
         ${isFutureQuarter ? `<div class="small" style="color:var(--ink-soft); font-weight:700; margin-top:2px;">Not yet started</div>` : ''}
+        ${((isActuallyLive && isPastQuarter) || (!isPlanningContext && f.status==='finished')) ? `<div class="small" style="color:var(--ink-soft); font-weight:700; margin-top:2px;">Finished</div>` : ''}
       </div>
       <div style="grid-column:3; grid-row:1; text-align:right; min-width:0;">
         <button type="button" data-close-grid-pitch-enlarge title="Close" style="background:var(--surface-2); border:none; border-radius:50%; width:32px; height:32px; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; color:var(--ink);">
@@ -3853,7 +3859,7 @@ function renderGridPitchEnlargeOverlay(){
         </button>
       </div>
       ${isActuallyLive && isFutureQuarter ? `
-      <div style="grid-column:2 / span 2; grid-row:2; align-self:end; margin-bottom:2px; display:flex; flex-wrap:wrap; justify-content:flex-start; gap:6px; min-width:0;">
+      <div style="grid-column:2 / span 2; grid-row:2; align-self:end; margin-bottom:2px; display:flex; flex-wrap:wrap; justify-content:center; gap:6px; min-width:0;">
         ${isFutureQuarter ? `<button type="button" class="btn amber small" data-start-this-quarter="${gridPitchEnlargedQuarter}" style="margin:0; width:auto; padding:7px 10px; font-size:12.5px; white-space:nowrap;">Start this ${f.periods===2?'half':'quarter'}</button>` : ''}
         ${(isFutureQuarter && isLastQuarter) ? `<button type="button" class="btn ghost small" data-enlarge-game-ended style="margin:0; width:auto; padding:7px 10px; font-size:12.5px; white-space:nowrap; border-color:var(--loss); color:var(--loss);">End game</button>` : ''}
       </div>` : ''}
@@ -3865,7 +3871,7 @@ function renderGridPitchEnlargeOverlay(){
     <div style="display:grid; grid-template-columns:minmax(max-content,1fr) auto minmax(36px,1fr); gap:6px; align-items:start; margin-bottom:10px;">
       <div style="min-width:0;">${renderPeriodScoreList(f)}</div>
       <div style="text-align:center; min-width:0;">
-        <div style="font-weight:700; font-family:'Oswald',sans-serif; font-size:34px; line-height:1.1; color:var(--ink);">${esc(periodFullLabel(f, gridPitchEnlargedQuarter))}</div>
+        <div style="font-weight:700; font-family:'Oswald',sans-serif; font-size:34px; line-height:1.1; color:var(--ink); position:relative;">${esc(periodFullLabel(f, gridPitchEnlargedQuarter))}<span class="live-icon" style="position:absolute; left:100%; top:50%; transform:translateY(-50%); margin-left:8px;"><i></i></span></div>
         <div class="scoreboard" style="background:none; padding:0; margin:0; border-radius:0;"><button type="button" data-enlarge-timer-toggle="${f.id}" title="${f.liveState.running?'Pause':'Start'} clock" class="timer${timerDisplay.stoppage?' stoppage':''}" style="font-family:'Oswald',sans-serif; font-size:48px; font-weight:800; line-height:1.1; margin:2px 0 0; text-align:center; white-space:nowrap; background:none; border:none; padding:0; cursor:pointer;">${timerDisplay.text}</button></div>
         <div style="font-size:24px; font-weight:800; line-height:1.2; color:${scoreStateColor}; margin-top:2px;">${scoreState} ${f.finalScore.us}&ndash;${f.finalScore.them}</div>
         ${isLastQuarter ? `<button type="button" class="btn ghost small" data-enlarge-game-ended style="margin:8px 0 0; width:auto; padding:6px 22px; white-space:nowrap; border-color:var(--loss); color:var(--loss);">End game</button>` : ''}
