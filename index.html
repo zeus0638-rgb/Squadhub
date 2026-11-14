@@ -9172,7 +9172,8 @@ function openKickoffTimeConfirm(fixtureId, step, chosenTime){
   const f = DATA.fixtures.find(x=>x.id===fixtureId);
   if(!f) return;
   const ko = scheduledKickoffHHMM(f);
-  step = step || (ko ? 'ask' : 'time');
+  // "Match is starting now" is just a go-live confirmation: the match and clock start when Go live is tapped.
+  if(!step){ step = 'confirm'; chosenTime = nowHHMM(); }
   const header = (title)=>`<h3>${title}</h3><button class="icon-x" data-close-modal>&times;</button>
     <div class="small" style="color:var(--ink-soft); margin-top:-6px; margin-bottom:16px;">vs ${esc(f.opponent||'TBC')}</div>`;
   let body = '';
@@ -9186,7 +9187,7 @@ function openKickoffTimeConfirm(fixtureId, step, chosenTime){
       <button class="btn ghost" data-kickoff-back style="margin-bottom:0;">&larr; Back</button>`;
   } else if(step==='confirm'){
     body = `${header('Go live?')}
-      <div style="font-size:15px; color:var(--ink-soft); margin-bottom:18px;">Kick-off at <b style="color:var(--ink);">${esc(chosenTime)}</b>. The clock starts when you tap Go live.</div>
+      <div style="font-size:15px; color:var(--ink-soft); margin-bottom:18px;">The match and the clock start as soon as you tap Go live.</div>
       <div style="display:flex; gap:10px;">
         <button class="btn ghost" data-kickoff-back style="flex:1; margin-bottom:0;">&larr; Back</button>
         <button class="btn amber" data-kickoff-golive style="flex:1; margin-bottom:0;">⚽ Go live</button>
@@ -9205,7 +9206,7 @@ function openKickoffTimeConfirm(fixtureId, step, chosenTime){
   attachModalHandlers();
   const back = document.querySelector('[data-kickoff-back]');
   if(back) back.onclick = ()=>{
-    if(step==='ask' || (step==='time' && !ko)) openStartMatchConfirm(fixtureId);
+    if(step==='confirm' || step==='ask' || (step==='time' && !ko)) openStartMatchConfirm(fixtureId);
     else openKickoffTimeConfirm(fixtureId, 'ask');
   };
   const yes = document.querySelector('[data-ko-yes]');
