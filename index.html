@@ -1910,6 +1910,10 @@ function normalizeFixtureLineup(f){
   };
   if(!f.lineup || typeof f.lineup !== 'object') f.lineup = emptyLineup(f.positions, f.periods);
   else repairLineup(f.lineup);
+  if((f.status==='live' || f.status==='finished') && !Object.values(f.playerAvailability||{}).includes('available')){
+    const rebuilt = copiedAvailability(f);
+    if(Object.values(rebuilt).includes('available')) f.playerAvailability = rebuilt;
+  }
 
   // Actual lineup: only exists once a match has gone live. Matches that reached
   // live/finished status before this feature existed won't have one yet - seed
@@ -3407,7 +3411,9 @@ function availablePlayersForFixture(f){
   // Player availability is the single, authoritative source for who can appear
   // anywhere for this match - the pitch view, lineup pickers, awards, all of it.
   // The older squad-selection screen (f.squadIds) is retired and never consulted.
-  const avail = f.playerAvailability || {};
+  let avail = f.playerAvailability || {};
+  // Nobody ticked, but the lineup shows who played: use that rather than showing an empty squad.
+  if(!Object.values(avail).includes('available') && (f.status==='live' || f.status==='finished')) avail = copiedAvailability(f);
   return sortByName(DATA.players.filter(p => avail[p.id] === 'available'));
 }
 function opponentStats(opponentId){
@@ -5782,9 +5788,6 @@ function renderResultDetail(id){
     <h1>vs ${esc(f.opponent||'TBC')}</h1>
     <div class="sub" style="display:flex; align-items:center; flex-wrap:wrap;">${fmtDate(f.dateTime)} · ${esc(competitionDisplayLabel(f))}${f.venue ? ` · ${f.venue==='home'?'Home':'Away'}` : ''}${f.location ? ` · <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(f.location)}" target="_blank" rel="noopener" style="color:inherit; text-decoration:none; display:inline-flex; align-items:center; gap:3px; white-space:nowrap;">${esc(f.location)}<svg viewBox="0 0 24 24" width="13" height="13" fill="none" style="flex-shrink:0;"><path d="M12 22s7-7.2 7-12a7 7 0 10-14 0c0 4.8 7 12 7 12z" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="10" r="2.5" stroke="currentColor" stroke-width="1.8"/></svg></a>` : ''}</div>
     <div style="position:absolute; top:14px; right:14px; display:flex; gap:8px;">
-      <button data-open-review="${f.id}" title="Review &amp; edit match" style="background:rgba(255,255,255,0.15); border:none; border-radius:50%; width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:#fff; cursor:pointer;">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M12 20h9" stroke="currentColor" stroke-width="1.8"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
-      </button>
       <button data-open-share-result="${f.id}" title="Share match report" style="background:rgba(255,255,255,0.15); border:none; border-radius:50%; width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:#fff; cursor:pointer;">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><circle cx="18" cy="5" r="2.5" stroke="currentColor" stroke-width="1.8"/><circle cx="6" cy="12" r="2.5" stroke="currentColor" stroke-width="1.8"/><circle cx="18" cy="19" r="2.5" stroke="currentColor" stroke-width="1.8"/><path d="M8.2 10.8l7.6-4.3M8.2 13.2l7.6 4.3" stroke="currentColor" stroke-width="1.8"/></svg>
       </button>
@@ -5796,7 +5799,8 @@ function renderResultDetail(id){
   <div class="content">
     <div class="fs-area fs-map">
     <div class="scoreboard result-banner" style="padding:18px 16px 16px; position:relative;">
-      <span class="pill ${res}" style="position:absolute; top:12px; right:12px; font-size:13px; padding:5px 12px;">${res.toUpperCase()}</span>
+      <span class="pill ${res}" style="position:absolute; top:12px; left:12px; font-size:13px; padding:5px 12px;">${({win:'Won',loss:'Lost',draw:'Drew'})[res]||res}</span>
+      <button type="button" data-open-review="${f.id}" title="Review &amp; edit match" style="position:absolute; top:12px; right:12px; background:rgba(255,255,255,0.18); border:none; border-radius:999px; padding:6px 14px; font-size:13px; font-weight:700; color:#fff; cursor:pointer; font-family:inherit;">Edit</button>
       <div class="quarter" style="font-size:22px;">FULL TIME</div>
       <div class="score" style="font-size:44px; line-height:1.1; margin-top:6px;">${f.venue==='away' ? `${f.finalScore.them} – ${f.finalScore.us}` : `${f.finalScore.us} – ${f.finalScore.them}`}</div>
       <div style="margin-top:8px; font-size:15px; color:rgba(255,255,255,0.92); font-weight:700;">${periodKeys(f).map((q,i)=>`${periodBadgeLabel(f, i+1)} ${f.venue==='away' ? `${stats.oppoGoalsByQuarter[i+1]}-${stats.goalsByQuarter[i+1]}` : `${stats.goalsByQuarter[i+1]}-${stats.oppoGoalsByQuarter[i+1]}`}`).join(' · ')}</div>
