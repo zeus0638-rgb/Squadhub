@@ -2345,6 +2345,17 @@ function applyViewOnlyLock(root){
     }
   });
 }
+// First name of the signed-in coach: the coach record linked to this login, else the account's own name.
+function myFirstName(){
+  let name = '';
+  if(currentUser){
+    const me = (DATA.coaches||[]).find(c=>c.authUserId && c.authUserId===currentUser.id)
+      || (currentUser.email ? (DATA.coaches||[]).find(c=>c.email && String(c.email).toLowerCase()===String(currentUser.email).toLowerCase()) : null);
+    if(me && me.name) name = me.name;
+    else if(currentUser.user_metadata) name = currentUser.user_metadata.full_name || currentUser.user_metadata.name || '';
+  }
+  return String(name||'').trim().split(/\s+/)[0] || '';
+}
 function myEffectivePermission(){
   // 'admin' (High), 'level3' (Medium - Team Admin), 'level2' (Basic - View Only).
   // Defaults to full access ('admin') whenever there's no cloud-tracked level to check
@@ -4571,8 +4582,8 @@ function renderHomeTab(){
   <div class="topbar topbar-main" style="position:relative;">
     ${teamLogoWatermarkHtml()}
     <div class="team-switch" data-open-team-switcher>${safeBadgeSrc(DATA.teamBadge) ? `<img class="team-switch-badge" src="${safeBadgeSrc(DATA.teamBadge)}">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-    <h1>Home</h1>
-    <div class="sub">Welcome back</div>
+    <h1 style="margin-top:-16px;">Home</h1>
+    <div class="sub">Welcome back${myFirstName() ? ', ' + esc(myFirstName()) : ''}</div>
     ${nextMatch ? `<div class="tap" data-open-fixture="${nextMatch.id}" style="margin:12px auto 0; width:fit-content; max-width:94%; text-align:center; cursor:pointer; background:rgba(255,255,255,0.16); border:1px solid rgba(255,255,255,0.3); border-radius:14px; padding:6px 18px 7px;">
       <div class="nm-label" style="font-weight:700; text-transform:uppercase; letter-spacing:0.05em;">Next match</div>
       <div class="nm-opp" style="font-weight:700; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:1px;">vs ${esc(nextMatch.opponent||'TBC')}</div>
