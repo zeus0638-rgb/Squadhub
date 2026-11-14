@@ -499,6 +499,9 @@
   .attr-bar-row .al{width:78px; font-weight:600; color:var(--ink-soft); flex-shrink:0;}
   .attr-bar-track{flex:1; height:7px; background:var(--surface-2); border-radius:4px; overflow:hidden; position:relative;}
   .attr-bar-fill{height:100%; background:var(--amber); border-radius:4px;}
+  /* Player stats bars: team colour on a clearly visible track */
+  .attr-bar-track.ps{ height:11px; background:var(--line); border-radius:6px; }
+  .attr-bar-track.ps .attr-bar-fill{ background:var(--pitch); border-radius:6px; }
   .attr-bar-fill.low{background:var(--loss);}
   .attr-bar-fill.high{background:var(--draw);}
   .live-bar-track{flex:1; height:16px; background:var(--amber); border-radius:4px; overflow:hidden; position:relative;}
@@ -5079,6 +5082,10 @@ function renderLive(id){
   <div class="topbar" style="position:relative;">
     <div class="backbar" ${isReview ? `data-open-review-exit="${f.id}"` : `data-back-to-fixture="${f.id}"`}>${BACK_ARROW}<span>${isReview ? 'Exit review' : 'Exit live match'}</span></div>
     ${bannerScore}
+    ${(f.location || f.referee) ? `<div style="position:absolute; top:16px; right:${isReview?'58px':'14px'}; max-width:44%; text-align:right; font-size:12.5px; line-height:1.35; color:rgba(255,255,255,0.92);">
+      ${f.location ? `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(f.location)}" target="_blank" rel="noopener" style="color:inherit; text-decoration:underline; display:inline-flex; align-items:flex-start; gap:3px; justify-content:flex-end;"><svg viewBox="0 0 24 24" width="13" height="13" style="flex-shrink:0; margin-top:2px;" fill="none"><path d="M12 22s7-7.2 7-12a7 7 0 10-14 0c0 4.8 7 12 7 12z" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="10" r="2.5" stroke="currentColor" stroke-width="1.8"/></svg><span>${esc(f.location)}</span></a>` : ''}
+      ${f.referee ? `<div>Ref: ${esc(f.referee)}</div>` : ''}
+    </div>` : ''}
     ${isReview ? `<button data-review-save-now="${f.id}" title="Save" style="position:absolute; top:14px; right:14px; background:rgba(255,255,255,0.15); border:none; border-radius:50%; width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:#fff; cursor:pointer;">
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M4 4.5A1.5 1.5 0 015.5 3H15l5 5v10.5a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.5v-14z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8 3v5h7V3" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><rect x="7" y="13" width="10" height="6.5" stroke="currentColor" stroke-width="1.7"/></svg>
     </button>` : ''}
@@ -5872,7 +5879,7 @@ function renderPlayerStatsContent(seasonFixtures){
             const pct = maxCount>0 ? (x.count/maxCount)*100 : 0;
             return `<div class="attr-bar-row tap" data-open-player="${x.player.id}">
               <div class="al ps-name">${esc(x.player.name.split(' ')[0])}</div>
-              <div class="attr-bar-track"><div class="attr-bar-fill" style="width:${pct}%"></div></div>
+              <div class="attr-bar-track ps"><div class="attr-bar-fill" style="width:${pct}%"></div></div>
               <div class="av">${x.count}</div>
             </div>`;
           }).join('')}
@@ -5891,7 +5898,7 @@ function renderPlayerStatsContent(seasonFixtures){
           const pct = (x.matches/maxMatches)*100;
           return `<div class="attr-bar-row tap" data-open-player="${x.player.id}">
             <div class="al ps-name">${esc(x.player.name.split(' ')[0])}</div>
-            <div class="attr-bar-track"><div class="attr-bar-fill" style="width:${pct}%"></div></div>
+            <div class="attr-bar-track ps"><div class="attr-bar-fill" style="width:${pct}%"></div></div>
             <div class="av">${x.matches}</div>
           </div>`;
         }).join('');
@@ -5921,7 +5928,7 @@ function renderPlayerStatsContent(seasonFixtures){
         const display = val;
         return `<div class="attr-bar-row tap" data-open-player="${x.player.id}">
           <div class="al ps-name">${esc(x.player.name.split(' ')[0])}</div>
-          <div class="attr-bar-track"><div class="attr-bar-fill" style="width:${pct}%"></div></div>
+          <div class="attr-bar-track ps"><div class="attr-bar-fill" style="width:${pct}%"></div></div>
           <div class="av">${display}</div>
         </div>`;
       }).join('')}
@@ -8970,6 +8977,8 @@ function openEditFixtureDetailsModal(fixtureId){
       <input type="text" id="ef-location" value="${esc(f.location)}" placeholder="${f.venue==='away' ? 'Select or type the away location' : f.venue==='home' ? 'Select or type the home location' : 'Ground / venue'}" autocomplete="off">
       <div id="ef-location-suggestions" style="display:none; position:absolute; top:38px; left:0; right:0; background:var(--panel); border:1px solid var(--line); border-radius:8px; z-index:50; max-height:170px; overflow-y:auto; box-shadow:0 6px 18px rgba(0,0,0,.15);"></div>
     </div>
+    <label>Referee</label>
+    <input type="text" id="ef-referee" value="${esc(f.referee||'')}" placeholder="e.g. John Smith" autocomplete="off">
     <button type="button" class="btn amber" id="ef-save-btn" style="margin-top:4px;">Save</button>
     <div class="small" data-edit-fixture-full-link="${fixtureId}" style="color:var(--ink-soft); text-decoration:underline; text-align:center; margin-top:14px; cursor:pointer;">Edit full details (competition, referee, etc.)</div>
   `;
@@ -9082,6 +9091,8 @@ function openEditFixtureDetailsModal(fixtureId){
     const newLocationName = locInput.value.trim();
     if(newLocationName) findOrCreateLocation(newLocationName);
     f.location = newLocationName;
+    const refInput = document.getElementById('ef-referee');
+    if(refInput) f.referee = refInput.value.trim();
     saveData();
     closeModal();
     render();
@@ -9106,7 +9117,21 @@ function openStartMatchConfirm(fixtureId){
   const alreadyStartedBtn = document.querySelector('[data-match-already-started]');
   if(alreadyStartedBtn) alreadyStartedBtn.onclick = ()=> openMatchAlreadyStartedModal(fixtureId);
   const alreadyFinishedBtn = document.querySelector('[data-match-already-finished]');
-  if(alreadyFinishedBtn) alreadyFinishedBtn.onclick = ()=>{
+  if(alreadyFinishedBtn) alreadyFinishedBtn.onclick = ()=> openAlreadyFinishedConfirm(fixtureId);
+}
+function openAlreadyFinishedConfirm(fixtureId){
+  const f = DATA.fixtures.find(x=>x.id===fixtureId);
+  if(!f) return;
+  openModal(`<h3>Match already finished?</h3><button class="icon-x" data-close-modal>&times;</button>
+    <div class="small" style="color:var(--ink-soft); margin-top:-6px; margin-bottom:16px;">vs ${esc(f.opponent||'TBC')}</div>
+    <div style="font-size:15px; color:var(--ink-soft); margin-bottom:18px;">This marks the match as finished and opens it so you can fill in the details afterwards.</div>
+    <div style="display:flex; gap:10px;">
+      <button class="btn ghost" data-af-back style="flex:1; margin-bottom:0;">&larr; Back</button>
+      <button class="btn amber" data-af-confirm style="flex:1; margin-bottom:0;">Yes, it's finished</button>
+    </div>`, {floating:true});
+  attachModalHandlers();
+  document.querySelector('[data-af-back]').onclick = ()=> openStartMatchConfirm(fixtureId);
+  document.querySelector('[data-af-confirm]').onclick = ()=>{
     closeModal();
     showFullTimeAnimation();
     setTimeout(()=>{
@@ -9156,12 +9181,12 @@ function openKickoffTimeConfirm(fixtureId, step, chosenTime){
       <div style="font-size:17px; font-weight:600; margin-bottom:16px;">Did the match kick off at <span style="font-family:'Oswald',sans-serif; font-size:22px;">${esc(ko)}</span>?</div>
       <div style="display:flex; gap:10px; margin-bottom:10px;">
         <button class="btn amber" data-ko-yes style="flex:1; margin-bottom:0;">Yes</button>
-        <button class="btn ghost" data-ko-no style="flex:1; margin-bottom:0;">No</button>
+        <button class="btn ghost" data-ko-no style="flex:1; margin-bottom:0;">No - adjust</button>
       </div>
       <button class="btn ghost" data-kickoff-back style="margin-bottom:0;">&larr; Back</button>`;
   } else if(step==='confirm'){
     body = `${header('Go live?')}
-      <div style="font-size:15px; color:var(--ink-soft); margin-bottom:18px;">Kick-off at <b style="color:var(--ink);">${esc(chosenTime)}</b>. The clock starts from there.</div>
+      <div style="font-size:15px; color:var(--ink-soft); margin-bottom:18px;">Kick-off at <b style="color:var(--ink);">${esc(chosenTime)}</b>. The clock starts when you tap Go live.</div>
       <div style="display:flex; gap:10px;">
         <button class="btn ghost" data-kickoff-back style="flex:1; margin-bottom:0;">&larr; Back</button>
         <button class="btn amber" data-kickoff-golive style="flex:1; margin-bottom:0;">⚽ Go live</button>
@@ -9184,12 +9209,17 @@ function openKickoffTimeConfirm(fixtureId, step, chosenTime){
     else openKickoffTimeConfirm(fixtureId, 'ask');
   };
   const yes = document.querySelector('[data-ko-yes]');
+  // Yes goes live immediately, and the clock starts from this tap (not from the scheduled time).
   if(yes) yes.onclick = ()=> openKickoffTimeConfirm(fixtureId, 'confirm', ko);
   const no = document.querySelector('[data-ko-no]');
   if(no) no.onclick = ()=> openKickoffTimeConfirm(fixtureId, 'time');
   const go = document.querySelector('[data-kickoff-golive]');
   if(step==='time') initDigitalTimeControl('kickoff-dtc');
-  if(go) go.onclick = ()=> goLiveFromTime(fixtureId, 1, step==='confirm' ? chosenTime : getDigitalTimeValue('kickoff-dtc'));
+  if(go) go.onclick = ()=>{
+    const v = step==='confirm' ? chosenTime : getDigitalTimeValue('kickoff-dtc');
+    // Left on "now": start the clock from this tap rather than from the start of that minute.
+    goLiveFromTime(fixtureId, 1, v, (step==='confirm' || v===nowHHMM()) ? 0 : undefined);
+  };
 }
 // "Match already started": which period, and when it started (a digital time) - or how many minutes in.
 function openMatchAlreadyStartedModal(fixtureId){
