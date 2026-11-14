@@ -345,7 +345,7 @@
   .live-icon i{ width:13px; height:13px; border-radius:50%; background:#fff; box-shadow:0 0 0 0 rgba(255,255,255,.8); animation:liveIconPulse 1.3s ease-out infinite; }
   @keyframes liveIconPulse{ 0%{ box-shadow:0 0 0 0 rgba(255,255,255,.8); opacity:1; } 70%{ box-shadow:0 0 0 6px rgba(255,255,255,0); opacity:.55; } 100%{ box-shadow:0 0 0 0 rgba(255,255,255,0); opacity:1; } }
   @media (prefers-reduced-motion: reduce){ .live-icon i{ animation:none; } }
-  .qs-list{ display:flex; flex-direction:column; gap:4px; margin-left:-9px; }   /* the pill's outline hangs out to the left only, so the text lines up with the page edge and nothing pokes into the title */
+  .qs-list{ display:flex; flex-direction:column; gap:4px; margin-left:-9px; width:max-content; }   /* the pill's outline hangs out to the left only, so the text lines up with the page edge and nothing pokes into the title */
   .qs-row{ display:flex; align-items:center; gap:5px; font-size:14px; font-weight:700; line-height:1; padding:4px 5px; border:2px solid transparent; border-radius:999px; white-space:nowrap; }
   .qs-row .qs-q{ width:22px; }
   .qs-row .qs-sc{ display:inline-grid; grid-template-columns:minmax(13px,auto) 9px minmax(13px,auto); align-items:center; font-variant-numeric:tabular-nums; }
@@ -353,6 +353,7 @@
   .qs-row.qs-view{ font-weight:800; border-color:#fff; }
   .qs-row.qs-live{ font-weight:800; animation:qsLiveGlow 1.7s ease-in-out infinite; cursor:pointer; -webkit-tap-highlight-color:transparent; }
   .qs-row.qs-live:active{ background:rgba(255,255,255,0.18); }
+  .qs-row{ box-sizing:border-box; min-width:112px; }
   .qs-row .qs-chip{ margin:0; font-size:8.5px; padding:2px 4px; gap:3px; }
   @keyframes qsLiveGlow{ 0%,100%{ box-shadow:0 0 0 0 rgba(255,255,255,0); } 50%{ box-shadow:0 0 12px 1px rgba(255,255,255,0.7); } }
   @keyframes qsLivePulse{ 0%,100%{ border-color:rgba(255,255,255,0.3); box-shadow:0 0 0 0 rgba(255,255,255,0); } 50%{ border-color:#fff; box-shadow:0 0 12px 1px rgba(255,255,255,0.65); } }
