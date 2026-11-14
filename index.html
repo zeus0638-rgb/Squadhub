@@ -100,7 +100,8 @@
   .topbar-main{ text-align:center; }
   .team-switch{
     display:flex; align-items:center; gap:5px; cursor:pointer;
-    width:fit-content; margin:0 0 8px auto; padding:2px 0 2px 10px;
+    /* Generous tap area: the whole badge + name + arrow is one big target (padding is offset by negative margin so layout is unchanged) */
+    width:fit-content; margin:-6px -6px -6px auto; padding:12px 6px 12px 18px; position:relative; z-index:2;
     -webkit-tap-highlight-color:transparent;
   }
   .team-switch .team-switch-badge{ width:16px; height:16px; border-radius:50%; object-fit:cover; flex-shrink:0; }
@@ -2307,6 +2308,7 @@ async function redeemTeamInvite(code){
     const matchedCoach = (DATA.coaches||[]).find(c=>c.id===result.coach_id);
     if(matchedCoach && !matchedCoach.authUserId){
       matchedCoach.authUserId = currentUser.id;
+      if(!String(matchedCoach.email||'').trim() && currentUser.email) matchedCoach.email = currentUser.email;
       // Keep the profile's own level in sync with what was actually granted, in case
       // it was changed again after the invite was sent but before it got redeemed.
       matchedCoach.permissionLevel = result.permission_level || matchedCoach.permissionLevel;
@@ -2354,6 +2356,12 @@ function myFirstName(){
     if(me && me.name) name = me.name;
     else if(currentUser.user_metadata) name = currentUser.user_metadata.full_name || currentUser.user_metadata.name || '';
   }
+  // The team's creator (or someone using the app without a login) is the Team Manager set up with the team,
+  // whose coach record isn't linked to a login or email.
+  if(!name && (!currentUser || !TEAMS_STORE.ownerUserId || TEAMS_STORE.ownerUserId===currentUser.id)){
+    const mgr = (DATA.coaches||[]).find(c=>/manager/i.test(c.role||'')) || (DATA.coaches||[])[0];
+    if(mgr && mgr.name) name = mgr.name;
+  }
   return String(name||'').trim().split(/\s+/)[0] || '';
 }
 function myEffectivePermission(){
@@ -2385,7 +2393,25 @@ function saveData(){
   }, 150);
 }
 
+// Ties the signed-in account to its coach record and fills in the coach's email when it's blank.
+// Joined coaches are linked by their invite; the team's creator (admin) is linked to the single Team Manager.
+function linkMyCoachRecord(){
+  if(!currentUser || !DATA || !DATA.coaches) return;
+  const email = String(currentUser.email || '').trim();
+  let me = DATA.coaches.find(c=>c.authUserId && c.authUserId===currentUser.id);
+  if(!me && email) me = DATA.coaches.find(c=>String(c.email||'').trim().toLowerCase()===email.toLowerCase());
+  if(!me && myEffectivePermission()==='admin'){
+    const mgrs = DATA.coaches.filter(c=>c.role==='Team Manager' && !c.authUserId);
+    if(mgrs.length===1) me = mgrs[0];
+  }
+  if(!me) return;
+  let changed = false;
+  if(!me.authUserId){ me.authUserId = currentUser.id; changed = true; }
+  if(!String(me.email||'').trim() && email){ me.email = email; changed = true; }
+  if(changed) saveData();
+}
 function goHomeOrWizard(){
+  try{ linkMyCoachRecord(); }catch(e){}
   // An unfinished team (started the wizard, never completed it) shouldn't force
   // straight back into that wizard either - land on the same choice screen as having
   // no team at all, so there's a way out via Import if that's what's actually needed,
