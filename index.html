@@ -346,18 +346,20 @@
   @keyframes liveIconPulse{ 0%{ box-shadow:0 0 0 0 rgba(255,255,255,.8); opacity:1; } 70%{ box-shadow:0 0 0 6px rgba(255,255,255,0); opacity:.55; } 100%{ box-shadow:0 0 0 0 rgba(255,255,255,0); opacity:1; } }
   @media (prefers-reduced-motion: reduce){ .live-icon i{ animation:none; } }
   .qs-list{ display:flex; flex-direction:column; gap:4px; margin-left:-9px; }   /* the pill's outline hangs out to the left only, so the text lines up with the page edge and nothing pokes into the title */
-  .qs-row{ display:flex; align-items:center; gap:5px; font-size:14px; font-weight:700; line-height:1; padding:4px 5px; border:2px solid transparent; border-radius:999px; white-space:nowrap; }
-  .qs-row .qs-q{ width:22px; }
+  .qs-row{ display:flex; align-items:center; gap:4px; font-size:14px; font-weight:700; line-height:1; padding:4px 4px; border:1.5px solid transparent; border-radius:999px; white-space:nowrap; }
+  .qs-row .qs-q{ width:20px; }
   .qs-row .qs-sc{ display:inline-grid; grid-template-columns:minmax(13px,auto) 9px minmax(13px,auto); align-items:center; font-variant-numeric:tabular-nums; }
   .qs-row .qs-us{ text-align:right; } .qs-row .qs-dash{ text-align:center; } .qs-row .qs-them{ text-align:left; }
-  .qs-row.qs-live{ font-weight:800; border-color:#fff; animation:qsLivePulse 1.7s ease-in-out infinite; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+  .qs-row.qs-view{ font-weight:800; border-color:#fff; }
+  .qs-row.qs-live{ font-weight:800; animation:qsLiveGlow 1.7s ease-in-out infinite; cursor:pointer; -webkit-tap-highlight-color:transparent; }
   .qs-row.qs-live:active{ background:rgba(255,255,255,0.18); }
   .qs-row .qs-chip{ margin:0; font-size:8.5px; padding:2px 4px; gap:3px; }
+  @keyframes qsLiveGlow{ 0%,100%{ box-shadow:0 0 0 0 rgba(255,255,255,0); } 50%{ box-shadow:0 0 12px 1px rgba(255,255,255,0.7); } }
   @keyframes qsLivePulse{ 0%,100%{ border-color:rgba(255,255,255,0.3); box-shadow:0 0 0 0 rgba(255,255,255,0); } 50%{ border-color:#fff; box-shadow:0 0 12px 1px rgba(255,255,255,0.65); } }
   @media (prefers-reduced-motion: reduce){ .qs-row.qs-live{ animation:none; } }
   .pitch-cover{ position:absolute; inset:0; z-index:5; pointer-events:none; display:flex; align-items:center; justify-content:center; background:rgba(128,128,128,0.5); }
   .pitch-cover.is-live{ background:none; }
-  .pitch-cover-label{ background:rgba(0,0,0,0.72); color:#fff; font-size:13px; font-weight:800; padding:7px 14px; border-radius:18px; letter-spacing:0.02em; white-space:nowrap; }
+  .pitch-cover-label{ background:rgba(0,0,0,0.72); color:#fff; font-size:13px; font-weight:800; padding:7px 14px; border-radius:18px; letter-spacing:0.02em; white-space:nowrap; text-align:center; line-height:1.25; }
   .tap-here-tag{ position:absolute; top:8px; right:8px; z-index:5; pointer-events:none; background:rgba(0,0,0,0.6); color:#fff; font-size:11px; font-weight:700; padding:3px 9px; border-radius:10px; letter-spacing:0.02em; }
   .lp-card{ -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
   .go-live-btn{ background:#fff; color:var(--pitch); border:none; border-radius:22px; padding:10px 28px; font-weight:800; font-size:16px; font-family:'Inter',sans-serif; cursor:pointer; display:inline-flex; align-items:center; gap:8px; }
@@ -1322,7 +1324,7 @@ function currentEventQuarter(f){
   return getViewingQuarter(f);
 }
 // Every period, one per line: played ones show their score, the live one pulses with LIVE beside it, the rest show #-#.
-function renderPeriodScoreList(f){
+function renderPeriodScoreList(f, viewQ){
   const liveQ = f.liveState ? f.liveState.quarter : 0;
   const goals = (q)=>({
     us: (f.events||[]).filter(e=>e.quarter===q && (e.type==='goal' || (e.type==='penalty' && e.outcome==='Scored'))).length,
@@ -1331,7 +1333,7 @@ function renderPeriodScoreList(f){
   return `<div class="qs-list" data-score-lines>${periodKeys(f).map((pk,i)=>{
     const q = i+1, isLive = q===liveQ, notYet = q>liveQ;
     const g = goals(q);
-    return `<div class="qs-row${isLive?' qs-live':''}"${isLive ? ' data-go-live-row role="button" tabindex="0" title="Go to the live period"' : ''}>
+    return `<div class="qs-row${isLive?' qs-live':''}${q===viewQ?' qs-view':''}"${isLive ? ' data-go-live-row role="button" tabindex="0" title="Go to the live period"' : ''}>
       <span class="qs-q">${f.periods===2 ? 'H'+q : 'Q'+q}</span>
       <span class="qs-sc"><span class="qs-us">${notYet?'#':g.us}</span><span class="qs-dash">&ndash;</span><span class="qs-them">${notYet?'#':g.them}</span></span>
       ${isLive ? `<span class="live-inline-badge qs-chip"><span style="width:5px; height:5px; border-radius:50%; background:var(--loss);"></span>LIVE</span>` : ''}
@@ -3846,8 +3848,8 @@ function renderGridPitchEnlargeOverlay(){
   // The period score list is the way back to the live period (tap the pulsing row), so there is no "Return to live"
   // button. Start this quarter / End game sit to the right of the list, roughly level with its last two rows.
   const headerOld = `
-    <div style="display:grid; grid-template-columns:minmax(max-content,1fr) auto minmax(36px,1fr); grid-template-rows:auto 1fr; column-gap:6px; row-gap:6px; align-items:start; margin-bottom:10px;">
-      <div style="grid-column:1; grid-row:1 / span 2; min-width:0;">${isActuallyLive ? renderPeriodScoreList(f) : ''}</div>
+    <div style="display:grid; grid-template-columns:max-content minmax(0,1fr) 36px; grid-template-rows:auto 1fr; column-gap:6px; row-gap:6px; align-items:start; margin-bottom:10px;">
+      <div style="grid-column:1; grid-row:1 / span 2; min-width:0;">${isActuallyLive ? renderPeriodScoreList(f, gridPitchEnlargedQuarter) : ''}</div>
       <div style="grid-column:2; grid-row:1; text-align:center; min-width:0;">
         <div style="font-weight:700; font-family:'Oswald',sans-serif; font-size:24px; color:var(--ink);">${esc(periodFullLabel(f, gridPitchEnlargedQuarter))}</div>
         ${isFutureQuarter ? `<div class="small" style="color:var(--ink-soft); font-weight:700; margin-top:2px;">Not yet started</div>` : ''}
@@ -3859,7 +3861,7 @@ function renderGridPitchEnlargeOverlay(){
         </button>
       </div>
       ${isActuallyLive && isFutureQuarter ? `
-      <div style="grid-column:2 / span 2; grid-row:2; align-self:end; margin-bottom:2px; display:flex; flex-wrap:wrap; justify-content:center; gap:6px; min-width:0;">
+      <div style="grid-column:2; grid-row:2; align-self:end; margin-bottom:2px; display:flex; flex-wrap:wrap; justify-content:center; gap:6px; min-width:0;">
         ${isFutureQuarter ? `<button type="button" class="btn amber small" data-start-this-quarter="${gridPitchEnlargedQuarter}" style="margin:0; width:auto; padding:7px 10px; font-size:12.5px; white-space:nowrap;">Start this ${f.periods===2?'half':'quarter'}</button>` : ''}
         ${(isFutureQuarter && isLastQuarter) ? `<button type="button" class="btn ghost small" data-enlarge-game-ended style="margin:0; width:auto; padding:7px 10px; font-size:12.5px; white-space:nowrap; border-color:var(--loss); color:var(--loss);">End game</button>` : ''}
       </div>` : ''}
@@ -3869,7 +3871,7 @@ function renderGridPitchEnlargeOverlay(){
   // score in the middle, the score of each period so far down the left, close (and End game) on the right.
   const headerLive = isThisQuarterLive ? `
     <div style="display:grid; grid-template-columns:minmax(max-content,1fr) auto minmax(36px,1fr); gap:6px; align-items:start; margin-bottom:10px;">
-      <div style="min-width:0;">${renderPeriodScoreList(f)}</div>
+      <div style="min-width:0;">${renderPeriodScoreList(f, gridPitchEnlargedQuarter)}</div>
       <div style="text-align:center; min-width:0;">
         <div style="font-weight:700; font-family:'Oswald',sans-serif; font-size:34px; line-height:1.1; color:var(--ink); position:relative;">${esc(periodFullLabel(f, gridPitchEnlargedQuarter))}<span class="live-icon" style="position:absolute; left:100%; top:50%; transform:translateY(-50%); margin-left:8px;"><i></i></span></div>
         <div class="scoreboard" style="background:none; padding:0; margin:0; border-radius:0;"><button type="button" data-enlarge-timer-toggle="${f.id}" title="${f.liveState.running?'Pause':'Start'} clock" class="timer${timerDisplay.stoppage?' stoppage':''}" style="font-family:'Oswald',sans-serif; font-size:48px; font-weight:800; line-height:1.1; margin:2px 0 0; text-align:center; white-space:nowrap; background:none; border:none; padding:0; cursor:pointer;">${timerDisplay.text}</button></div>
@@ -5013,7 +5015,7 @@ function renderLive(id){
       ${tPeriods.map((qk,i)=>`
         <div class="card tap lp-card ${liveQuarterNum===i+1?'live-cell-border':''}" data-enlarge-grid-pitch="${i+1}" data-lp-quarter="${i+1}" style="padding:0; overflow:hidden; position:relative;">
           ${liveQuarterNum===i+1 ? `<div class="live-corner-badge"><span style="width:5px; height:5px; border-radius:50%; background:var(--loss);"></span>LIVE</div>` : ''}
-          <div class="pitch-cover${liveQuarterNum===i+1?' is-live':''}"><span class="pitch-cover-label">${liveQuarterNum===i+1 ? 'Open live view' : 'Open ' + esc(periodBadgeLabel(f, i+1))}</span></div>
+          <div class="pitch-cover${liveQuarterNum===i+1?' is-live':''}"><span class="pitch-cover-label">${liveQuarterNum===i+1 ? 'Currently live' : ('Open ' + esc(periodBadgeLabel(f, i+1)) + ((liveQuarterNum!==null && i+1<liveQuarterNum) || f.status==='finished' ? '<br><span style="font-size:11px; font-weight:700; opacity:.85;">(finished)</span>' : ''))}</span></div>
           ${renderPitchFormation(f, qk, {showSubs:true, showName:true, fitScreen:false, showQuarterWatermark:true, useActual:true})}
         </div>`).join('')}
     </div>
@@ -5568,30 +5570,31 @@ function renderEventItem(ev, fixtureId){
   if(ev.type==='goal'){
     const scorer = getPlayer(ev.scorer);
     const assist = ev.assist ? getPlayer(ev.assist) : null;
-    text = `${scorer?scorer.name:'Unknown'} scored${assist?', assisted by '+assist.name:''} — Q${ev.quarter}${time?' · '+time:''}`;
+    text = `Q${ev.quarter} · ${scorer?scorer.name:'Unknown'} scored${assist?', assisted by '+assist.name:''}`;
   } else if(ev.type==='oppogoal'){
-    text = `Opponent scored — Q${ev.quarter}${time?' · '+time:''}`;
+    text = `Q${ev.quarter} · Opponent scored`;
   } else if(ev.type==='sub'){
     const out = getPlayer(ev.out), inn = getPlayer(ev.in);
-    text = `${inn?inn.name:'?'} came on for ${out?out.name:'?'} — Q${ev.quarter}${time?' · '+time:''}`;
+    text = `Q${ev.quarter} · ${inn?inn.name:'?'} came on for ${out?out.name:'?'}`;
   } else if(ev.type==='penalty'){
     const p = getPlayer(ev.player);
-    text = `${p?p.name:'?'} penalty — ${ev.outcome} — Q${ev.quarter}${time?' · '+time:''}`;
+    text = `Q${ev.quarter} · ${p?p.name:'?'} penalty — ${ev.outcome}`;
   } else if(ev.type==='comment'){
     text = `Q${ev.quarter}: ${esc(ev.text)}`;
   } else if(ev.type==='yellowcard'){
     const p = getPlayer(ev.player);
-    text = `${p?p.name:'?'} — yellow card — Q${ev.quarter}${time?' · '+time:''}`;
+    text = `Q${ev.quarter} · ${p?p.name:'?'} — yellow card`;
   } else if(ev.type==='redcard'){
     const p = getPlayer(ev.player);
-    text = `${p?p.name:'?'} — red card — Q${ev.quarter}${time?' · '+time:''}`;
+    text = `Q${ev.quarter} · ${p?p.name:'?'} — red card`;
   }
   const editAttr = (ev.type==='yellowcard' || ev.type==='redcard') ? 'data-edit-card' : (ev.type==='goal' || ev.type==='oppogoal') ? 'data-edit-goal' : null;
   const editBtn = (fixtureId && editAttr) ? `<button type="button" ${editAttr}="${fixtureId}|${ev.id}" title="Edit time/period" style="background:none; border:none; padding:0 0 0 8px; cursor:pointer; color:var(--ink-soft); display:flex; align-items:center;">
     <svg viewBox="0 0 24 24" width="14" height="14" fill="none"><path d="M12 20h9" stroke="currentColor" stroke-width="1.8"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
   </button>` : '';
   const delBtn = fixtureId ? `<button class="icon-x" style="position:static; font-size:16px; padding:0 0 0 8px;" data-delete-event="${fixtureId}|${ev.id}">&times;</button>` : '';
-  return `<div class="event-item"><span class="tag"${ev.type==='goal' ? ' style="font-size:17px; line-height:1; padding:3px 8px;"' : ''}>${tags[ev.type]}</span><span style="flex:1;">${text}</span>${editBtn}${delBtn}</div>`;
+  const showTime = time && ev.type!=='comment';
+  return `<div class="event-item"><span style="display:flex; flex-direction:column; align-items:center; gap:3px; flex-shrink:0;"><span class="tag"${ev.type==='goal' ? ' style="font-size:17px; line-height:1; padding:3px 8px;"' : ''}>${tags[ev.type]}</span>${showTime ? `<span class="small" style="color:var(--ink-soft); font-size:11px; font-weight:600; line-height:1;">${time}</span>` : ''}</span><span style="flex:1;">${text}</span>${editBtn}${delBtn}</div>`;
 }
 
 // ---------- RESULTS TAB ----------
