@@ -1890,37 +1890,36 @@ function normalizeFixtureLineup(f){
   if(!f.bench && f.bench !== 0) f.bench = DEFAULT_CONFIG.bench;
   if(!f.periods) f.periods = DEFAULT_CONFIG.periods;
   if(!f.minutesPerPeriod) f.minutesPerPeriod = DEFAULT_CONFIG.minutesPerPeriod;
-  let needsReset = false;
-  if(!f.lineup) needsReset = true;
-  else {
+  // Repair in place rather than wiping: a missing quarter, position or a/b field is
+  // filled with an empty slot, but every player already recorded is always kept.
+  const repairLineup = (lu)=>{
+    if(!lu || typeof lu !== 'object') return false;
     periodKeys(f).forEach(q=>{
-      if(!f.lineup[q]) { needsReset = true; return; }
+      if(!lu[q] || typeof lu[q] !== 'object') lu[q] = {};
       f.positions.forEach(pos=>{
-        const slot = f.lineup[q][pos];
-        if(!slot || typeof slot !== 'object' || !('a' in slot) || !('b' in slot)) needsReset = true;
+        const slot = lu[q][pos];
+        if(!slot || typeof slot !== 'object') lu[q][pos] = {a:'', b:'', subAt:null};
+        else {
+          if(!('a' in slot)) slot.a = '';
+          if(!('b' in slot)) slot.b = '';
+          if(!('subAt' in slot)) slot.subAt = null;
+        }
       });
     });
-  }
-  if(needsReset) f.lineup = emptyLineup(f.positions, f.periods);
+    return true;
+  };
+  if(!f.lineup || typeof f.lineup !== 'object') f.lineup = emptyLineup(f.positions, f.periods);
+  else repairLineup(f.lineup);
 
   // Actual lineup: only exists once a match has gone live. Matches that reached
-  // live/finished status before this feature existed won't have one yet — seed
-  // it from the pre-match plan as the best available starting point. If one
-  // already exists but doesn't match the current shape, fall back to the plan
-  // rather than wiping it to blank, so real recorded data is never lost.
+  // live/finished status before this feature existed won't have one yet - seed
+  // it from the pre-match plan as the best available starting point. An existing
+  // one is only ever repaired, never replaced, so real recorded data is kept.
   if((f.status==='live' || f.status==='finished') && !f.actualLineup){
     f.actualLineup = JSON.parse(JSON.stringify(f.lineup));
   }
   if(f.actualLineup){
-    let actualNeedsReset = false;
-    periodKeys(f).forEach(q=>{
-      if(!f.actualLineup[q]) { actualNeedsReset = true; return; }
-      f.positions.forEach(pos=>{
-        const slot = f.actualLineup[q][pos];
-        if(!slot || typeof slot !== 'object' || !('a' in slot) || !('b' in slot)) actualNeedsReset = true;
-      });
-    });
-    if(actualNeedsReset) f.actualLineup = JSON.parse(JSON.stringify(f.lineup));
+    if(!repairLineup(f.actualLineup)) f.actualLineup = JSON.parse(JSON.stringify(f.lineup));
   }
 }
 
@@ -3865,9 +3864,9 @@ function renderGridPitchEnlargeOverlay(){
       <div style="grid-column:2; grid-row:2; align-self:end; justify-self:center; position:relative; width:0; height:34px; margin-bottom:2px;">
         <div style="position:absolute; left:0; bottom:0; transform:translateX(-50%); white-space:nowrap;">
           <button type="button" class="btn amber small" data-start-this-quarter="${gridPitchEnlargedQuarter}" style="margin:0; width:auto; padding:7px 8px; font-size:12px; white-space:nowrap;">Start this ${f.periods===2?'half':'quarter'}</button>
-          ${isLastQuarter ? `<button type="button" class="btn ghost small" data-enlarge-game-ended style="position:absolute; left:100%; bottom:0; margin:0 0 0 6px; width:auto; padding:7px 10px; font-size:12px; white-space:nowrap; border-color:var(--loss); color:var(--loss);">End game</button>` : ''}
         </div>
-      </div>` : ''}
+      </div>
+      ${isLastQuarter ? `<div style="grid-column:3; grid-row:2; align-self:end; justify-self:end; margin-bottom:2px;"><button type="button" class="btn ghost small" data-enlarge-game-ended style="margin:0; width:auto; padding:7px 10px; font-size:12px; white-space:nowrap; border-color:var(--loss); color:var(--loss);">End game</button></div>` : ''}` : ''}
     </div>
 `;
   // While this period is live the top of the screen is built for reading from arm's length: big period name, clock and
@@ -5802,7 +5801,6 @@ function renderResultDetail(id){
       <div class="score" style="font-size:44px; line-height:1.1; margin-top:6px;">${f.venue==='away' ? `${f.finalScore.them} – ${f.finalScore.us}` : `${f.finalScore.us} – ${f.finalScore.them}`}</div>
       <div style="margin-top:8px; font-size:15px; color:rgba(255,255,255,0.92); font-weight:700;">${periodKeys(f).map((q,i)=>`${periodBadgeLabel(f, i+1)} ${f.venue==='away' ? `${stats.oppoGoalsByQuarter[i+1]}-${stats.goalsByQuarter[i+1]}` : `${stats.goalsByQuarter[i+1]}-${stats.oppoGoalsByQuarter[i+1]}`}`).join(' · ')}</div>
     </div>
-    </div>
 
     <div class="toggle-group" style="margin-bottom:12px;">
       ${tabs.map(t=>`<button type="button" class="${tab===t.id?'on':''}" data-rd-tab="${t.id}" style="padding:7px 4px; font-size:11.5px;">${t.label}</button>`).join('')}
@@ -7688,13 +7686,23 @@ function openModal(html, opts){
   // genuine, deliberate tap afterwards.
   const openedAt = Date.now();
   wrap.addEventListener('click', (e)=>{
-    if(Date.now()-openedAt <= 400){ e.stopPropagation(); e.preventDefault(); return; }
+    if(!wrap._autoClick && Date.now()-openedAt <= 400){ e.stopPropagation(); e.preventDefault(); return; }
     if(e.target===wrap) closeModal();
   }, true);
   document.body.appendChild(wrap);
   wireTimeFields(wrap);
   if(opts && opts.anchorToBanner) anchorModalToBanner(wrap);
   applyViewOnlyLock(wrap);
+  // "When did this happen?" / "What minute?" pop-ups open on the Real time tab by default.
+  // Runs after the caller has attached its handlers (same tick), using the tab's own button.
+  setTimeout(()=>{
+    const realBtn = wrap.querySelector('[data-ql-mode="clock"], [data-bs-mode="clock"], [data-oppo-confirm-time-mode-opt="clock"], [data-oppo-time-mode-opt="clock"], [data-sub-time-mode-opt="clock"], [data-quick-log-time-mode-opt="clock"], [data-goal-time-mode-opt="clock"]');
+    if(realBtn && !realBtn.classList.contains('on')){
+      wrap._autoClick = true;
+      try{ realBtn.click(); }catch(e){}
+      wrap._autoClick = false;
+    }
+  }, 0);
 }
 // Seats a floating popup near the top of the screen instead of the middle: its top edge lines up
 // with the top of the page title in the banner ("Home", "Players"...) and never rises above it.
