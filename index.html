@@ -1027,7 +1027,7 @@ function timelineSortBtn(kind){
   const asc = timelineQOrder[kind]==='asc';
   return `<div style="display:flex; justify-content:flex-end; margin-bottom:6px;"><button type="button" data-timeline-sort="${kind}" style="background:var(--surface-2); border:1px solid var(--line); color:var(--ink); border-radius:999px; padding:6px 12px; font-size:12.5px; font-weight:700; cursor:pointer; font-family:inherit;">Sort: ${asc?'Q1 &rarr; Q4':'Q4 &rarr; Q1'} &#8645;</button></div>`;
 }
-function timelineGroupStyle(idx){ return idx===0 ? 'padding:2px 0 4px;' : 'border-top:2px solid var(--pitch); margin-top:14px; padding:14px 0 4px;'; }
+function timelineGroupStyle(idx){ return idx===0 ? 'border-top:2px solid var(--pitch); padding:14px 0 4px;' : 'border-top:2px solid var(--pitch); margin-top:14px; padding:14px 0 4px;'; }
 function orderedQuarterIdx(n, kind){ const a = Array.from({length:n},(_,i)=>i); return timelineQOrder[kind]==='asc' ? a : a.reverse(); }
 let liveTab = 'timeline';
 let subTabsHtml = '';   // set by whichever screen wants a sub-tab row docked above the main tab bar
