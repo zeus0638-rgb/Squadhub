@@ -513,6 +513,9 @@
   .live-bar-played .live-bar-val{color:var(--amber);}
   .live-bar-projected .live-bar-val{color:#fff;}
   .attr-bar-row .av{width:26px; text-align:right; font-weight:700; font-family:'Oswald',sans-serif; flex-shrink:0;}
+  .live-locked *{pointer-events:none !important;}
+  .live-locked .toggle-group, .live-locked .toggle-group *, .live-locked [data-timeline-sort], .live-locked .keep, .live-locked .keep *{pointer-events:auto !important;}
+  .lock-banner{background:var(--amber-soft); color:var(--ink); padding:10px 16px; font-size:13.5px; text-align:center; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap;}
   .toggle-group{display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; margin-bottom:14px;}
   .toggle-group-scroll{display:flex; border:1px solid var(--line); border-radius:8px; margin-bottom:14px; overflow-x:auto; -webkit-overflow-scrolling:touch;}
   .toggle-group-scroll::-webkit-scrollbar{ display:none; }
@@ -2022,6 +2025,7 @@ async function pushTeamToCloud(team){
       if(memberErr && memberErr.code !== '23505'){ console.error('cloud membership create failed', memberErr); LAST_CLOUD_ERROR = 'Membership: ' + describeCloudError(memberErr); return; }
       team.cloudSynced = true;
     } else {
+      await protectLockedFixtures(team);
       const { error } = await supabaseClient.from('teams')
         .update({ name: team.name || 'My team', data: team.data, updated_at: new Date().toISOString() })
         .eq('id', team.id);
@@ -2363,6 +2367,124 @@ function myFirstName(){
     if(mgr && mgr.name) name = mgr.name;
   }
   return String(name||'').trim().split(/\s+/)[0] || '';
+}
+// ---- Live match lock: only the coach who set a match live can change it until it ends ----
+function liveLockOwnerIsOther(f){
+  return !!(f && f.status==='live' && f.liveLock && f.liveLock.userId && currentUser && f.liveLock.userId!==currentUser.id);
+}
+function liveLockIsStale(f){ return !!(f && f.liveLock && Date.now() - (f.liveLock.beat||f.liveLock.at||0) > 5*60*1000); }
+function setLiveLock(f){
+  if(!f) return;
+  f.liveLock = currentUser ? {userId:currentUser.id, name:myFirstName() || 'a coach', at:Date.now(), beat:Date.now()} : null;
+  if(!f.liveLock) delete f.liveLock;
+}
+function liveLockedToast(f){
+  const t = document.createElement('div');
+  t.className = 'saved-toast';
+  t.textContent = 'Locked by coach ' + ((f && f.liveLock && f.liveLock.name) || 'another coach') + ' until the match ends';
+  t.style.cssText = 'position:fixed; top:calc(16px + env(safe-area-inset-top,0px)); left:50%; transform:translateX(-50%); background:var(--ink); color:var(--bg); padding:9px 18px; border-radius:20px; font-size:13.5px; z-index:9999; max-width:90%; text-align:center;';
+  document.body.appendChild(t); setTimeout(()=>t.remove(), 2200);
+}
+function liveLockBannerHtml(f){
+  if(!liveLockOwnerIsOther(f)) return '';
+  const stale = myEffectivePermission()!=='level2';
+  return `<div class="lock-banner keep">
+    <span>&#128274; Locked by coach ${esc(f.liveLock.name || 'another coach')} &middot; you're viewing live updates</span>
+    ${stale ? `<button type="button" class="keep" data-live-takeover="${f.id}" style="background:var(--pitch); color:#fff; border:none; border-radius:999px; padding:6px 12px; font-weight:700; font-size:12.5px;">Take over</button>` : ''}
+  </div>`;
+}
+// Keeps a locked-out coach's copy of the live match fresh, and stops them overwriting it in the cloud.
+const _lsync = {busy:false, last:'', n:0};
+function adoptCloudFixtures(cloudData, force){
+  if(!cloudData || !cloudData.fixtures || !DATA || !DATA.fixtures) return false;
+  let changed = false;
+  cloudData.fixtures.forEach(cf=>{
+    const idx = DATA.fixtures.findIndex(x=>x.id===cf.id);
+    const lf = idx>=0 ? DATA.fixtures[idx] : null;
+    const cloudLockedByOther = liveLockOwnerIsOther(cf);
+    if(cloudLockedByOther || (lf && liveLockOwnerIsOther(lf))){
+      if(!force && lf && JSON.stringify(lf)===JSON.stringify(cf)) return;
+      if(idx>=0) DATA.fixtures[idx] = cf; else DATA.fixtures.push(cf);
+      changed = true;
+    }
+  });
+  return changed;
+}
+async function liveSyncTick(){
+  try{
+    if(document.hidden || !supabaseClient || !currentUser || _lsync.busy || typeof DATA==='undefined' || !DATA || !DATA.fixtures) return;
+    const teamId = activeCloudTeamId(); if(!teamId) return;
+    // the coach running the match shows they're still there
+    const mine = DATA.fixtures.find(x=>x.status==='live' && x.liveLock && x.liveLock.userId===currentUser.id);
+    if(mine && Date.now() - (mine.liveLock.beat||0) > 30000){ mine.liveLock.beat = Date.now(); saveData(); }
+    const watching = !!mine || DATA.fixtures.some(liveLockOwnerIsOther);
+    _lsync.n++;
+    if(!watching && _lsync.n % 5 !== 0) return;          // normally look every ~20s so a newly started match is noticed; every ~4s while watching one
+    _lsync.busy = true;
+    const {data, error} = await supabaseClient.from('teams').select('data, updated_at').eq('id', teamId).maybeSingle();
+    _lsync.busy = false;
+    if(error || !data || !data.data) return;
+    if(!watching && data.updated_at===_lsync.last) return;
+    _lsync.last = data.updated_at;
+    const wasWatching = DATA.fixtures.filter(liveLockOwnerIsOther).map(x=>x.id);
+    if(!adoptCloudFixtures(data.data, false)) return;
+    try{ syncActiveTeamData(); await storageSet(STORE_KEY, JSON.stringify(TEAMS_STORE)); }catch(e){}
+    if(document.getElementById('modal-root')) return;
+    const vf = VIEW.screen==='live' ? DATA.fixtures.find(x=>x.id===VIEW.params.id) : null;
+    if(vf && vf.status==='finished' && !reviewMode && wasWatching.includes(vf.id)){ stopTimer(); go('results','resultDetail',{id:vf.id}); return; }
+    if(vf && vf.status==='live' && vf.liveState && vf.liveState.running && timerFixtureId!==vf.id) startTimer(vf.id);
+    render();
+  }catch(e){ _lsync.busy = false; }
+}
+setInterval(liveSyncTick, 4000);
+// Tells the other coaches (not the one running the match) about each timeline event.
+const _evn = {sig:'', busy:false, fails:0, until:0};
+function liveEventText(ev, f){
+  const nm = (id)=>{ const p = getPlayer(id); return p ? p.name.split(' ')[0] : '?'; };
+  const q = periodBadgeLabel(f, ev.quarter||1);
+  if(ev.type==='goal') return {title:`GOAL! ${nm(ev.scorer)} scored`, body:`${q} \u00b7 vs ${f.opponent||'TBC'}${ev.assist?' \u00b7 assist '+nm(ev.assist):''}`};
+  if(ev.type==='oppogoal') return {title:`${f.opponent||'Opponent'} scored`, body:q};
+  if(ev.type==='yellowcard') return {title:`Yellow card: ${nm(ev.player)}`, body:q};
+  if(ev.type==='redcard') return {title:`Red card: ${nm(ev.player)}`, body:q};
+  if(ev.type==='sub') return {title:`Sub: ${nm(ev.in)} on for ${nm(ev.out)}`, body:q};
+  if(ev.type==='penalty') return {title:`Penalty: ${nm(ev.player)}`, body:`${q} \u00b7 ${ev.outcome||''}`};
+  return null;
+}
+function liveEventNotifyTick(){
+  if(!supabaseClient || !currentUser || !DATA || !DATA.fixtures || _evn.busy || Date.now()<_evn.until) return;
+  const teamId = activeCloudTeamId(); if(!teamId) return;
+  const f = DATA.fixtures.find(x=>x.status==='live' && x.liveLock && x.liveLock.userId===currentUser.id);
+  if(!f) return;
+  const since = Date.now() - 10*60*1000;
+  const items = [];
+  (f.events||[]).forEach(ev=>{
+    const t = Date.parse(ev.loggedAt||''); if(!t || t<since) return;
+    const x = liveEventText(ev, f); if(!x) return;
+    items.push({dedupe_key:'ev-'+ev.id, topic:'live_events', title:x.title, body:x.body, send_at:new Date().toISOString(), tag:'ev-'+ev.id, url:'./', data:{fixtureId:f.id, exclude_user:currentUser.id}});
+  });
+  const sig = f.id+'|'+items.map(i=>i.dedupe_key).join(',');
+  if(sig===_evn.sig) return;
+  _evn.busy = true;
+  supabaseClient.rpc('notification_sync_schedule', {p_team_id:teamId, p_scope:`fixture:${f.id}:live_events`, p_items:items.slice(-50)}).then(({error})=>{
+    _evn.busy = false;
+    if(error){ _evn.fails++; _evn.until = Date.now() + Math.min(600000, 30000*_evn.fails); return; }
+    _evn.fails = 0; _evn.sig = sig;
+  }, ()=>{ _evn.busy = false; _evn.fails++; _evn.until = Date.now() + Math.min(600000, 30000*_evn.fails); });
+}
+setInterval(liveEventNotifyTick, 3000);
+async function protectLockedFixtures(team){
+  // Before a locked-out coach saves, take the locked match from the cloud so their copy can never overwrite it.
+  const fx = (team.data && team.data.fixtures) || [];
+  if(!fx.some(x=> liveLockOwnerIsOther(x) || (x.status==='live' && x.liveLock && currentUser && x.liveLock.userId===currentUser.id))) return;
+  try{
+    const {data} = await supabaseClient.from('teams').select('data').eq('id', team.id).maybeSingle();
+    if(data && data.data && data.data.fixtures){
+      data.data.fixtures.forEach(cf=>{
+        const i = fx.findIndex(x=>x.id===cf.id);
+        if(i>=0 && (liveLockOwnerIsOther(fx[i]) || liveLockOwnerIsOther(cf))) fx[i] = cf;     // a match someone else holds (or has taken over) always comes from the cloud
+      });
+    }
+  }catch(e){}
 }
 function myEffectivePermission(){
   // 'admin' (High), 'level3' (Medium - Team Admin), 'level2' (Basic - View Only).
@@ -5137,7 +5259,8 @@ function renderLive(id){
     </button>` : ''}
   </div>
   ${isReview ? `<div style="background:var(--amber-soft); padding:9px 20px; font-size:12.5px; color:var(--ink); text-align:center;">Reviewing a finished match — nothing here is live. Changes save as you make them; tap "Exit review" above when you're done.</div>` : ''}
-  <div class="content">
+  ${liveLockBannerHtml(f)}
+  <div class="content${liveLockOwnerIsOther(f) ? ' live-locked' : ''}">
     <div class="scoreboard" style="position:relative;">
       <div class="quarter">${isReview ? 'REVIEW MODE' : periodWord(f).toUpperCase() + ' ' + f.liveState.quarter + ' OF ' + f.periods}</div>
       ${isReview ? '' : `<div class="timer${timerDisplay.stoppage?' stoppage':''}">${timerDisplay.text}</div>`}
@@ -6582,6 +6705,7 @@ function openTeamSwitcherModal(){
         </div>`;
       }).join('')}
     </div>
+    <button class="btn ghost" data-add-new-team style="margin-top:14px;">+ Add another team</button>
     <div class="text-size-row">
       <div class="small" style="color:var(--ink-soft); font-weight:600; margin-bottom:6px;">Text size</div>
       ${textSizeToggleHtml()}
@@ -6590,7 +6714,6 @@ function openTeamSwitcherModal(){
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
       Notifications
     </button>
-    <button class="btn ghost" data-add-new-team style="margin-top:10px;">+ Add another team</button>
     ${currentUser ? `<button class="btn ghost" data-log-out style="margin-top:10px; color:var(--loss); border-color:var(--loss); display:flex; align-items:center; justify-content:center; gap:7px;">
       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" style="flex-shrink:0;"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 17l5-5-5-5M21 12H9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
       Log out${currentUser.email ? ` (${esc(currentUser.email)})` : ''}
@@ -7960,7 +8083,9 @@ function openCoachQualModal(coachId){
 function commitMatchStart(fixtureId, quarter, secondsLeft, actualStartTime, stoppageSeconds){
   const f = DATA.fixtures.find(x=>x.id===fixtureId);
   if(!f) return;
+  if(liveLockOwnerIsOther(f)){ closeModal(); liveLockedToast(f); render(); return; }
   f.status = 'live';
+  setLiveLock(f);
   if(!f.actualLineup) f.actualLineup = JSON.parse(JSON.stringify(f.lineup));
   f.liveState.quarter = quarter;
   f.liveState.secondsLeft = secondsLeft;
@@ -8294,7 +8419,7 @@ if('serviceWorker' in navigator && /^https?:/.test(location.protocol)){
   window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
   // Stale-page guard: installed/Play Store copies can hold on to an old index.html. Ask the
   // server (bypassing every cache) which build is live and reload once if this isn't it.
-  const BUILD_ID = '2026-11-13-2214';
+  const BUILD_ID = '2026-11-15-1000';
   const checkForNewBuild = async ()=>{
     try{
       if(!navigator.onLine) return;
@@ -8998,6 +9123,7 @@ function openFixtureQuickActionsModal(fixtureId){
 function openEditFixtureDetailsModal(fixtureId){
   const f = DATA.fixtures.find(x=>x.id===fixtureId);
   if(!f) return;
+  if(liveLockOwnerIsOther(f)){ liveLockedToast(f); return; }
   const [dPart, tPart] = (f.dateTime||'').split('T');
   const body = `
     <h3>Edit fixture</h3>
@@ -9144,6 +9270,7 @@ function openEditFixtureDetailsModal(fixtureId){
   };
 }
 function openStartMatchConfirm(fixtureId){
+  { const lf = DATA.fixtures.find(x=>x.id===fixtureId); if(liveLockOwnerIsOther(lf)){ liveLockedToast(lf); return; } }
   const f = DATA.fixtures.find(x=>x.id===fixtureId);
   if(!f) return;
   const body = `
@@ -9366,6 +9493,7 @@ function commitMatchFinished(fixtureId){
   const f = DATA.fixtures.find(x=>x.id===fixtureId);
   if(!f) return;
   f.status = 'finished';
+  delete f.liveLock;
   setLiveRunning(f, false);
   stopTimer();
   saveData();
@@ -12198,6 +12326,23 @@ function attachHandlers(){
   const back = document.querySelector('[data-back]');
   if(back && !back.dataset.navTab) back.addEventListener('click', ()=> go(VIEW.tab,null,{}));
 
+  document.querySelectorAll('[data-live-takeover]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const f = DATA.fixtures.find(x=>x.id===el.dataset.liveTakeover);
+      if(!f || !liveLockOwnerIsOther(f)) return;
+      const doIt = ()=>{
+        closeModal();
+        setLiveLock(f); saveData(); render();
+        if(f.liveState && f.liveState.running) startTimer(f.id);
+      };
+      if(liveLockIsStale(f)){ doIt(); return; }
+      openModal(`<h3>Take over this match?</h3><button class="icon-x" data-close-modal>&times;</button>
+        <div style="font-size:15px; color:var(--ink-soft); margin-bottom:18px;">Coach ${esc(f.liveLock.name||'another coach')} is running this match. If you take over, you can edit it and they'll be locked out and see your updates instead.</div>
+        <div style="display:flex; gap:10px;"><button class="btn ghost" data-close-modal style="flex:1; margin-bottom:0;">Cancel</button><button class="btn amber" data-lock-takeover-ok style="flex:1; margin-bottom:0;">Take over</button></div>`, {floating:true});
+      attachModalHandlers();
+      document.querySelector('[data-lock-takeover-ok]').onclick = doIt;
+    });
+  });
   document.querySelectorAll('[data-back-to-fixture]').forEach(el=>{
     el.addEventListener('click', ()=>{
       // Deliberately NOT stopping the timer here - the match clock should keep
@@ -13963,6 +14108,7 @@ function startTimer(fixtureId){
     if(!f || !f.liveState || !f.liveState.running){ stopTimer(); return; }
     syncLiveClock(f);
     paintLiveClock(f);
+    if(liveLockOwnerIsOther(f)){ if(!f.liveState.running){ stopTimer(); render(); } return; }   // a locked-out coach only watches: the owner's phone saves
     if(!f.liveState.running){ saveData(); stopTimer(); render(); return; }   // time's up: the clock has stopped itself at 0m 00s
     if(Date.now() - lastSavedAt >= 10000){ lastSavedAt = Date.now(); saveData(); }
   };
