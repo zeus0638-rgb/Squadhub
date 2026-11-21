@@ -10,7 +10,7 @@
 
    It does not cache anything, so changes to index.html still reach everyone the next time they open the app. */
 
-var SW_VERSION = '2026-11-13b';
+var SW_VERSION = '2026-11-21b';
 self.addEventListener('install', function(e){ self.skipWaiting(); });
 self.addEventListener('activate', function(e){ e.waitUntil(self.clients.claim()); });
 
@@ -22,7 +22,7 @@ self.addEventListener('push', function(e){
     body: d.body || '',
     tag: d.tag || undefined,            // same tag = replaces the earlier notification instead of stacking
     renotify: false,
-    requireInteraction: d.topic === 'sub_reminders',   // time-critical ones stay until you deal with them
+    requireInteraction: d.topic === 'sub_reminders' || d.topic === 'period_end' || d.topic === 'match_end',   // time-critical ones stay until you deal with them
     vibrate: [250, 120, 250, 120, 250],
     icon: 'icon-192.png',
     data: d
@@ -43,12 +43,44 @@ self.addEventListener('push', function(e){
   );
 });
 
+// A phone that follows a team as a parent has its link's key saved here by follow.html.
+function followToken(){
+  return new Promise(function(res){
+    try{
+      var r = indexedDB.open('sqh-follow', 1);
+      r.onupgradeneeded = function(){ r.result.createObjectStore('kv'); };
+      r.onsuccess = function(){
+        try{
+          var g = r.result.transaction('kv').objectStore('kv').get('token');
+          g.onsuccess = function(){ res(g.result || null); };
+          g.onerror = function(){ res(null); };
+        }catch(x){ res(null); }
+      };
+      r.onerror = function(){ res(null); };
+    }catch(x){ res(null); }
+  });
+}
+
 self.addEventListener('notificationclick', function(e){
   e.notification.close();
-  var url = (e.notification.data && e.notification.data.url) || './';
-  e.waitUntil(self.clients.matchAll({type: 'window', includeUncontrolled: true}).then(function(list){
-    for(var i = 0; i < list.length; i++){ if('focus' in list[i]) return list[i].focus(); }
-    return self.clients.openWindow(url);
+  var d = e.notification.data || {};
+  e.waitUntil(Promise.all([followToken(), self.clients.matchAll({type: 'window', includeUncontrolled: true})]).then(function(r){
+    var token = r[0], list = r[1], i;
+    if(token){
+      // a parent: open the read-only live page
+      var u = new URL('follow.html?t=' + encodeURIComponent(token), self.registration.scope).href;
+      for(i = 0; i < list.length; i++){
+        if(list[i].url.indexOf('follow.html') >= 0){ list[i].postMessage({type: 'refresh'}); return list[i].focus(); }
+      }
+      return self.clients.openWindow(u);
+    }
+    // a coach: open the app on that match (the app shows the full view if they run it, the locked view if not)
+    var info = {fixtureId: (d.data && d.data.fixtureId) || null, topic: d.topic || null};
+    for(i = 0; i < list.length; i++){
+      if(list[i].url.indexOf('follow.html') < 0){ list[i].postMessage({type: 'open', info: info}); return list[i].focus(); }
+    }
+    var q = info.fixtureId ? ('?open=' + encodeURIComponent(info.fixtureId)) : '';
+    return self.clients.openWindow(new URL('./', self.registration.scope).href + q);
   }));
 });
 

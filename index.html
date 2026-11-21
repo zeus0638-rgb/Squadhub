@@ -2437,41 +2437,225 @@ async function liveSyncTick(){
   }catch(e){ _lsync.busy = false; }
 }
 setInterval(liveSyncTick, 4000);
-// Tells the other coaches (not the one running the match) about each timeline event.
-const _evn = {sig:'', busy:false, fails:0, until:0};
-function liveEventText(ev, f){
-  const nm = (id)=>{ const p = getPlayer(id); return p ? p.name.split(' ')[0] : '?'; };
-  const q = periodBadgeLabel(f, ev.quarter||1);
-  if(ev.type==='goal') return {title:`GOAL! ${nm(ev.scorer)} scored`, body:`${q} \u00b7 vs ${f.opponent||'TBC'}${ev.assist?' \u00b7 assist '+nm(ev.assist):''}`};
-  if(ev.type==='oppogoal') return {title:`${f.opponent||'Opponent'} scored`, body:q};
-  if(ev.type==='yellowcard') return {title:`Yellow card: ${nm(ev.player)}`, body:q};
-  if(ev.type==='redcard') return {title:`Red card: ${nm(ev.player)}`, body:q};
-  if(ev.type==='sub') return {title:`Sub: ${nm(ev.in)} on for ${nm(ev.out)}`, body:q};
-  if(ev.type==='penalty') return {title:`Penalty: ${nm(ev.player)}`, body:`${q} \u00b7 ${ev.outcome||''}`};
-  return null;
+// ---- Parent link: what the coach's phone publishes while a match is live ----
+const _follow = {cfg:null, at:0, teamId:null, busy:false, sig:'', at2:0, pub:false};
+async function followCfg(force){
+  const teamId = activeCloudTeamId();
+  if(!teamId || !supabaseClient || !currentUser) return null;
+  if(!force && _follow.teamId===teamId && Date.now()-_follow.at<60000) return _follow.cfg;
+  if(_follow.busy) return _follow.cfg;
+  _follow.busy = true;
+  try{
+    const {data, error} = await supabaseClient.rpc('follow_get_settings', {p_team_id:teamId});
+    _follow.cfg = (!error && data && data[0]) ? data[0] : null;
+  }catch(e){}
+  _follow.busy = false; _follow.at = Date.now(); _follow.teamId = teamId;
+  return _follow.cfg;
 }
-function liveEventNotifyTick(){
-  if(!supabaseClient || !currentUser || !DATA || !DATA.fixtures || _evn.busy || Date.now()<_evn.until) return;
+// Names in notifications and on the parent page follow the team's choice (first names, initials, or none).
+function followNameMode(){ const c = _follow.cfg; return (c && c.enabled && c.names) ? c.names : 'first'; }
+function followPlayerLabel(id){
+  const p = getPlayer(id); if(!p) return '?';
+  const mode = followNameMode(), parts = String(p.name||'').trim().split(/\s+/);
+  if(mode==='none') return 'A player';
+  if(mode==='initials') return parts.map(x=> x ? x[0].toUpperCase()+'.' : '').join('') || '?';
+  return parts[0] || '?';
+}
+function followBuildSnapshot(f, ended){
+  const ls = f.liveState || {}, away = f.venue==='away', a = f.finalScore || {us:0,them:0}, L = followPlayerLabel;
+  const events = [];
+  (f.events||[]).slice().sort((x,y)=> String(x.loggedAt||'').localeCompare(String(y.loggedAt||''))).forEach(ev=>{
+    const per = periodBadgeLabel(f, ev.quarter||1);
+    const clk = ev.clockTime ? ev.clockTime : ((typeof ev.minute==='number') ? `${ev.minute}'` : fmtEventTime(ev.loggedAt));
+    let k = null, txt = '';
+    if(ev.type==='goal'){ k='goal'; txt = `${L(ev.scorer)} scored` + (ev.assist ? ` (assist ${L(ev.assist)})` : ''); }
+    else if(ev.type==='oppogoal'){ k='ogoal'; txt = `${f.opponent||'Opponent'} scored`; }
+    else if(ev.type==='yellowcard'){ k='yc'; txt = `Yellow card: ${L(ev.player)}`; }
+    else if(ev.type==='redcard'){ k='rc'; txt = `Red card: ${L(ev.player)}`; }
+    else if(ev.type==='penalty'){ k='pen'; txt = `Penalty: ${L(ev.player)}${ev.outcome?' ('+ev.outcome+')':''}`; }
+    else if(ev.type==='sub'){ k='sub'; txt = `${L(ev.in)} on for ${L(ev.out)}`; }
+    if(k) events.push({k, txt, per, clk});
+  });
+  let secondsLeft = ls.secondsLeft || 0;
+  if(ls.running && ls.lastTickAt) secondsLeft = Math.max(0, secondsLeft - Math.floor((Date.now()-ls.lastTickAt)/1000));
+  let accent = ''; try{ accent = getComputedStyle(document.documentElement).getPropertyValue('--pitch').trim(); }catch(e){}
+  return {
+    home: away ? (f.opponent||'TBC') : teamShort(), away: away ? teamShort() : (f.opponent||'TBC'),
+    hs: away ? a.them : a.us, as: away ? a.us : a.them,
+    period: ended ? '' : periodBadgeLabel(f, ls.quarter||1), status: ended ? 'ft' : 'live',
+    clock: {running: !!ls.running && !ended, secondsLeft}, events, accent
+  };
+}
+async function followPublish(f, ended){
+  try{
+    const cfg = await followCfg(); if(!cfg || !cfg.enabled) return;
+    const teamId = activeCloudTeamId(); if(!teamId) return;
+    await supabaseClient.rpc('follow_publish', {p_team_id:teamId, p_fixture_id:f.id, p_snapshot:followBuildSnapshot(f, ended), p_ended:!!ended});
+  }catch(e){}
+}
+function followPublishTick(){
+  if(!supabaseClient || !currentUser || !DATA || !DATA.fixtures) return;
   const teamId = activeCloudTeamId(); if(!teamId) return;
   const f = DATA.fixtures.find(x=>x.status==='live' && x.liveLock && x.liveLock.userId===currentUser.id);
   if(!f) return;
-  const since = Date.now() - 10*60*1000;
+  followCfg();
+  if(_follow.teamId!==teamId || !_follow.cfg || !_follow.cfg.enabled || _follow.pub) return;
+  const snap = followBuildSnapshot(f, false);
+  const sig = JSON.stringify([f.id, snap.hs, snap.as, snap.period, snap.clock.running, snap.clock.running ? 0 : snap.clock.secondsLeft, snap.events.map(e=>e.txt+e.clk)]);
+  if(sig===_follow.sig && Date.now()-_follow.at2 < 25000) return;      // changes go out at once; otherwise a refresh every ~25s keeps the clock honest
+  _follow.pub = true;
+  supabaseClient.rpc('follow_publish', {p_team_id:teamId, p_fixture_id:f.id, p_snapshot:snap, p_ended:false}).then(({error})=>{
+    _follow.pub = false; if(!error){ _follow.sig = sig; _follow.at2 = Date.now(); }
+  }, ()=>{ _follow.pub = false; });
+}
+setInterval(followPublishTick, 3000);
+
+// ---- Opening the app from a notification: the match goes straight to its live view ----
+let _pendingOpen = null, _pendingOpenAt = 0, _pendingBusy = false;
+try{ const q = new URLSearchParams(location.search).get('open'); if(q){ _pendingOpen = {fixtureId:q}; _pendingOpenAt = Date.now(); } }catch(e){}
+async function pullLiveNow(){
+  const teamId = activeCloudTeamId(); if(!teamId || !supabaseClient) return;
+  const {data, error} = await supabaseClient.from('teams').select('data, updated_at').eq('id', teamId).maybeSingle();
+  if(error || !data || !data.data) return;
+  if(adoptCloudFixtures(data.data, false)){ try{ syncActiveTeamData(); await storageSet(STORE_KEY, JSON.stringify(TEAMS_STORE)); }catch(e){} }
+}
+async function handlePendingOpen(){
+  if(!_pendingOpen || _pendingBusy) return;
+  if(Date.now() - _pendingOpenAt > 90000){ _pendingOpen = null; return; }
+  if(!currentUser || typeof DATA==='undefined' || !DATA || !DATA.fixtures) return;      // still signing in: try again in a few seconds
+  _pendingBusy = true;
+  const po = _pendingOpen;
+  try{ await pullLiveNow(); }catch(e){}
+  _pendingOpen = null; _pendingBusy = false;
+  try{ history.replaceState(null, '', location.pathname); }catch(e){}
+  const f = po.fixtureId ? DATA.fixtures.find(x=>x.id===po.fixtureId) : null;
+  if(f && f.status==='live'){
+    reviewMode = false;
+    go('matchday', 'live', {id:f.id});
+    if(f.liveState && f.liveState.running) startTimer(f.id);
+  } else if(f && f.status==='finished'){
+    go('results', 'resultDetail', {id:f.id});
+  } else {
+    go('fixtures', null, {});
+  }
+}
+setInterval(handlePendingOpen, 1500);
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.addEventListener('message', (e)=>{
+    const m = e.data || {};
+    if(m.type==='open' && m.info){ _pendingOpen = {fixtureId:m.info.fixtureId || null}; _pendingOpenAt = Date.now(); handlePendingOpen(); }
+  });
+}
+
+// ---- Notifications from the match: kick-off, events, subs, end of period, full time, new fixtures ----
+// Each producer hands the server the complete list for one "scope"; the server queues what's new, re-times what moved
+// and cancels what's gone. Who actually receives each kind is decided on the server (team audience + personal switches).
+const _ns = {};
+function syncNotifItems(teamId, scope, items, opts){
+  opts = opts || {};
+  const st = _ns[scope] || (_ns[scope] = {sig:'', dsig:'', dat:0, busy:false, fails:0, until:0});
+  if(st.busy || Date.now()<st.until) return;
+  const sig = teamId + '|' + JSON.stringify(items.map(i=>[i.dedupe_key, i.title, i.body, i.sched ? (i.send_at||'').slice(0,19) : '']));
+  if(sig===st.sig) return;
+  if(opts.debounce){ if(st.dsig!==sig){ st.dsig = sig; st.dat = Date.now()+opts.debounce; return; } if(Date.now()<st.dat) return; }
+  st.busy = true;
+  supabaseClient.rpc('notification_sync_schedule', {p_team_id:teamId, p_scope:scope, p_items:items.slice(-50)}).then(({error})=>{
+    st.busy = false;
+    if(error){ st.fails++; st.until = Date.now() + Math.min(600000, 30000*st.fails); return; }
+    st.fails = 0; st.sig = sig;
+  }, ()=>{ st.busy = false; st.fails++; st.until = Date.now() + Math.min(600000, 30000*st.fails); });
+}
+function matchScoreLine(f){
+  const us = esc0(teamShort()), them = esc0(f.opponent||'TBC');
+  const away = f.venue==='away', a = f.finalScore||{us:0,them:0};
+  return away ? `${them} ${a.them} - ${a.us} ${us}` : `${us} ${a.us} - ${a.them} ${them}`;
+}
+function esc0(x){ return String(x==null?'':x); }
+function liveEventItem(ev, f){
+  const nm = followPlayerLabel;
+  const q = periodBadgeLabel(f, ev.quarter||1), sc = matchScoreLine(f);
+  if(ev.type==='goal') return {topic:'live_events', title:`GOAL! ${nm(ev.scorer)} scored`, body:`${q} · ${sc}${ev.assist?' · assist '+nm(ev.assist):''}`};
+  if(ev.type==='oppogoal') return {topic:'live_events', title:`${f.opponent||'Opponent'} scored`, body:`${q} · ${sc}`};
+  if(ev.type==='yellowcard') return {topic:'live_events', title:`Yellow card: ${nm(ev.player)}`, body:q};
+  if(ev.type==='redcard') return {topic:'live_events', title:`Red card: ${nm(ev.player)}`, body:q};
+  if(ev.type==='penalty') return {topic:'live_events', title:`Penalty: ${nm(ev.player)}`, body:`${q} · ${ev.outcome||''}`};
+  if(ev.type==='sub') return {topic:'sub_made', title:`Sub: ${nm(ev.in)} on for ${nm(ev.out)}`, body:q};
+  return null;
+}
+function liveEventNotifyTick(){
+  if(!supabaseClient || !currentUser || !DATA || !DATA.fixtures) return;
+  const teamId = activeCloudTeamId(); if(!teamId) return;
+  const f = DATA.fixtures.find(x=>x.status==='live' && x.liveLock && x.liveLock.userId===currentUser.id);
+  if(!f) return;
+  if(_follow.teamId!==teamId){ followCfg(); return; }          // the team's name setting is needed first
+  const since = Date.now() - 10*60*1000, me = currentUser.id, base = {send_at:new Date().toISOString(), url:'./', data:{fixtureId:f.id, exclude_user:me}};
   const items = [];
+  if((f.liveLock.at||0) > since){
+    const away = f.venue==='away', us = teamShort(), them = f.opponent||'TBC';
+    items.push({...base, dedupe_key:'ko', topic:'match_kickoff', tag:'ko-'+f.id, title:'Kick-off!', body: away ? `${them} v ${us}` : `${us} v ${them}`});
+  }
   (f.events||[]).forEach(ev=>{
     const t = Date.parse(ev.loggedAt||''); if(!t || t<since) return;
-    const x = liveEventText(ev, f); if(!x) return;
-    items.push({dedupe_key:'ev-'+ev.id, topic:'live_events', title:x.title, body:x.body, send_at:new Date().toISOString(), tag:'ev-'+ev.id, url:'./', data:{fixtureId:f.id, exclude_user:currentUser.id}});
+    const x = liveEventItem(ev, f); if(!x) return;
+    items.push({...base, dedupe_key:'ev-'+ev.id, topic:x.topic, tag:'ev-'+ev.id, title:x.title, body:x.body});
   });
-  const sig = f.id+'|'+items.map(i=>i.dedupe_key).join(',');
-  if(sig===_evn.sig) return;
-  _evn.busy = true;
-  supabaseClient.rpc('notification_sync_schedule', {p_team_id:teamId, p_scope:`fixture:${f.id}:live_events`, p_items:items.slice(-50)}).then(({error})=>{
-    _evn.busy = false;
-    if(error){ _evn.fails++; _evn.until = Date.now() + Math.min(600000, 30000*_evn.fails); return; }
-    _evn.fails = 0; _evn.sig = sig;
-  }, ()=>{ _evn.busy = false; _evn.fails++; _evn.until = Date.now() + Math.min(600000, 30000*_evn.fails); });
+  syncNotifItems(teamId, `fixture:${f.id}:live_events`, items);
+}
+// The clock reaching zero is scheduled on the server ahead of time, so it still goes out if the coach's phone locks or dies.
+function periodEndNotifyTick(){
+  if(!supabaseClient || !currentUser || !DATA || !DATA.fixtures) return;
+  const teamId = activeCloudTeamId(); if(!teamId) return;
+  const f = DATA.fixtures.find(x=>x.status==='live' && x.liveState && x.liveLock && x.liveLock.userId===currentUser.id);
+  if(!f) return;
+  const ls = f.liveState, items = [];
+  if(ls.running && ls.lastTickAt){
+    const last = ls.quarter >= (f.periods||4);
+    const at = Math.max(Date.now(), ls.lastTickAt + ls.secondsLeft*1000);
+    items.push({
+      dedupe_key: last ? 'fulltime' : 'pe-'+ls.quarter, topic: last ? 'match_end' : 'period_end', tag: (last?'ft-':'pe-')+f.id+'-'+ls.quarter,
+      title: last ? 'Full time' : `End of ${periodBadgeLabel(f, ls.quarter)}`, body: matchScoreLine(f),
+      send_at: new Date(Math.round(at/1000)*1000).toISOString(), sched:true, url:'./', data:{fixtureId:f.id}
+    });
+  }
+  syncNotifItems(teamId, `fixture:${f.id}:period_end`, items, {debounce:2500});
+}
+// The coach ends the match: full time goes out now with the final score (a clock-expiry one that already went is not repeated).
+function notifyMatchEnded(f){
+  if(!supabaseClient || !currentUser || !f) return;
+  const teamId = activeCloudTeamId(); if(!teamId) return;
+  if(!(f.liveLock && f.liveLock.userId===currentUser.id)) return;
+  const st = _ns[`fixture:${f.id}:period_end`]; if(st){ st.sig = ''; st.until = 0; st.busy = false; }
+  syncNotifItems(teamId, `fixture:${f.id}:period_end`, [{
+    dedupe_key:'fulltime', topic:'match_end', tag:'ft-'+f.id, title:'Full time', body:matchScoreLine(f),
+    send_at:new Date().toISOString(), url:'./', data:{fixtureId:f.id, exclude_user:currentUser.id}
+  }]);
+}
+// New fixtures: the team remembers which fixtures it has already announced, so every coach's phone agrees.
+function notifyNewFixtures(){
+  try{
+    if(!supabaseClient || !currentUser || !DATA || !DATA.fixtures || myEffectivePermission()==='level2') return;
+    const ids = DATA.fixtures.map(x=>x.id);
+    if(!Array.isArray(DATA.notifiedFixtureIds)){ DATA.notifiedFixtureIds = ids; return; }      // first time: nothing is "new"
+    const known = new Set(DATA.notifiedFixtureIds);
+    const fresh = DATA.fixtures.filter(x=>!known.has(x.id));
+    if(!fresh.length) return;
+    DATA.notifiedFixtureIds = ids;
+    const teamId = activeCloudTeamId(); if(!teamId) return;
+    const upcoming = fresh.filter(x=>x.status!=='finished' && x.status!=='live');
+    if(!upcoming.length) return;
+    const when = (x)=>{ const d = x.dateTime ? new Date(x.dateTime) : null; return d && !isNaN(d) ? d.toLocaleString('en-GB',{weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'}) : 'date to be confirmed'; };
+    const one = upcoming.length===1 ? upcoming[0] : null;
+    const item = {
+      dedupe_key:'nf-'+upcoming[0].id+'-'+upcoming.length, topic:'new_fixture', tag:'nf-'+upcoming[0].id,
+      title: one ? `New fixture: vs ${one.opponent||'TBC'}` : `${upcoming.length} new fixtures added`,
+      body: one ? `${when(one)}${one.venue==='away'?' · Away':' · Home'}${one.location?' · '+one.location:''}` : upcoming.slice(0,3).map(x=>`vs ${x.opponent||'TBC'}`).join(', ') + (upcoming.length>3?'…':''),
+      send_at:new Date().toISOString(), url:'./', data:{exclude_user:currentUser.id, fixtureId: one ? one.id : null}
+    };
+    syncNotifItems(teamId, `fixtures:new:${upcoming[0].id}`, [item]);
+  }catch(e){}
 }
 setInterval(liveEventNotifyTick, 3000);
+setInterval(periodEndNotifyTick, 3000);
 async function protectLockedFixtures(team){
   // Before a locked-out coach saves, take the locked match from the cloud so their copy can never overwrite it.
   const fx = (team.data && team.data.fixtures) || [];
@@ -2505,6 +2689,7 @@ function saveData(){
   }
   clearTimeout(saveTimeout);
   saveTimeout = setTimeout(async ()=>{
+    notifyNewFixtures();
     syncActiveTeamData();
     const ok = await storageSet(STORE_KEY, JSON.stringify(TEAMS_STORE));
     if(!ok) console.error('save failed');
@@ -8419,7 +8604,7 @@ if('serviceWorker' in navigator && /^https?:/.test(location.protocol)){
   window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
   // Stale-page guard: installed/Play Store copies can hold on to an old index.html. Ask the
   // server (bypassing every cache) which build is live and reload once if this isn't it.
-  const BUILD_ID = '2026-11-15-1000';
+  const BUILD_ID = '2026-11-22-0010';
   const checkForNewBuild = async ()=>{
     try{
       if(!navigator.onLine) return;
@@ -8611,17 +8796,47 @@ function serverRemindersTick(){
 }
 
 // The Notifications pop-up: every signed-in coach can turn notifications on for their own phone and choose what they get.
+function followLink(){
+  const c = _follow.cfg; if(!c || !c.token) return '';
+  try{ return new URL('follow.html?t=' + c.token, location.href).href; }catch(e){ return ''; }
+}
+function followCardHtml(){
+  const c = _follow.cfg, link = c.enabled ? followLink() : '';
+  const nm = c.names || 'initials';
+  const opt = (v, t)=>`<button type="button" data-follow-names="${v}" class="${nm===v?'on':''}">${t}</button>`;
+  return `<div class="section-title" style="margin-top:16px;">Parent live link</div>
+    <div class="small" style="color:var(--ink-soft); margin-bottom:8px;">Parents see only the live score, clock and timeline of a match that is live. No sign-in, and no team data, location or squad is shared. Choose who gets notifications in the ticks above.</div>
+    <div class="card" style="margin-bottom:0;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:2px 0 10px;">
+        <div style="font-weight:600;">Parent link on</div>
+        <label class="switch"><input type="checkbox" role="switch" data-follow-on ${c.enabled?'checked':''}><span class="switch-track"></span></label>
+      </div>
+      <div class="small" style="color:var(--ink-soft); font-weight:600; margin-bottom:6px;">Player names shown to parents</div>
+      <div class="toggle-group" style="margin-bottom:12px;">${opt('first','First names')}${opt('initials','Initials')}${opt('none','No names')}</div>
+      ${link ? `<div class="small" style="word-break:break-all; padding:10px; border:1px solid var(--line); border-radius:8px; margin-bottom:10px; color:var(--ink-soft);">${esc(link)}</div>
+        <div style="display:flex; gap:8px;">
+          <button type="button" class="btn amber" data-follow-share style="flex:1; margin-bottom:0;">Share link</button>
+          <button type="button" class="btn ghost" data-follow-copy style="flex:1; margin-bottom:0;">Copy</button>
+        </div>
+        <button type="button" class="btn ghost" data-follow-reset style="margin:10px 0 0; color:var(--loss); border-color:var(--loss);">Reset link</button>
+        <div class="small" id="follow-msg" style="color:var(--ink-soft); margin-top:8px;">Resetting stops the old link working and removes everyone who followed with it.</div>` : `<div class="small" id="follow-msg" style="color:var(--ink-soft);">Switch it on to get a link to share with parents.</div>`}
+    </div>`;
+}
 async function openNotificationsPopup(){
   const teamId = activeCloudTeamId();
   let st = await pushGetState();
   let healed = false;                  // the automatic repair is tried once per visit to this pop-up, never in a loop
-  let prefs = null, prefsNote = '';
+  let prefs = null, prefsNote = '', audience = null;
   const loadPrefs = async ()=>{
-    prefs = null; prefsNote = '';
+    prefs = null; prefsNote = ''; audience = null;
     if(!st.supported) return;
     if(!teamId){ prefsNote = 'Choose a synced team to pick what you get.'; return; }
     try{ const {data, error} = await supabaseClient.rpc('notification_get_prefs', {p_team_id:teamId}); if(error) throw error; prefs = data || []; }
     catch(e){ prefsNote = "Your choices couldn't be loaded yet."; }
+    if(myEffectivePermission()==='admin'){
+      try{ await followCfg(true); }catch(e){}
+      try{ const {data, error} = await supabaseClient.rpc('notification_get_audience', {p_team_id:teamId}); if(!error) audience = data || []; }catch(e){}
+    }
   };
   await loadPrefs();
   const statusText = ()=>{
@@ -8654,7 +8869,22 @@ async function openNotificationsPopup(){
             <label class="switch"><input type="checkbox" role="switch" data-np-pref="${esc(t.topic)}" ${t.enabled?'checked':''}><span class="switch-track"></span></label>
           </div>`).join('') || '<div class="small" style="color:var(--ink-soft);">Nothing to choose yet.</div>'
           : `<div class="small" style="color:var(--ink-soft);">${esc(prefsNote || (st.supported ? '' : 'Not available on this device.'))}</div>`}
-      </div>`;
+      </div>
+      ${audience && audience.length ? `
+      <div class="section-title" style="margin-top:16px;">Who gets them (whole team)</div>
+      <div class="small" style="color:var(--ink-soft); margin-bottom:8px;">Coaches = High and Medium access. Parents = people following with the parent link below (and any Basic view-only logins). Everyone can still switch kinds off for themselves above.</div>
+      <div class="card" style="margin-bottom:0;">
+        <div style="display:flex; justify-content:flex-end; gap:18px; font-size:12px; font-weight:700; color:var(--ink-soft); padding-bottom:4px;"><span style="width:62px; text-align:center;">Coaches</span><span style="width:62px; text-align:center;">Parents</span></div>
+        ${audience.map(a=>`
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:9px 0; border-top:1px solid var(--line);">
+            <div style="min-width:0; font-weight:600; font-size:14px;">${esc(a.label)}</div>
+            <div style="display:flex; gap:18px; flex-shrink:0;">
+              <label style="width:62px; display:flex; justify-content:center;"><input type="checkbox" data-aud="${esc(a.topic)}|coaches" ${a.coaches?'checked':''} style="width:22px; height:22px; accent-color:var(--pitch);"></label>
+              <label style="width:62px; display:flex; justify-content:center;"><input type="checkbox" data-aud="${esc(a.topic)}|parents" ${a.parents?'checked':''} style="width:22px; height:22px; accent-color:var(--pitch);"></label>
+            </div>
+          </div>`).join('')}
+      </div>` : ''}
+      ${(myEffectivePermission()==='admin' && _follow.cfg) ? followCardHtml() : ''}`;
     openModal(body, {floating:true});
     attachModalHandlers();
     const note = (t)=>{ const el = document.getElementById('np-msg'); if(el) el.textContent = t; };
@@ -8709,6 +8939,38 @@ async function openNotificationsPopup(){
     if(helperEl) pushHelperVersion().then(v=>{ helperEl.textContent = (v ? 'Notification helper: version ' + v : 'Notification helper: an older version is still running. Close SquadHub completely and reopen it.') + ' \u00b7 Chrome says notifications are: ' + permissionWord(); });
     const off = document.querySelector('[data-np-disable]');
     if(off) off.onclick = async ()=>{ off.disabled = true; try{ await pushDisable(); }catch(e){} await refresh('Turned off on this phone.'); };
+    const followSave = async (patch, reset)=>{
+      const c = _follow.cfg; if(!c) return;
+      const {data, error} = await supabaseClient.rpc('follow_set', {p_team_id:teamId, p_enabled:patch.enabled!==undefined?patch.enabled:c.enabled, p_names:patch.names||c.names||'initials', p_reset:!!reset});
+      if(error || !data || !data[0]){ note("That didn't save. Please try again."); return false; }
+      _follow.cfg = data[0]; _follow.at = Date.now(); paint(''); return true;
+    };
+    const fOn = document.querySelector('[data-follow-on]');
+    if(fOn) fOn.addEventListener('change', async ()=>{ if(!(await followSave({enabled:fOn.checked}))) fOn.checked = !fOn.checked; });
+    document.querySelectorAll('[data-follow-names]').forEach(b=> b.addEventListener('click', ()=> followSave({names:b.dataset.followNames})));
+    const fMsg = (t)=>{ const el = document.getElementById('follow-msg'); if(el) el.textContent = t; };
+    const fCopy = document.querySelector('[data-follow-copy]');
+    if(fCopy) fCopy.onclick = async ()=>{ try{ await navigator.clipboard.writeText(followLink()); fMsg('Link copied.'); }catch(e){ fMsg('Could not copy. Press and hold the link to copy it.'); } };
+    const fShare = document.querySelector('[data-follow-share]');
+    if(fShare) fShare.onclick = async ()=>{
+      const msg = `Follow ${teamShort()} live: ${followLink()}`;
+      try{ if(navigator.share) await navigator.share({title:`${teamShort()} live`, text:msg}); else { await navigator.clipboard.writeText(msg); fMsg('Message copied. Paste it into your parents\' group.'); } }catch(e){}
+    };
+    const fReset = document.querySelector('[data-follow-reset]');
+    if(fReset) fReset.onclick = async ()=>{
+      if(fReset.dataset.sure!=='1'){ fReset.dataset.sure = '1'; fReset.textContent = 'Tap again to reset the link'; return; }
+      fReset.disabled = true; await followSave({}, true); const el = document.getElementById('follow-msg'); if(el) el.textContent = 'New link made. Share it again.';
+    };
+    document.querySelectorAll('[data-aud]').forEach(el=>{
+      el.addEventListener('change', async ()=>{
+        const [topic, who] = el.dataset.aud.split('|');
+        const row = (audience||[]).find(a=>a.topic===topic); if(!row) return;
+        const next = {coaches:row.coaches, parents:row.parents}; next[who] = el.checked;
+        const {error} = await supabaseClient.rpc('notification_set_audience', {p_team_id:teamId, p_topic:topic, p_coaches:next.coaches, p_parents:next.parents});
+        if(error){ el.checked = !el.checked; note("That didn't save. Please try again."); }
+        else row[who] = el.checked;
+      });
+    });
     document.querySelectorAll('[data-np-pref]').forEach(el=>{
       el.addEventListener('change', async ()=>{
         const {error} = await supabaseClient.rpc('notification_set_pref', {p_team_id:teamId, p_topic:el.dataset.npPref, p_enabled:el.checked});
@@ -9492,6 +9754,8 @@ function openEndGameConfirm(fixtureId){
 function commitMatchFinished(fixtureId){
   const f = DATA.fixtures.find(x=>x.id===fixtureId);
   if(!f) return;
+  notifyMatchEnded(f);
+  followPublish(f, true);
   f.status = 'finished';
   delete f.liveLock;
   setLiveRunning(f, false);
