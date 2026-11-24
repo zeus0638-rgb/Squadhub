@@ -937,6 +937,13 @@
   html.text-large .fs-map [style*="font-size:16px"]{ font-size:18px !important; }
   html.text-large .fs-map [style*="font-size:17px"]{ font-size:19px !important; }
   /* Sub-screens with a back button (player/coach/result screens): bigger banner text too */
+  /* Home banner a touch smaller than the other main tabs */
+  .topbar.home-top h1{ font-size:19px; }
+  .topbar.home-top .sub{ font-size:11.5px; }
+  .home-top .nm-label{ font-size:9.5px; } .home-top .nm-opp{ font-size:12px; } .home-top .nm-date{ font-size:10px; }
+  html.text-large .topbar.topbar-main.home-top h1{ font-size:26px; }
+  html.text-large .topbar.topbar-main.home-top .sub{ font-size:13.5px; }
+  html.text-large .home-top .nm-label{ font-size:10px; } html.text-large .home-top .nm-opp{ font-size:13.5px; } html.text-large .home-top .nm-date{ font-size:11.5px; }
   html.text-large .topbar.topbar-big h1{ font-size:28px; letter-spacing:.015em; }
   html.text-large .topbar.topbar-big .sub{ font-size:15px; }
   /* Match result screen: score tile, tabs and timeline (the Pitch view tab is left as it was) */
@@ -5186,7 +5193,7 @@ function renderHomeTab(){
     tabHtml = renderPlayerStatsContent(seasonFixtures);
   }
   return `
-  <div class="topbar topbar-main" style="position:relative;">
+  <div class="topbar topbar-main home-top" style="position:relative;">
     ${teamLogoWatermarkHtml()}
     <div class="team-switch" data-open-team-switcher>${safeBadgeSrc(DATA.teamBadge) ? `<img class="team-switch-badge" src="${safeBadgeSrc(DATA.teamBadge)}">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     <h1 style="margin-top:-16px;">Home</h1>
@@ -8010,12 +8017,9 @@ function renderTeamTab(){
     const permText = perm==='granted' ? 'Allowed' : perm==='denied' ? 'Blocked in your phone settings' : perm==='unsupported' ? 'Not available on this device' : 'Not asked yet';
     const sw = (key, on)=>`<label class="switch"><input type="checkbox" role="switch" data-notif-toggle="${key}" ${on?'checked':''}><span class="switch-track"></span></label>`;
     tabHtml = `
-    <div class="section-title" style="margin-top:0;">Substitution reminders</div>
+    <div class="section-title" style="margin-top:0;">Sub reminder timing</div>
     <div class="card">
-      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px;">
-        <div><div style="font-weight:600;">Remind me about planned subs</div><div class="small" style="color:var(--ink-soft);">During a live match: who comes off, who comes on, and where.</div></div>
-        ${sw('subReminders', ns.subReminders)}
-      </div>
+      <div class="small" style="color:var(--ink-soft); margin-bottom:12px;">Which notifications you get (and for coaches or parents) is set from the team switcher &rarr; Notifications, or the bell on a match.</div>
       <label>Remind me</label>
       <div class="toggle-group" style="margin-bottom:14px;">
         <button type="button" class="${ns.subLeadMinutes===0?'on':''}" data-sub-lead="0">At the time</button>
@@ -8028,15 +8032,14 @@ function renderTeamTab(){
       </div>
     </div>
 
-    <div class="section-title">Phone notifications</div>
+    <div class="section-title">Notifications</div>
     <div class="card">
-      <div style="font-weight:600;">Reminders when the app is closed</div>
-      <div class="small" style="color:var(--ink-soft); margin:2px 0 12px;">Each coach switches this on for their own phone. The reminder is sent from the server, so it arrives even if SquadHub is closed or the phone is locked.</div>
-      <button type="button" class="btn amber" data-open-notifications style="margin-bottom:10px;">Set up this phone</button>
+      <button type="button" class="btn amber" data-open-notifications style="margin-bottom:10px;">Notification settings</button>
+      <div class="small" style="color:var(--ink-soft); margin:0 0 12px;">Phone status: ${permText}. Each coach switches notifications on for their own phone from there.</div>
       <button type="button" class="btn ghost" data-notif-test style="margin-bottom:0;">Show a test reminder here</button>
     </div>
 
-    <div class="section-title">Keep the screen on</div>
+    <div class="section-title">Live match</div>
     <div class="card">
       <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
         <div><div style="font-weight:600;">Keep the screen on during a live match</div><div class="small" style="color:var(--ink-soft);">Stops the phone locking mid-match, so the clock stays in front of you. Uses more battery.</div></div>
@@ -8329,8 +8332,30 @@ function showSavedToast(){
     setTimeout(()=> toast.remove(), 200);
   }, 1000);
 }
+// Phone back button closes the open pop-up (instead of leaving the app). One history entry is pushed
+// while any pop-up is open; popups replacing each other share it.
+let _modalHist = false, _ignorePop = 0;
+function modalHistPush(){
+  if(_modalHist) return;
+  try{ history.pushState({sqhModal:1}, ''); _modalHist = true; }catch(e){}
+}
+function modalHistRelease(){
+  // after a normal close: drop the spare history entry unless another pop-up opened straight away
+  setTimeout(()=>{
+    if(_modalHist && !document.getElementById('modal-root')){
+      _modalHist = false; _ignorePop++;
+      try{ history.back(); }catch(e){ _ignorePop--; }
+    }
+  }, 80);
+}
+window.addEventListener('popstate', ()=>{
+  if(_ignorePop>0){ _ignorePop--; return; }
+  _modalHist = false;
+  document.querySelectorAll('#modal-root').forEach(m=> m.remove());
+});
 function openModal(html, opts){
-  closeModal();
+  document.querySelectorAll('#modal-root').forEach(m=> m.remove());
+  modalHistPush();
   const floating = !!(opts && opts.floating);
   const wrap = document.createElement('div');
   wrap.className = 'modal-bg' + (floating ? ' floating' : '') + (opts && opts.wide ? ' wide-bg' : '');
@@ -8454,6 +8479,7 @@ function largeTextScope(){
 }
 function closeModal(){
   document.querySelectorAll('#modal-root').forEach(m=> m.remove());
+  if(_modalHist) modalHistRelease();
 }
 
 function openRecordCoachQualModal(coachId, linkId, returnToQualsList){
@@ -8888,7 +8914,7 @@ if('serviceWorker' in navigator && /^https?:/.test(location.protocol)){
   window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
   // Stale-page guard: installed/Play Store copies can hold on to an old index.html. Ask the
   // server (bypassing every cache) which build is live and reload once if this isn't it.
-  const BUILD_ID = '2026-11-24-2205';
+  const BUILD_ID = '2026-11-24-2320';
   const checkForNewBuild = async ()=>{
     try{
       if(!navigator.onLine) return;
