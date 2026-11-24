@@ -513,10 +513,13 @@
   .live-bar-played .live-bar-val{color:var(--amber);}
   .live-bar-projected .live-bar-val{color:#fff;}
   .attr-bar-row .av{width:26px; text-align:right; font-weight:700; font-family:'Oswald',sans-serif; flex-shrink:0;}
-  .ng-head{display:flex; justify-content:flex-end; font-size:12px; font-weight:700; color:var(--ink-soft); padding-bottom:6px;}
-  .ng-head span, .ng-cell{width:48px; flex-shrink:0; text-align:center;}
+  .sticky-head{position:sticky; top:-22px; z-index:6; background:var(--panel); margin:-22px -20px 6px; padding:22px 20px 8px; border-bottom:1px solid var(--line);}
+  .sticky-head h3{margin:0 0 2px;}
+  .sticky-head .icon-x{top:18px;}
+  .ng-head{display:flex; justify-content:flex-end; align-items:flex-end; gap:6px; font-size:11px; font-weight:700; color:var(--ink-soft); padding:6px 0; position:sticky; top:0; z-index:4; background:var(--panel); border-bottom:1px solid var(--line);}
+  .ng-head span, .ng-cell{width:62px; flex-shrink:0; text-align:center;}
+  .ng-head span{white-space:nowrap; overflow:hidden; text-overflow:clip;}
   .ng-row{display:flex; align-items:center; justify-content:space-between; gap:6px; padding:9px 0; border-top:1px solid var(--line);}
-  .ng-head + .ng-row{border-top:none;}
   .ng-cell{display:flex; justify-content:center;}
   .ng-cell input{width:22px; height:22px; accent-color:var(--pitch);}
   .ng-cell.chg input{outline:2px dashed var(--ink-soft); outline-offset:2px; border-radius:4px;}
@@ -2497,6 +2500,14 @@ async function notifLoadGrid(teamId){
   }catch(e){ return null; }
 }
 // one grid for both the team switcher and a match: rows = kinds, columns = Me / Coaches / Parents
+function stickyHeadHtml(title, subHtml){
+  return `<div class="sticky-head"><h3>${title}</h3><button class="icon-x" data-close-modal>&times;</button>${subHtml||''}</div>`;
+}
+// the column headings stay in view just under the pinned title while the list scrolls
+function pinGridHead(){
+  const h = document.querySelector('#modal-root .sticky-head');
+  document.querySelectorAll('#modal-root .ng-head').forEach(el=>{ el.style.top = (h ? h.offsetHeight - 22 : 0) + 'px'; });
+}
 function notifGridHtml(rows, opts){
   const teamCols = !!opts.teamCols, lockTeam = !!opts.lockTeamCols;
   if(!rows.length) return `<div class="small" style="color:var(--ink-soft);">Nothing to choose yet.</div>`;
@@ -2518,16 +2529,20 @@ function matchBellBtn(f){
 async function openMatchNotificationsModal(fixtureId){
   const f = DATA.fixtures.find(x=>x.id===fixtureId); if(!f) return;
   const teamId = activeCloudTeamId();
-  const title = `<h3>Match notifications</h3><button class="icon-x" data-close-modal>&times;</button>
-    <div class="small" style="color:var(--ink-soft); margin:-6px 0 12px;">${f.opponent ? 'vs '+esc(f.opponent) : 'This match'}${f.dateTime ? ' · '+esc(fmtDate(f.dateTime)) : ''}</div>`;
+  const title = stickyHeadHtml('Match notifications', `<div class="small" style="color:var(--ink-soft);">${f.opponent ? 'vs '+esc(f.opponent) : 'This match'}${f.dateTime ? ' · '+esc(fmtDate(f.dateTime)) : ''}</div>`);
   if(!teamId || !supabaseClient || !currentUser){
-    openModal(title + `<div class="small" style="color:var(--ink-soft);">Sign in and sync your team to use notifications.</div>`, {floating:true}); attachModalHandlers(); return;
+    openModal(title + `<div class="small" style="color:var(--ink-soft); margin-top:10px;">Sign in and sync your team to use notifications.</div>`, {floating:true}); attachModalHandlers(); return;
   }
+  openModal(title + `<div class="small" style="color:var(--ink-soft); margin-top:14px;">Loading...</div>`, {floating:true});     // shown at once; the choices follow when they arrive
+  attachModalHandlers();
   let grid = null, myOv = {};
   const load = async ()=>{
-    grid = await notifLoadGrid(teamId);
-    try{ const {data} = await supabaseClient.rpc('notification_get_match_prefs', {p_team_id:teamId, p_fixture_id:f.id}); myOv = {}; (data||[]).forEach(r=>{ myOv[r.topic] = r.enabled; }); }catch(e){}
-    try{ await followCfg(true); }catch(e){}
+    const [g, m] = await Promise.all([
+      notifLoadGrid(teamId),
+      supabaseClient.rpc('notification_get_match_prefs', {p_team_id:teamId, p_fixture_id:f.id}).then(r=>r, ()=>({data:null})),
+      followCfg().catch(()=>null)
+    ]);
+    grid = g; myOv = {}; ((m && m.data) || []).forEach(r=>{ myOv[r.topic] = r.enabled; });
   };
   await load();
   const perm = myEffectivePermission();
@@ -2552,6 +2567,7 @@ async function openMatchNotificationsModal(fixtureId){
     return msg;
   };
   const paint = ()=>{
+    if(!document.getElementById('modal-root')) return;          // closed while loading
     const body = title + `
       <div class="small" style="color:var(--ink-soft); margin-bottom:8px;">${teamCols ? 'Starts from your team defaults. Changes here apply to this match only.' : 'Starts from your defaults. Changes here apply to this match only.'}${lockTeam && teamCols ? (liveLockOwnerIsOther(f) ? ' Coach '+esc((f.liveLock&&f.liveLock.name)||'another coach')+' is running this match, so only your own tick can change.' : '') : ''}</div>
       <div class="card" style="margin-bottom:10px;">${grid ? notifGridHtml(rowsFor(), {teamCols, lockTeamCols:lockTeam}) : '<div class="small" style="color:var(--ink-soft);">Your choices could not be loaded. Check your connection.</div>'}
@@ -2561,6 +2577,7 @@ async function openMatchNotificationsModal(fixtureId){
       <div class="card" style="margin-bottom:0;">${linkHtml()}</div>`;
     openModal(body, {floating:true});
     attachModalHandlers();
+    pinGridHead();
     const note = (t)=>{ const el = document.getElementById('mn-msg'); if(el) el.textContent = t; };
     document.querySelectorAll('[data-ng]').forEach(el=>{
       el.addEventListener('change', async ()=>{
@@ -8814,7 +8831,7 @@ if('serviceWorker' in navigator && /^https?:/.test(location.protocol)){
   window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
   // Stale-page guard: installed/Play Store copies can hold on to an old index.html. Ask the
   // server (bypassing every cache) which build is live and reload once if this isn't it.
-  const BUILD_ID = '2026-11-24-0800';
+  const BUILD_ID = '2026-11-24-1800';
   const checkForNewBuild = async ()=>{
     try{
       if(!navigator.onLine) return;
@@ -9057,8 +9074,7 @@ async function openNotificationsPopup(){
   const paint = (msg)=>{
     const canTurnOn = st.supported && st.signedIn && !st.subscribed && st.permission!=='denied';
     const body = `
-      <h3>Notifications</h3>
-      <button class="icon-x" data-close-modal>&times;</button>
+      ${stickyHeadHtml('Notifications')}
       <div class="card" style="margin-bottom:12px;">
         <div style="font-weight:600;">This phone</div>
         <div class="small" style="color:var(--ink-soft); margin:2px 0 12px;">${esc(statusText())}</div>
@@ -9077,6 +9093,7 @@ async function openNotificationsPopup(){
       ${(myEffectivePermission()==='admin' && _follow.cfg) ? followCardHtml() : ''}`;
     openModal(body, {floating:true});
     attachModalHandlers();
+    pinGridHead();
     const note = (t)=>{ const el = document.getElementById('np-msg'); if(el) el.textContent = t; };
     const refresh = async (m)=>{ st = await pushGetState(); await loadPrefs(); paint(m); };
     const enable = document.querySelector('[data-np-enable]');
