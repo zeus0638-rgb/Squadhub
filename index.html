@@ -4660,8 +4660,7 @@ function openManageQuarterModal(fixtureId, qNum){
       ${quickEventBtnHtml('yellowcard','data-lp-event','Log a yellow card')}
       ${quickEventBtnHtml('redcard','data-lp-event','Log a red card')}
       ${quickEventBtnHtml('owngoal','data-lp-event','Log an own goal')}
-    </div>
-    <button type="button" class="btn ghost" data-lp-event="oppown" style="margin:10px 0 0;">⚽ Opponent own goal (counts for us)</button>`;
+    </div>`;
   openModal(body, {floating:true});
   attachModalHandlers();
   const startBtn = document.querySelector('#modal-root [data-lp-start]');
@@ -4787,10 +4786,13 @@ function openQuarterQuickLog(fixtureId, qNum, type){
       <button class="icon-x" data-close-modal>&times;</button>
       ${type==='goal' ? `<button type="button" data-ql-oppo-goal style="position:absolute; top:16px; right:54px; background:var(--surface-2); color:var(--ink); border:1px solid var(--line); border-radius:16px; padding:6px 12px; font-size:13px; font-weight:700; cursor:pointer;">&#129349; Oppo goal</button>` : ''}
       <div class="small" style="color:var(--ink-soft); margin:-6px 0 12px;">${esc(periodFullLabel(f, qNum))}</div>
+      ${type==='owngoal' ? `<div class="card" style="margin-bottom:10px;"><div class="player-row tap" data-ql-oppown><div class="pname" style="flex:1; font-weight:700;">🥅 ${esc(f.opponent||'Opponent')} <span class="small" style="color:var(--ink-soft); font-weight:400;">— own goal, counts for us</span></div></div></div>` : ''}
       ${eligible.length===0 ? `<div class="small" style="color:var(--ink-soft);">No one is recorded on the pitch for this ${word} yet. Open it and set the lineup first.</div>`
         : `<div class="card" style="max-height:55vh; overflow-y:auto; margin-bottom:0;">${playerRows(eligible, 'data-ql-player')}</div>`}`;
     openModal(body, {floating:true});
     attachModalHandlers();
+    const oppOwnRow = document.querySelector('#modal-root [data-ql-oppown]');
+    if(oppOwnRow) oppOwnRow.onclick = ()=>{ closeModal(); openQuarterQuickLog(fixtureId, qNum, 'oppown'); };
     const oppoBtn = document.querySelector('#modal-root [data-ql-oppo-goal]');
     if(oppoBtn) oppoBtn.onclick = ()=>{ closeModal(); openLogOppoGoalConfirm(fixtureId, qNum); };
     document.querySelectorAll('[data-ql-player]').forEach(el=>{
@@ -6165,6 +6167,7 @@ function renderPitchFormation(f, quarterKey, opts){
       ? `<div data-overlay-col style="flex:1; min-width:0; display:flex; flex-direction:column; gap:6px;"><button type="button" data-view-player-mins="${f.id}" ${opts.useActual?'data-use-actual="true"':''} ${opts.minsSoFar?'data-mins-so-far="true"':''} style="${overlayBtnStyle} flex:none; width:100%;">Player mins</button><button type="button" data-view-events="${f.id}" data-events-editable="${opts.allowReset?'true':'false'}" style="${overlayBtnStyle} flex:none; width:100%;">Events</button></div>`
       : `<button type="button" data-view-player-mins="${f.id}" ${opts.useActual?'data-use-actual="true"':''} ${opts.minsSoFar?'data-mins-so-far="true"':''} style="${overlayBtnStyle}">Player mins</button>`) : '',
     opts.allowOppoGoal ? `<button type="button" data-log-oppo-goal-marker="${f.id}|${quarterNumForOppoGoal}" style="${oppoGoalBtnStyle}">🥅 Oppo goal</button>` : '',
+    opts.allowOppoGoal ? `<button type="button" data-log-oppown-marker="${f.id}|${quarterNumForOppoGoal}" style="${oppoGoalBtnStyle}">⚽ Opp OG</button>` : '',
     (opts.allowAutoGenerate && !opts.useActual) ? `<button type="button" data-open-spread-minutes="${f.id}" style="${overlayBtnStyle}">Auto-generate</button>` : '',
     opts.allowReset ? `<button type="button" data-reset-pitch-formation="${posKey}" style="${overlayBtnStyle}">Reset markers</button>` : ''
   ].filter(Boolean);
@@ -6222,7 +6225,7 @@ function sortEventsForDisplay(qEvents){
   return keyed.map(x=>x.ev).reverse();
 }
 function renderEventItem(ev, fixtureId){
-  const tags = {goal:'⚽', sub:'SUB', penalty:'PEN', comment:'NOTE', oppogoal:'OPP ⚽', owngoal:'OWN ⚽', oppown:'⚽ OG', yellowcard:'🟨 CARD', redcard:'🟥 CARD'};
+  const tags = {goal:'⚽', sub:'SUB', penalty:'PEN', comment:'NOTE', oppogoal:'OPP ⚽', owngoal:'⚽ OG', oppown:'⚽ OG', yellowcard:'🟨 CARD', redcard:'🟥 CARD'};
   const time = ev.clockTime ? ev.clockTime : ((typeof ev.minute === 'number') ? `${ev.minute}'` : fmtEventTime(ev.loggedAt));
   let text = '';
   if(ev.type==='goal'){
@@ -8885,7 +8888,7 @@ if('serviceWorker' in navigator && /^https?:/.test(location.protocol)){
   window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
   // Stale-page guard: installed/Play Store copies can hold on to an old index.html. Ask the
   // server (bypassing every cache) which build is live and reload once if this isn't it.
-  const BUILD_ID = '2026-11-24-2130';
+  const BUILD_ID = '2026-11-24-2205';
   const checkForNewBuild = async ()=>{
     try{
       if(!navigator.onLine) return;
@@ -11823,7 +11826,7 @@ function openMarkerInfoModal(fixtureId, quarterKey, pos, useActual){
         else if(ev.type==='goal' && ev.assist===p.id){ tag='⚽'; text = `Assisted${time?' — '+time:''}`; }
         else if(ev.type==='yellowcard'){ tag='🟨 CARD'; text = `Yellow card${time?' — '+time:''}`; }
         else if(ev.type==='redcard'){ tag='🟥 CARD'; text = `Red card${time?' — '+time:''}`; }
-        else if(ev.type==='owngoal' && ev.player===p.id){ tag='OWN ⚽'; text = `Own goal${time?' — '+time:''}`; }
+        else if(ev.type==='owngoal' && ev.player===p.id){ tag='⚽ OG'; text = `Own goal${time?' — '+time:''}`; }
         else return '';
         return `<div class="event-item"><span class="tag">${tag}</span><span style="flex:1;">${text}</span></div>`;
       }).join('')}
@@ -14482,6 +14485,12 @@ function attachHandlers(){
     ['pointerup','pointercancel','pointerleave'].forEach(ev=> card.addEventListener(ev, clear));
     card.addEventListener('click', (e)=>{ if(fired){ e.stopImmediatePropagation(); e.preventDefault(); fired = false; } }, true);   // the release after a hold isn't a tap
     card.addEventListener('contextmenu', (e)=> e.preventDefault());
+  });
+  document.querySelectorAll('[data-log-oppown-marker]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const [fixtureId, quarterNum] = btn.dataset.logOppownMarker.split('|');
+      openQuarterQuickLog(fixtureId, parseInt(quarterNum), 'oppown');
+    });
   });
   document.querySelectorAll('[data-log-oppo-goal-marker]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
