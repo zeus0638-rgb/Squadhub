@@ -10,7 +10,7 @@
 
    It does not cache anything, so changes to index.html still reach everyone the next time they open the app. */
 
-var SW_VERSION = '2026-11-21b';
+var SW_VERSION = '2026-11-24a';
 self.addEventListener('install', function(e){ self.skipWaiting(); });
 self.addEventListener('activate', function(e){ e.waitUntil(self.clients.claim()); });
 
@@ -22,7 +22,7 @@ self.addEventListener('push', function(e){
     body: d.body || '',
     tag: d.tag || undefined,            // same tag = replaces the earlier notification instead of stacking
     renotify: false,
-    requireInteraction: d.topic === 'sub_reminders' || d.topic === 'period_end' || d.topic === 'match_end',   // time-critical ones stay until you deal with them
+    requireInteraction: d.topic === 'sub_reminders' || d.topic === 'period_end' || d.topic === 'match_end' || d.title === 'Full time',   // time-critical ones stay until you deal with them
     vibrate: [250, 120, 250, 120, 250],
     icon: 'icon-192.png',
     data: d
