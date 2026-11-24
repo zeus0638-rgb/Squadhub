@@ -1350,11 +1350,12 @@ function currentEventQuarter(f){
   return getViewingQuarter(f);
 }
 // Every period, one per line: played ones show their score, the live one pulses with LIVE beside it, the rest show #-#.
+function isUsGoalEv(e){ return e.type==='goal' || e.type==='oppown' || (e.type==='penalty' && e.outcome==='Scored'); }  // oppown = the opposition put it in their own net
 function isThemGoalEv(e){ return e.type==='oppogoal' || e.type==='owngoal'; }  // an own goal by one of ours counts for the opposition
 function renderPeriodScoreList(f, viewQ){
   const liveQ = f.liveState ? f.liveState.quarter : 0;
   const goals = (q)=>({
-    us: (f.events||[]).filter(e=>e.quarter===q && (e.type==='goal' || (e.type==='penalty' && e.outcome==='Scored'))).length,
+    us: (f.events||[]).filter(e=>e.quarter===q && isUsGoalEv(e)).length,
     them: (f.events||[]).filter(e=>e.quarter===q && isThemGoalEv(e)).length
   });
   return `<div class="qs-list" data-score-lines>${periodKeys(f).map((pk,i)=>{
@@ -1371,7 +1372,7 @@ function quarterScoreLines(f, upTo){
   // Our goals / their goals scored in each period so far (a scored penalty counts as ours, same as the match score).
   const rows = [];
   for(let q=1; q<=upTo; q++){
-    const us = (f.events||[]).filter(e=>e.quarter===q && (e.type==='goal' || (e.type==='penalty' && e.outcome==='Scored'))).length;
+    const us = (f.events||[]).filter(e=>e.quarter===q && isUsGoalEv(e)).length;
     const them = (f.events||[]).filter(e=>e.quarter===q && isThemGoalEv(e)).length;
     rows.push({q, us, them});
   }
@@ -2714,6 +2715,7 @@ function followBuildSnapshot(f, ended){
     if(ev.type==='goal'){ k='goal'; txt = `${L(ev.scorer)} scored` + (ev.assist ? ` (assist ${L(ev.assist)})` : ''); }
     else if(ev.type==='oppogoal'){ k='ogoal'; txt = `${f.opponent||'Opponent'} scored`; }
     else if(ev.type==='owngoal'){ k='ogoal'; txt = `Own goal: ${L(ev.player)}`; }
+    else if(ev.type==='oppown'){ k='goal'; txt = `${f.opponent||'Opponent'} own goal`; }
     else if(ev.type==='yellowcard'){ k='yc'; txt = `Yellow card: ${L(ev.player)}`; }
     else if(ev.type==='redcard'){ k='rc'; txt = `Red card: ${L(ev.player)}`; }
     else if(ev.type==='penalty'){ k='pen'; txt = `Penalty: ${L(ev.player)}${ev.outcome?' ('+ev.outcome+')':''}`; }
@@ -2819,6 +2821,7 @@ function liveEventItem(ev, f){
   const nm = followPlayerLabel;
   const q = periodBadgeLabel(f, ev.quarter||1), sc = matchScoreLine(f);
   if(ev.type==='goal') return {topic:'live_events', title:`GOAL! ${nm(ev.scorer)} scored`, body:`${q} · ${sc}${ev.assist?' · assist '+nm(ev.assist):''}`};
+  if(ev.type==='oppown') return {topic:'live_events', title:`GOAL! ${f.opponent||'Opponent'} own goal`, body:`${q} · ${sc}`};
   if(ev.type==='owngoal') return {topic:'live_events', title:`Own goal: ${nm(ev.player)}`, body:`${q} · ${sc}`};
   if(ev.type==='oppogoal') return {topic:'live_events', title:`${f.opponent||'Opponent'} scored`, body:`${q} · ${sc}`};
   if(ev.type==='yellowcard') return {topic:'live_events', title:`Yellow card: ${nm(ev.player)}`, body:q};
@@ -4083,7 +4086,7 @@ function teamMatchStats(f){
   const oppoGoalsByQuarter = {1:0,2:0,3:0,4:0};
   let subsCount = 0, pensTaken = 0, pensScored = 0, pensMissed = 0;
   (f.events||[]).forEach(ev=>{
-    if(ev.type==='goal' && goalsByQuarter[ev.quarter]!==undefined) goalsByQuarter[ev.quarter]++;
+    if((ev.type==='goal'||ev.type==='oppown') && goalsByQuarter[ev.quarter]!==undefined) goalsByQuarter[ev.quarter]++;
     if(isThemGoalEv(ev) && oppoGoalsByQuarter[ev.quarter]!==undefined) oppoGoalsByQuarter[ev.quarter]++;
     if(ev.type==='sub') subsCount++;
     if(ev.type==='penalty'){
@@ -4459,12 +4462,12 @@ function renderGridPitchEnlargeOverlay(){
   const scoreDiff = f.finalScore.us - f.finalScore.them;
   const scoreState = scoreDiff>0 ? 'Winning' : (scoreDiff<0 ? 'Losing' : 'Drawing');
   const scoreStateColor = scoreDiff>0 ? 'var(--win)' : (scoreDiff<0 ? 'var(--loss)' : 'var(--ink-soft)');
-  const qGoalsUs = isPastQuarter ? (f.events||[]).filter(e=>e.type==='goal' && e.quarter===gridPitchEnlargedQuarter).length : 0;
+  const qGoalsUs = isPastQuarter ? (f.events||[]).filter(e=>(e.type==='goal'||e.type==='oppown') && e.quarter===gridPitchEnlargedQuarter).length : 0;
   const qGoalsThem = isPastQuarter ? (f.events||[]).filter(e=>isThemGoalEv(e) && e.quarter===gridPitchEnlargedQuarter).length : 0;
   // The running score as it stood at the END of this quarter specifically, not
   // wherever the match has got to since - f.finalScore is the latest total, which
   // would be wrong here once more goals have gone in after this quarter finished.
-  const cumUsByQ = isPastQuarter ? (f.events||[]).filter(e=>e.type==='goal' && e.quarter<=gridPitchEnlargedQuarter).length : 0;
+  const cumUsByQ = isPastQuarter ? (f.events||[]).filter(e=>(e.type==='goal'||e.type==='oppown') && e.quarter<=gridPitchEnlargedQuarter).length : 0;
   const cumThemByQ = isPastQuarter ? (f.events||[]).filter(e=>isThemGoalEv(e) && e.quarter<=gridPitchEnlargedQuarter).length : 0;
   // The period score list is the way back to the live period (tap the pulsing row), so there is no "Return to live"
   // button. Start this quarter / End game sit to the right of the list, roughly level with its last two rows.
@@ -4657,7 +4660,8 @@ function openManageQuarterModal(fixtureId, qNum){
       ${quickEventBtnHtml('yellowcard','data-lp-event','Log a yellow card')}
       ${quickEventBtnHtml('redcard','data-lp-event','Log a red card')}
       ${quickEventBtnHtml('owngoal','data-lp-event','Log an own goal')}
-    </div>`;
+    </div>
+    <button type="button" class="btn ghost" data-lp-event="oppown" style="margin:10px 0 0;">⚽ Opponent own goal (counts for us)</button>`;
   openModal(body, {floating:true});
   attachModalHandlers();
   const startBtn = document.querySelector('#modal-root [data-lp-start]');
@@ -4681,19 +4685,22 @@ function openQuarterQuickLog(fixtureId, qNum, type){
   });
   const players = ids.map(id=>getPlayer(id)).filter(Boolean);
   const word = periodWord(f).toLowerCase();
-  const eventLabel = type==='goal' ? 'goal' : (type==='yellowcard' ? 'yellow card' : (type==='owngoal' ? 'own goal' : 'red card'));
+  const eventLabel = type==='goal' ? 'goal' : (type==='yellowcard' ? 'yellow card' : (type==='owngoal' ? 'own goal' : (type==='oppown' ? 'opponent own goal' : 'red card')));
   const needsTimeStep = ()=> (reviewMode && reviewFixtureId===f.id) || !f.liveState || qNum !== f.liveState.quarter;
   const pulseColor = type==='goal' ? '#2E9E3F' : (type==='yellowcard' ? '#F4C430' : (type==='owngoal' ? '#6B5B95' : '#E0393E'));
   const playerRows = (list, attr)=> list.map(p=>`
     <div class="player-row tap" ${attr}="${p.id}">${shirtHtml(p)}<div class="pname" style="flex:1;">${esc(p.name)}</div></div>`).join('');
 
   const finish = (playerId, assistId, minute, clockTime)=>{
-    const player = getPlayer(playerId); if(!player) return;
+    const player = getPlayer(playerId); if(!player && type!=='oppown') return;
     const evBase = {id:uid(), quarter:qNum, loggedAt:new Date().toISOString()};
     if(typeof minute === 'number') evBase.minute = minute;
     if(clockTime) evBase.clockTime = clockTime;
     if(type==='goal'){
       f.events.push({...evBase, type:'goal', scorer:playerId, assist:assistId||null});
+      f.finalScore.us += 1;
+    } else if(type==='oppown'){
+      f.events.push({...evBase, type:'oppown'});
       f.finalScore.us += 1;
     } else {
       f.events.push({...evBase, type, player:playerId});
@@ -4702,10 +4709,10 @@ function openQuarterQuickLog(fixtureId, qNum, type){
     const autoRed = type==='yellowcard' ? checkSecondYellowAutoRed(f, playerId, qNum) : false;
     saveData();
     closeModal();
-    const where = findPlayerSlotInQuarter(f.actualLineup, f.positions, quarterKey, playerId);
+    const where = playerId ? findPlayerSlotInQuarter(f.actualLineup, f.positions, quarterKey, playerId) : null;
     justLoggedPulse = where ? {posKey:f.id+'_'+quarterKey, pos:where.pos, color:pulseColor} : null;
     render();
-    if(type==='goal') showGoalCelebration();
+    if(type==='goal' || type==='oppown') showGoalCelebration();
     else if(type==='owngoal') showOppoGoalReaction();
     else showCardAnimation(player.name, type);
     if(autoRed) setTimeout(()=> showCardAnimation(player.name, 'redcard'), 1900);
@@ -4714,11 +4721,11 @@ function openQuarterQuickLog(fixtureId, qNum, type){
 
   const timeStep = (playerId, assistId)=>{
     const mpp = f.minutesPerPeriod || DEFAULT_CONFIG.minutesPerPeriod;
-    const player = getPlayer(playerId);
+    const player = playerId ? getPlayer(playerId) : null;
     const body = `
       <h3>When did this happen?</h3>
       <button class="icon-x" data-close-modal>&times;</button>
-      <div class="small" style="color:var(--ink-soft); margin-bottom:10px;">${esc(player.name)} &mdash; ${eventLabel}</div>
+      <div class="small" style="color:var(--ink-soft); margin-bottom:10px;">${player ? esc(player.name)+' &mdash; ' : ''}${eventLabel}</div>
       <div class="toggle-group" id="ql-time-mode" data-selected="quarter">
         <button type="button" class="on" data-ql-mode="quarter">${esc(periodWord(f))} mins</button>
         <button type="button" data-ql-mode="clock">Real time</button>
@@ -4794,6 +4801,7 @@ function openQuarterQuickLog(fixtureId, qNum, type){
       });
     });
   };
+  if(type==='oppown'){ if(needsTimeStep()) timeStep(null, null); else finish(null, null); return; }
   playerStep();
 }
 function openPlanMinutesReviewModal(fixtureId, useActual, startTab, soFar){
@@ -6214,7 +6222,7 @@ function sortEventsForDisplay(qEvents){
   return keyed.map(x=>x.ev).reverse();
 }
 function renderEventItem(ev, fixtureId){
-  const tags = {goal:'⚽', sub:'SUB', penalty:'PEN', comment:'NOTE', oppogoal:'OPP ⚽', owngoal:'OWN ⚽', yellowcard:'🟨 CARD', redcard:'🟥 CARD'};
+  const tags = {goal:'⚽', sub:'SUB', penalty:'PEN', comment:'NOTE', oppogoal:'OPP ⚽', owngoal:'OWN ⚽', oppown:'⚽ OG', yellowcard:'🟨 CARD', redcard:'🟥 CARD'};
   const time = ev.clockTime ? ev.clockTime : ((typeof ev.minute === 'number') ? `${ev.minute}'` : fmtEventTime(ev.loggedAt));
   let text = '';
   if(ev.type==='goal'){
@@ -6223,6 +6231,8 @@ function renderEventItem(ev, fixtureId){
     text = `Q${ev.quarter} · ${scorer?scorer.name:'Unknown'} scored${assist?', assisted by '+assist.name:''}`;
   } else if(ev.type==='oppogoal'){
     text = `Q${ev.quarter} · Opponent scored`;
+  } else if(ev.type==='oppown'){
+    text = `Q${ev.quarter} · Opponent own goal (to us)`;
   } else if(ev.type==='owngoal'){
     const p = getPlayer(ev.player);
     text = `Q${ev.quarter} · Own goal — ${p?p.name:'?'}`;
@@ -6241,7 +6251,7 @@ function renderEventItem(ev, fixtureId){
     const p = getPlayer(ev.player);
     text = `Q${ev.quarter} · ${p?p.name:'?'} — red card`;
   }
-  const editAttr = (ev.type==='yellowcard' || ev.type==='redcard' || ev.type==='owngoal') ? 'data-edit-card' : (ev.type==='goal' || ev.type==='oppogoal') ? 'data-edit-goal' : null;
+  const editAttr = (ev.type==='yellowcard' || ev.type==='redcard' || ev.type==='owngoal' || ev.type==='oppown') ? 'data-edit-card' : (ev.type==='goal' || ev.type==='oppogoal') ? 'data-edit-goal' : null;
   const editBtn = (fixtureId && editAttr) ? `<button type="button" ${editAttr}="${fixtureId}|${ev.id}" title="Edit time/period" style="background:none; border:none; padding:0 0 0 8px; cursor:pointer; color:var(--ink-soft); font-size:13.5px; font-weight:700; font-family:inherit;">Edit</button>` : '';
   const delBtn = fixtureId ? `<button class="icon-x" style="position:static; font-size:16px; padding:0 0 0 8px;" data-delete-event="${fixtureId}|${ev.id}">&times;</button>` : '';
   const showTime = time && ev.type!=='comment';
@@ -8875,7 +8885,7 @@ if('serviceWorker' in navigator && /^https?:/.test(location.protocol)){
   window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
   // Stale-page guard: installed/Play Store copies can hold on to an old index.html. Ask the
   // server (bypassing every cache) which build is live and reload once if this isn't it.
-  const BUILD_ID = '2026-11-24-2100';
+  const BUILD_ID = '2026-11-24-2130';
   const checkForNewBuild = async ()=>{
     try{
       if(!navigator.onLine) return;
@@ -10591,6 +10601,8 @@ function eventPlainText(ev){
     return `${scorer?scorer.name:'Unknown'} scored${assist?', assisted by '+assist.name:''}${time?' ('+time+')':''}`;
   } else if(ev.type==='oppogoal'){
     return `Opponent scored${time?' ('+time+')':''}`;
+  } else if(ev.type==='oppown'){
+    return `Opponent own goal${time?' ('+time+')':''}`;
   } else if(ev.type==='owngoal'){
     const p = getPlayer(ev.player);
     return `Own goal — ${p?p.name:'?'}${time?' ('+time+')':''}`;
@@ -11532,7 +11544,7 @@ function openDeleteEventConfirm(fixtureId, eventId){
     const ev2 = (f2.events||[]).find(x=>x.id===eventId);
     if(!ev2) { closeModal(); return; }
     f2.events = f2.events.filter(x=>x.id!==eventId);
-    if(ev2.type==='goal'){
+    if(ev2.type==='goal' || ev2.type==='oppown'){
       f2.finalScore.us = Math.max(0, f2.finalScore.us - 1);
     } else if(ev2.type==='penalty' && ev2.outcome==='Scored'){
       f2.finalScore.us = Math.max(0, f2.finalScore.us - 1);
@@ -12315,15 +12327,15 @@ function openEditCardModal(fixtureId, eventId){
   const f = DATA.fixtures.find(x=>x.id===fixtureId);
   if(!f) return;
   const ev = (f.events||[]).find(e=>e.id===eventId);
-  if(!ev || (ev.type!=='yellowcard' && ev.type!=='redcard' && ev.type!=='owngoal')) return;
+  if(!ev || (ev.type!=='yellowcard' && ev.type!=='redcard' && ev.type!=='owngoal' && ev.type!=='oppown')) return;
   const player = getPlayer(ev.player);
   const mpp = f.minutesPerPeriod || DEFAULT_CONFIG.minutesPerPeriod;
   const currentMinute = (typeof ev.minute==='number') ? ev.minute : Math.round(mpp/2);
   const startMode = ev.clockTime ? 'clock' : 'quarter';
   const body = `
-    <h3>${ev.type==='owngoal'?'Edit own goal':'Edit '+(ev.type==='redcard'?'red':'yellow')+' card'}</h3>
+    <h3>${ev.type==='oppown'?'Edit opponent own goal':ev.type==='owngoal'?'Edit own goal':'Edit '+(ev.type==='redcard'?'red':'yellow')+' card'}</h3>
     <button class="icon-x" data-close-modal>&times;</button>
-    <div class="small" style="color:var(--ink-soft); margin-bottom:14px;">${player?esc(player.name):'Unknown'}</div>
+    <div class="small" style="color:var(--ink-soft); margin-bottom:14px;">${ev.type==='oppown' ? esc(f.opponent||'Opponent') : (player?esc(player.name):'Unknown')}</div>
     <label>Period</label>
     <div class="toggle-group" id="edit-card-quarter" data-selected="${ev.quarter}">
       ${periodKeys(f).map((q,i)=>`<button type="button" class="${ev.quarter===i+1?'on':''}" data-quarter-opt="${i+1}">${esc(periodBadgeLabel(f, i+1))}</button>`).join('')}
