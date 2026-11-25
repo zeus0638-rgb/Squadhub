@@ -5353,9 +5353,10 @@ function renderHomeTab(){
     ${teamLogoWatermarkHtml()}
     <div class="team-switch" data-open-team-switcher>${safeBadgeSrc(DATA.teamBadge) ? `<img class="team-switch-badge" src="${safeBadgeSrc(DATA.teamBadge)}">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     <h1>${(homeTab==='fixtures'||homeTab==='results') ? 'Fixtures &amp; Results' : 'Stats'}</h1>
-    <div class="sub">${(homeTab==='fixtures'||homeTab==='results') ? 'Upcoming fixtures &amp; past results' : 'Season &amp; player stats'}</div>
+    <div class="sub">${(homeTab==='fixtures'||homeTab==='results') ? '&nbsp;' : 'Season &amp; player stats'}</div>
   </div>
   <div class="content fs-area">
+    ${(homeTab==='fixtures'||homeTab==='results') ? `<div class="dash-hi">${homeTab==='fixtures' ? 'Fixtures' : 'Results'}</div>` : ''}
     <div class="season-chip-wrap">${seasonChipHtml('home', homeSeasonFilter)}</div>
     ${tabHtml}
   </div>`;
@@ -8236,15 +8237,9 @@ function teamSectionHtml(tab){
     const permText = perm==='granted' ? 'Allowed' : perm==='denied' ? 'Blocked in your phone settings' : perm==='unsupported' ? 'Not available on this device' : 'Not asked yet';
     const sw = (key, on)=>`<label class="switch"><input type="checkbox" role="switch" data-notif-toggle="${key}" ${on?'checked':''}><span class="switch-track"></span></label>`;
     tabHtml = `
-    <div class="section-title" style="margin-top:0;">Sub reminder timing</div>
+    <div class="section-title" style="margin-top:0;">Sub reminders</div>
     <div class="card">
       <div class="small" style="color:var(--ink-soft); margin-bottom:12px;">Which notifications you get (and for coaches or parents) is set from the team switcher &rarr; Notifications, or the bell on a match.</div>
-      <label>Remind me</label>
-      <div class="toggle-group" style="margin-bottom:14px;">
-        <button type="button" class="${ns.subLeadMinutes===0?'on':''}" data-sub-lead="0">At the time</button>
-        <button type="button" class="${ns.subLeadMinutes===1?'on':''}" data-sub-lead="1">1 min before</button>
-        <button type="button" class="${ns.subLeadMinutes===2?'on':''}" data-sub-lead="2">2 min before</button>
-      </div>
       <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
         <div><div style="font-weight:600;">Sound and vibration</div><div class="small" style="color:var(--ink-soft);">A short alert tone and buzz with each reminder.</div></div>
         ${sw('subSound', ns.subSound)}
@@ -8259,13 +8254,6 @@ function teamSectionHtml(tab){
       ${_notifErr ? `<div class="small" style="color:#e0393e; margin-top:12px;">Last problem queuing a notification (${Math.round((Date.now()-_notifErr.at)/60000)} min ago): ${esc(_notifErr.msg)}</div>` : '<div class="small" style="color:var(--ink-soft); margin-top:12px;">No problems queuing notifications since the app opened.</div>'}
     </div>
 
-    <div class="section-title">Live match</div>
-    <div class="card">
-      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
-        <div><div style="font-weight:600;">Keep the screen on during a live match</div><div class="small" style="color:var(--ink-soft);">Stops the phone locking mid-match, so the clock stays in front of you. Uses more battery.</div></div>
-        ${sw('keepScreenOn', ns.keepScreenOn)}
-      </div>
-    </div>
     <div class="small" style="color:var(--ink-soft); text-align:center; margin-top:6px;">More notification options are coming soon.</div>`;
   } else if(tab==='backup'){
     tabHtml = `
@@ -9033,9 +9021,9 @@ function notifSettings(){
   const n = (typeof DATA!=='undefined' && DATA && DATA.notifications) || {};
   return {
     subReminders: n.subReminders !== false,
-    subLeadMinutes: typeof n.subLeadMinutes==='number' ? n.subLeadMinutes : 1,
-    subSound: n.subSound !== false,
-    keepScreenOn: n.keepScreenOn !== false
+    subLeadMinutes: 0,   // always at the planned time
+
+    subSound: n.subSound !== false
   };
 }
 function setNotifSetting(key, value){
@@ -9144,18 +9132,6 @@ function checkSubReminders(){
   });
   if(changed) saveData();
 }
-// Keep the screen on while a match is live, so the clock, reminders and notifications keep running.
-let _wakeLock = null;
-async function syncWakeLock(){
-  try{
-    const live = typeof DATA!=='undefined' && DATA && DATA.fixtures && DATA.fixtures.some(x=>x.status==='live');
-    const want = live && notifSettings().keepScreenOn && !document.hidden;
-    if(want && !_wakeLock && 'wakeLock' in navigator){
-      _wakeLock = await navigator.wakeLock.request('screen');
-      _wakeLock.addEventListener('release', ()=>{ _wakeLock = null; });
-    } else if(!want && _wakeLock){ const w = _wakeLock; _wakeLock = null; await w.release(); }
-  }catch(e){ _wakeLock = null; }
-}
 // The Player mins tab on the match screen shows live figures, so it refreshes itself every 20 seconds while it's open
 // (and only then: not while a pop-up or picker is on top, or the enlarged pitch is showing).
 let _minsTabRefreshAt = Date.now();
@@ -9166,13 +9142,12 @@ function refreshMinsTab(){
   _minsTabRefreshAt = Date.now();
   render();
 }
-setInterval(()=>{ try{ checkSubReminders(); serverRemindersTick(); syncWakeLock(); refreshMinsTab(); }catch(e){} }, 1000);
-document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) syncWakeLock(); });
+setInterval(()=>{ try{ checkSubReminders(); serverRemindersTick(); refreshMinsTab(); }catch(e){} }, 1000);
 if('serviceWorker' in navigator && /^https?:/.test(location.protocol)){
   window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
   // Stale-page guard: installed/Play Store copies can hold on to an old index.html. Ask the
   // server (bypassing every cache) which build is live and reload once if this isn't it.
-  const BUILD_ID = '2026-11-25-2100';
+  const BUILD_ID = '2026-11-25-2130';
   const checkForNewBuild = async ()=>{
     try{
       if(!navigator.onLine) return;
@@ -14356,10 +14331,7 @@ function attachHandlers(){
     el.addEventListener('click', openNotificationsPopup);
   });
   document.querySelectorAll('[data-notif-toggle]').forEach(el=>{
-    el.addEventListener('change', ()=>{ setNotifSetting(el.dataset.notifToggle, el.checked); syncWakeLock(); });
-  });
-  document.querySelectorAll('[data-sub-lead]').forEach(el=>{
-    el.addEventListener('click', ()=>{ setNotifSetting('subLeadMinutes', parseInt(el.dataset.subLead)); render(); });
+    el.addEventListener('change', ()=>{ setNotifSetting(el.dataset.notifToggle, el.checked); });
   });
   document.querySelectorAll('[data-notif-allow]').forEach(el=>{
     el.addEventListener('click', async ()=>{ await requestPhoneNotifications(); render(); });
