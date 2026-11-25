@@ -3076,6 +3076,7 @@ function linkMyCoachRecord(){
   if(changed) saveData();
 }
 function goHomeOrWizard(){
+  navMenuOpen = null;
   try{ linkMyCoachRecord(); }catch(e){}
   // An unfinished team (started the wizard, never completed it) shouldn't force
   // straight back into that wizard either - land on the same choice screen as having
@@ -4606,6 +4607,7 @@ function renderGridPitchEnlargeOverlay(){
         <button type="button" data-close-grid-pitch-enlarge title="Close" style="background:var(--surface-2); border:none; border-radius:50%; width:36px; height:36px; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; color:var(--ink);">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         </button>
+        ${(f.liveState.secondsLeft<=0 && !f.liveState.running && f.liveState.endedQ!==f.liveState.quarter && !isLastQuarter) ? `<div style="margin-top:10px;"><button type="button" class="btn amber small" data-period-finished="${f.id}" style="margin:0; width:auto; max-width:92px; padding:8px 10px; font-size:12.5px; line-height:1.15; white-space:normal;">${f.periods===2?'Half':'Quarter'} finished</button></div>` : ''}
       </div>
     </div>` : '';
   const headerHtml = isThisQuarterLive ? headerLive : headerOld;
@@ -5962,7 +5964,6 @@ function renderLive(id){
     ${bannerScore}
     ${bannerInfo}
     ${!isReview ? `<div style="position:absolute; top:14px; right:14px;">${matchBellBtn(f)}</div>` : ''}
-    ${(!isReview && f.status==='live' && f.liveState && !f.liveState.running && f.liveState.secondsLeft<=0 && f.liveState.endedQ!==f.liveState.quarter && f.liveState.quarter < (f.periods||4)) ? `<button type="button" class="q-finished-btn" data-period-finished="${f.id}">${f.periods===2?'Half':'Quarter'} finished</button>` : ''}
     ${isReview ? `<button data-review-save-now="${f.id}" title="Save" style="position:absolute; top:14px; right:14px; background:rgba(255,255,255,0.15); border:none; border-radius:50%; width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:#fff; cursor:pointer;">
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M4 4.5A1.5 1.5 0 015.5 3H15l5 5v10.5a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.5v-14z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8 3v5h7V3" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><rect x="7" y="13" width="10" height="6.5" stroke="currentColor" stroke-width="1.7"/></svg>
     </button>` : ''}
@@ -9183,7 +9184,7 @@ if('serviceWorker' in navigator && /^https?:/.test(location.protocol)){
   window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
   // Stale-page guard: installed/Play Store copies can hold on to an old index.html. Ask the
   // server (bypassing every cache) which build is live and reload once if this isn't it.
-  const BUILD_ID = '2026-11-26-0000';
+  const BUILD_ID = '2026-11-26-0100';
   const checkForNewBuild = async ()=>{
     try{
       if(!navigator.onLine) return;
@@ -10315,7 +10316,7 @@ function openPeriodEndedPrompt(fid){
   const yes = document.querySelector('[data-pe-yes]'), no = document.querySelector('[data-pe-no]');
   if(no) no.onclick = ()=>{
     closeModal();
-    if(!last){ ensureOnLiveScreen(fid); gridPitchEnlargedQuarter = null; render(); }   // back to the live view, where Quarter finished is waiting
+    if(!last){ ensureOnLiveScreen(fid); setEnlargedQuarter(q); render(); }   // back to this period's pitch view, where Quarter finished is waiting
   };
   if(yes) yes.onclick = ()=>{
     closeModal();
@@ -15248,7 +15249,7 @@ function playHelloIntroIfHome(){
   // Only when the login actually landed on the home screen - not on the welcome tour or the
   // no-team / unfinished-setup screens.
   if(!DATA || !DATA.teamSetupCompleted || !TEAMS_STORE.teams || TEAMS_STORE.teams.length === 0) return;
-  if(!document.querySelector('[data-home-tab]')) return;
+  if(VIEW.tab!=='dash' || VIEW.screen) return;      // the Home landing page
   showHelloIntro();
 }
 
