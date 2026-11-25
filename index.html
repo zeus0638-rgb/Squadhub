@@ -450,6 +450,7 @@
     color:#fff; font-size:14px; font-weight:700; letter-spacing:0.2px; line-height:1;
     cursor:pointer; -webkit-tap-highlight-color:transparent; user-select:none;
   }
+  .backbar.main-close{ position:absolute; top:12px; left:14px; margin:0; z-index:3; }
   .backbar:active{ transform:scale(0.96); background:rgba(255,255,255,0.30); }
   .backbar .back-arrow{
     width:32px; height:32px; border-radius:50%; flex-shrink:0;
@@ -1536,6 +1537,11 @@ function seasonLabelForDate(dateStr){
   // Season runs Aug through June. July (gap month) counts as the start of the next season.
   if(m >= 6){ return `${String(y).slice(-2)}/${String(y+1).slice(-2)}`; }
   return `${String(y-1).slice(-2)}/${String(y).slice(-2)}`;
+}
+const CLOSE_X = '<span class="back-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg></span>';
+function mainCloseHtml(){
+  if(VIEW.screen || VIEW.tab==='dash') return '';
+  return `<div class="backbar main-close" data-main-close>${CLOSE_X}<span>Close</span></div>`;
 }
 const BACK_ARROW = '<span class="back-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';
 
@@ -5052,7 +5058,7 @@ const ICO_LINE = _ico('<path d="M4 18l5-6 4 3 7-9"/><path d="M4 20.5h16"/>');
 const ICO_HOME = _ico('<path d="M4 11l8-6.5 8 6.5"/><path d="M6 9.8V19.5h12V9.8"/><path d="M10 19.5v-5h4v5"/>');
 const ICO_TEAM = _ico('<circle cx="9" cy="8.5" r="3"/><path d="M3 19c.8-3.2 3.2-4.8 6-4.8s5.2 1.6 6 4.8"/><circle cx="17" cy="9.5" r="2.4"/><path d="M16.5 14.4c2.4.2 4 1.6 4.5 4.2"/>');
 const NAV_DEFS = [
-  {id:'stats', label:'Stats', icon:ICO_BARS, sub:[{k:'teamstats',label:'Season',icon:ICO_LINE},{k:'playerstats',label:'Players',icon:ICO_PLAYERS}]},
+  {id:'stats', label:'Stats', icon:ICO_BARS, sub:[{k:'teamstats',label:'Season stats',icon:ICO_LINE},{k:'playerstats',label:'Player stats',icon:ICO_PLAYERS}]},
   {id:'fixres', label:'Fixtures &amp; Results', icon:ICO_CAL, sub:[{k:'fixtures',label:'Fixtures',icon:ICO_CAL},{k:'results',label:'Results',icon:ICO_FLAG}]},
   {id:'myteam', label:'My Team', icon:ICO_TEAM, sub:[{k:'players',label:'Players',icon:ICO_PLAYERS},{k:'coaches',label:'Coaches',icon:ICO_COACHES}]},
   {id:'matchday', label:'Live', bold:true, icon:TAB_DEFS.find(t=>t.id==='matchday').icon},
@@ -5226,7 +5232,7 @@ function renderMatchdayTab(){
   }
   return `
   <div class="topbar topbar-main">
-    ${teamLogoWatermarkHtml()}
+    ${teamLogoWatermarkHtml()}${mainCloseHtml()}
     <div class="team-switch" data-open-team-switcher>${safeBadgeSrc(DATA.teamBadge) ? `<img class="team-switch-badge" src="${safeBadgeSrc(DATA.teamBadge)}">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     <h1>Live</h1>
     <div class="sub">${new Date().toLocaleDateString(undefined,{weekday:'long', day:'numeric', month:'long'})}</div>
@@ -5350,13 +5356,13 @@ function renderHomeTab(){
   }
   return `
   <div class="topbar topbar-main" style="position:relative;">
-    ${teamLogoWatermarkHtml()}
+    ${teamLogoWatermarkHtml()}${mainCloseHtml()}
     <div class="team-switch" data-open-team-switcher>${safeBadgeSrc(DATA.teamBadge) ? `<img class="team-switch-badge" src="${safeBadgeSrc(DATA.teamBadge)}">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     <h1>${(homeTab==='fixtures'||homeTab==='results') ? 'Fixtures &amp; Results' : 'Stats'}</h1>
-    <div class="sub">${(homeTab==='fixtures'||homeTab==='results') ? '&nbsp;' : 'Season &amp; player stats'}</div>
+    <div class="sub">&nbsp;</div>
   </div>
   <div class="content fs-area">
-    ${(homeTab==='fixtures'||homeTab==='results') ? `<div class="dash-hi">${homeTab==='fixtures' ? 'Fixtures' : 'Results'}</div>` : ''}
+    <div class="dash-hi">${({fixtures:'Fixtures',results:'Results',teamstats:'Season stats',playerstats:'Player stats'})[homeTab] || ''}</div>
     <div class="season-chip-wrap">${seasonChipHtml('home', homeSeasonFilter)}</div>
     ${tabHtml}
   </div>`;
@@ -5401,7 +5407,7 @@ function renderDashboardTab(){
   }
   return `
   <div class="topbar topbar-main" style="position:relative;">
-    ${teamLogoWatermarkHtml()}
+    ${teamLogoWatermarkHtml()}${mainCloseHtml()}
     <div class="team-switch" data-open-team-switcher>${badge ? `<img class="team-switch-badge" src="${badge}">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     <h1>Home</h1>
     <div class="sub">${esc(teamShort())} overview</div>
@@ -6831,12 +6837,13 @@ function renderPlayersTab(){
       }).join('')}</div>`;
   return `
   <div class="topbar topbar-main">
-    ${teamLogoWatermarkHtml()}
+    ${teamLogoWatermarkHtml()}${mainCloseHtml()}
     <div class="team-switch" data-open-team-switcher>${safeBadgeSrc(DATA.teamBadge) ? `<img class="team-switch-badge" src="${safeBadgeSrc(DATA.teamBadge)}">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-    <h1>Players</h1>
-    <div class="sub">${players.length} in the squad pool</div>
+    <h1>My Team</h1>
+    <div class="sub">&nbsp;</div>
   </div>
   <div class="content fs-area fs-map">
+    <div class="dash-hi">Players</div>
     <div class="season-chip-wrap split">${playersSortChipHtml()}${seasonChipHtml('players', playersSeasonFilter)}</div>
     ${tabHtml}
   </div>`;
@@ -7340,12 +7347,13 @@ function renderCoachesTab(){
   }
   return `
   <div class="topbar topbar-main" style="position:relative;">
-    ${teamLogoWatermarkHtml()}
+    ${teamLogoWatermarkHtml()}${mainCloseHtml()}
     <div class="team-switch" data-open-team-switcher>${safeBadgeSrc(DATA.teamBadge) ? `<img class="team-switch-badge" src="${safeBadgeSrc(DATA.teamBadge)}">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-    <h1>Coaches</h1>
-    <div class="sub">${DATA.coaches.length} coach${DATA.coaches.length===1?'':'es'} · qualifications &amp; certifications</div>
+    <h1>My Team</h1>
+    <div class="sub">&nbsp;</div>
   </div>
   <div class="content fs-area fs-map">
+    <div class="dash-hi">Coaches</div>
     ${tabHtml}
   </div>`;
 }
@@ -8297,8 +8305,8 @@ function teamSectionHtml(tab){
 let teamOpen = {};
 const TEAM_SECTIONS = [
   {id:'identity', label:'Identity', icon:'<rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6.5 16c.4-1.4 1.4-2 2.5-2s2.1.6 2.5 2M14 10h4M14 13h3"/>'},
-  {id:'colour', label:'Colour & display', icon:'<path d="M12 3a9 9 0 100 18c1.2 0 2-.8 1.6-1.8-.4-1 .2-2.2 1.4-2.2H17a4 4 0 004-4c0-5-4-10-9-10z"/><circle cx="8" cy="11" r="1"/><circle cx="12" cy="7.5" r="1"/><circle cx="16" cy="11" r="1"/>'},
-  {id:'format', label:'Format', icon:'<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>'},
+  {id:'colour', label:'Display', icon:'<path d="M12 3a9 9 0 100 18c1.2 0 2-.8 1.6-1.8-.4-1 .2-2.2 1.4-2.2H17a4 4 0 004-4c0-5-4-10-9-10z"/><circle cx="8" cy="11" r="1"/><circle cx="12" cy="7.5" r="1"/><circle cx="16" cy="11" r="1"/>'},
+  {id:'format', label:'Match format', icon:'<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>'},
   {id:'configure', label:'Awards & qualifications library', icon:'<circle cx="12" cy="9" r="5"/><path d="M9 13.5L7.5 21l4.5-2.5 4.5 2.5L15 13.5"/>'},
   {id:'seasons', label:'Seasons', icon:'<rect x="4" y="5.5" width="16" height="14" rx="2"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>'},
   {id:'notifications', label:'Notifications', icon:'<path d="M6 16V11a6 6 0 0112 0v5l1.5 2h-15L6 16z"/><path d="M10 20.5a2.2 2.2 0 004 0"/>'},
@@ -8327,7 +8335,7 @@ function renderTeamTab(){
   }).join('');
   return `
   <div class="topbar topbar-main" style="position:relative;">
-    ${teamLogoWatermarkHtml()}
+    ${teamLogoWatermarkHtml()}${mainCloseHtml()}
     <div class="team-switch" data-open-team-switcher>${safeBadgeSrc(DATA.teamBadge) ? `<img class="team-switch-badge" src="${safeBadgeSrc(DATA.teamBadge)}">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     <h1>Settings</h1>
     <div class="sub">Format, identity &amp; backup</div>
@@ -8598,7 +8606,7 @@ let _screenHist = false;
 function syncScreenHist(){
   try{
     if(_modalHist || document.getElementById('modal-root') || navMenuOpen) return;   // never stack under a pop-up's entry
-    const hasBack = !!(VIEW.screen && document.querySelector('#app .backbar'));
+    const hasBack = !!(document.querySelector('#app .backbar'));
     if(hasBack && !_screenHist){ history.pushState({sqhScreen:1}, ''); _screenHist = true; }
     else if(!hasBack && _screenHist){ _screenHist = false; _ignorePop++; history.back(); }
   }catch(e){}
@@ -9165,7 +9173,7 @@ if('serviceWorker' in navigator && /^https?:/.test(location.protocol)){
   window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
   // Stale-page guard: installed/Play Store copies can hold on to an old index.html. Ask the
   // server (bypassing every cache) which build is live and reload once if this isn't it.
-  const BUILD_ID = '2026-11-25-2200';
+  const BUILD_ID = '2026-11-25-2230';
   const checkForNewBuild = async ()=>{
     try{
       if(!navigator.onLine) return;
@@ -13095,6 +13103,9 @@ function openMatchSummaryEditor(fixtureId){
 function attachHandlers(){
   document.querySelectorAll('[data-open-team-switcher]').forEach(el=>{
     el.addEventListener('click', openTeamSwitcherModal);
+  });
+  document.querySelectorAll('[data-main-close]').forEach(el=>{
+    el.addEventListener('click', ()=>{ navMenuOpen = null; go('dash', null, {}); });
   });
   document.querySelectorAll('[data-ball]').forEach(el=>{
     el.addEventListener('click', ()=>{
