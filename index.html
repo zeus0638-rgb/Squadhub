@@ -190,6 +190,8 @@
   .tap-hint span{ background:var(--pitch); color:#fff; padding:5px 12px; border-radius:999px; box-shadow:0 3px 10px rgba(0,0,0,.3); }
   .tap-hint svg{ margin-top:-3px; }
   @keyframes tap-hint-bounce{ 0%,100%{ transform:translateX(-50%) translateY(0); opacity:.95; } 50%{ transform:translateX(-50%) translateY(-9px); opacity:1; } }
+  .dash-hi{ font-family:'Oswald',sans-serif; font-weight:600; font-size:44px; line-height:1.1; margin:2px 0 14px; color:var(--ink); }
+  html.text-large .dash-hi{ font-size:50px; }
   .dash-content{ position:relative; z-index:1; }
   .navmain-head{ display:grid; grid-template-columns:44px 1fr 44px; align-items:center; padding:2px 0 8px; margin-bottom:6px; border-bottom:2px solid var(--pitch); }
   .navmain-title{ text-align:center; font-family:'Inter',sans-serif; font-size:16px; font-weight:700; color:var(--ink); letter-spacing:.04em; }
@@ -3083,6 +3085,7 @@ function go(tab, screen, params){
     tab = 'home'; screen = null; params = {};
   }
   gridPitchEnlargedQuarter = null;
+  if(tab === 'team' && !screen){ teamOpen = {}; }
   if(screen === 'resultDetail') resultDetailTab = 'timeline';
   if(screen === 'live' && !(VIEW.screen==='live' && params && VIEW.params && params.id===VIEW.params.id)){
     liveTab = (reviewMode && params && reviewFixtureId === params.id) ? 'timeline' : 'test';
@@ -5346,10 +5349,11 @@ function renderHomeTab(){
     tabHtml = renderPlayerStatsContent(seasonFixtures);
   }
   return `
-  <div class="topbar topbar-main home-top" style="position:relative;">
+  <div class="topbar topbar-main" style="position:relative;">
     ${teamLogoWatermarkHtml()}
     <div class="team-switch" data-open-team-switcher>${safeBadgeSrc(DATA.teamBadge) ? `<img class="team-switch-badge" src="${safeBadgeSrc(DATA.teamBadge)}">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-    <h1 style="margin-top:-16px;">${(homeTab==='fixtures'||homeTab==='results') ? 'Fixtures &amp; Results' : 'Stats'}</h1>
+    <h1>${(homeTab==='fixtures'||homeTab==='results') ? 'Fixtures &amp; Results' : 'Stats'}</h1>
+    <div class="sub">${(homeTab==='fixtures'||homeTab==='results') ? 'Upcoming fixtures &amp; past results' : 'Season &amp; player stats'}</div>
   </div>
   <div class="content fs-area">
     <div class="season-chip-wrap">${seasonChipHtml('home', homeSeasonFilter)}</div>
@@ -5395,14 +5399,15 @@ function renderDashboardTab(){
     </div>`;
   }
   return `
-  <div class="topbar topbar-main home-top" style="position:relative;">
+  <div class="topbar topbar-main" style="position:relative;">
     ${teamLogoWatermarkHtml()}
     <div class="team-switch" data-open-team-switcher>${badge ? `<img class="team-switch-badge" src="${badge}">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-    <h1 style="margin-top:-16px;">Home</h1>
-    <div class="sub">Hi${first ? ' ' + esc(first) : ''}</div>
+    <h1>Home</h1>
+    <div class="sub">${esc(teamShort())} overview</div>
   </div>
   ${badge ? `<div class="dash-badge" style="background-image:url('${badge}');"></div>` : ''}
   <div class="content fs-area dash-content">
+    <div class="dash-hi">Hi${first ? ' ' + esc(first) : ''}</div>
     <div class="dash-sec">
     <div class="section-title" style="margin-top:0;">Form guide <span style="font-weight:400; color:var(--ink-soft);">(last 5 matches)</span></div>
     <div class="card" style="margin-bottom:0;">
@@ -7399,6 +7404,7 @@ function openTeamSwitcherModal(){
       }).join('')}
     </div>
     <button class="btn ghost" data-add-new-team style="margin-top:14px;">+ Add another team</button>
+    <div style="height:34px;"></div>
     <div class="text-size-row">
       <div class="small" style="color:var(--ink-soft); font-weight:600; margin-bottom:6px;">Text size</div>
       ${textSizeToggleHtml()}
@@ -8305,7 +8311,7 @@ const TEAM_SECTIONS = [
   {id:'identity', label:'Identity', icon:'<rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6.5 16c.4-1.4 1.4-2 2.5-2s2.1.6 2.5 2M14 10h4M14 13h3"/>'},
   {id:'colour', label:'Colour & display', icon:'<path d="M12 3a9 9 0 100 18c1.2 0 2-.8 1.6-1.8-.4-1 .2-2.2 1.4-2.2H17a4 4 0 004-4c0-5-4-10-9-10z"/><circle cx="8" cy="11" r="1"/><circle cx="12" cy="7.5" r="1"/><circle cx="16" cy="11" r="1"/>'},
   {id:'format', label:'Format', icon:'<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>'},
-  {id:'configure', label:'Configure', icon:'<circle cx="12" cy="9" r="5"/><path d="M9 13.5L7.5 21l4.5-2.5 4.5 2.5L15 13.5"/>'},
+  {id:'configure', label:'Awards & qualifications library', icon:'<circle cx="12" cy="9" r="5"/><path d="M9 13.5L7.5 21l4.5-2.5 4.5 2.5L15 13.5"/>'},
   {id:'seasons', label:'Seasons', icon:'<rect x="4" y="5.5" width="16" height="14" rx="2"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>'},
   {id:'notifications', label:'Notifications', icon:'<path d="M6 16V11a6 6 0 0112 0v5l1.5 2h-15L6 16z"/><path d="M10 20.5a2.2 2.2 0 004 0"/>'},
   {id:'backup', label:'Backup', icon:'<path d="M7 18a4 4 0 01-.6-7.9 5.5 5.5 0 0110.6-1A4.5 4.5 0 0117.5 18H7z"/><path d="M12 11v6m0 0l-2.4-2.4M12 17l2.4-2.4"/>'}
@@ -9166,7 +9172,7 @@ if('serviceWorker' in navigator && /^https?:/.test(location.protocol)){
   window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
   // Stale-page guard: installed/Play Store copies can hold on to an old index.html. Ask the
   // server (bypassing every cache) which build is live and reload once if this isn't it.
-  const BUILD_ID = '2026-11-25-2030';
+  const BUILD_ID = '2026-11-25-2100';
   const checkForNewBuild = async ()=>{
     try{
       if(!navigator.onLine) return;
