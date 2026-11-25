@@ -175,6 +175,11 @@
   .navmenu-wrap{ position:fixed; left:0; right:0; margin:0 auto; width:100%; max-width:480px; bottom:calc(var(--tabbar-h, 76px) + 6px); height:0; z-index:31; pointer-events:none; }
   .navmenu{ position:absolute; bottom:0; left:50%; transform:translateX(-50%); background:var(--panel); border:2px solid var(--pitch); border-radius:18px; box-shadow:0 8px 28px rgba(0,0,0,.45); pointer-events:auto; animation:navmenu-in .16s ease-out; padding:8px; }
   .navmenu-main{ width:min(270px, 82vw); display:flex; flex-direction:column; gap:2px; }
+  .navmain-head{ display:grid; grid-template-columns:44px 1fr 44px; align-items:center; padding:2px 0 8px; margin-bottom:6px; border-bottom:2px solid var(--pitch); }
+  .navmain-title{ text-align:center; font-family:'Inter',sans-serif; font-size:16px; font-weight:700; color:var(--ink); letter-spacing:.04em; }
+  .navmain-cog{ width:40px; height:40px; border:none; border-radius:50%; background:none; color:var(--ink); display:flex; align-items:center; justify-content:center; justify-self:end; cursor:pointer; }
+  .navmain-cog svg{ width:24px; height:24px; }
+  .navmain-cog.on{ background:var(--pitch); color:#fff; }
   .navmain-item{ display:flex; align-items:center; gap:14px; width:100%; padding:13px 12px; border:none; border-radius:12px; background:none; color:var(--ink); font-family:'Inter',sans-serif; font-size:16px; font-weight:600; text-align:left; cursor:pointer; }
   .navmain-item svg{ width:26px; height:26px; flex-shrink:0; }
   .navmain-item span{ flex:1; }
@@ -5002,10 +5007,10 @@ const ICO_BARS = _ico('<path d="M5 20V12M12 20V5M19 20v-9"/>', 2.2);
 const ICO_LINE = _ico('<path d="M4 18l5-6 4 3 7-9"/><path d="M4 20.5h16"/>');
 const ICO_TEAM = _ico('<circle cx="9" cy="8.5" r="3"/><path d="M3 19c.8-3.2 3.2-4.8 6-4.8s5.2 1.6 6 4.8"/><circle cx="17" cy="9.5" r="2.4"/><path d="M16.5 14.4c2.4.2 4 1.6 4.5 4.2"/>');
 const NAV_DEFS = [
-  {id:'myteam', label:'My Team', icon:ICO_TEAM, sub:[{k:'players',label:'Players',icon:ICO_PLAYERS},{k:'coaches',label:'Coaches',icon:ICO_COACHES}]},
-  {id:'fixres', label:'Fixtures &amp; Results', icon:ICO_CAL, sub:[{k:'fixtures',label:'Fixtures',icon:ICO_CAL},{k:'results',label:'Results',icon:ICO_FLAG}]},
-  {id:'matchday', label:'Live', bold:true, icon:TAB_DEFS.find(t=>t.id==='matchday').icon},
   {id:'stats', label:'Stats', icon:ICO_BARS, sub:[{k:'teamstats',label:'Season',icon:ICO_LINE},{k:'playerstats',label:'Players',icon:ICO_PLAYERS}]},
+  {id:'fixres', label:'Fixtures &amp; Results', icon:ICO_CAL, sub:[{k:'fixtures',label:'Fixtures',icon:ICO_CAL},{k:'results',label:'Results',icon:ICO_FLAG}]},
+  {id:'myteam', label:'My Team', icon:ICO_TEAM, sub:[{k:'players',label:'Players',icon:ICO_PLAYERS},{k:'coaches',label:'Coaches',icon:ICO_COACHES}]},
+  {id:'matchday', label:'Live', bold:true, icon:TAB_DEFS.find(t=>t.id==='matchday').icon},
   {id:'team', label:'Settings', icon:TAB_DEFS.find(t=>t.id==='team').icon}
 ];
 let navMenuOpen = null, navAnchorTop = null, navMainH = 0;   // id of the main tab whose sub-menu is showing
@@ -5061,9 +5066,11 @@ function navMenuHtml(){
   const items = NAV_DEFS.filter(n=>n.id!=='team' || admin);
   if(navMenuOpen==='main'){
     const grp = navGroupOfView();
+    const cog = NAV_DEFS.find(n=>n.id==='team');
     return `<div class="navmenu-bg" data-nav-menu-bg></div>
     <div class="navmenu-wrap"><div class="navmenu navmenu-main">
-      ${items.map(n=>`<button type="button" class="navmain-item ${grp===n.id?'on':''}" data-nav-item="${n.id}"><svg viewBox="0 0 24 24">${n.icon}</svg><span>${n.label}</span>${n.sub?'<b class="navarrow">&rsaquo;</b>':''}</button>`).join('')}
+      <div class="navmain-head"><span></span><span class="navmain-title">Menu</span>${admin ? `<button type="button" class="navmain-cog ${grp==='team'?'on':''}" data-nav-item="team" aria-label="Settings"><svg viewBox="0 0 24 24">${cog.icon}</svg></button>` : '<span></span>'}</div>
+      ${items.filter(n=>n.id!=='team').map(n=>`<button type="button" class="navmain-item ${grp===n.id?'on':''}" data-nav-item="${n.id}"><svg viewBox="0 0 24 24">${n.icon}</svg><span>${n.label}</span>${n.sub?'<b class="navarrow">&rsaquo;</b>':''}</button>`).join('')}
     </div></div>`;
   }
   const def = NAV_DEFS.find(n=>n.id===navMenuOpen);
@@ -9025,7 +9032,7 @@ if('serviceWorker' in navigator && /^https?:/.test(location.protocol)){
   window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
   // Stale-page guard: installed/Play Store copies can hold on to an old index.html. Ask the
   // server (bypassing every cache) which build is live and reload once if this isn't it.
-  const BUILD_ID = '2026-11-25-1745';
+  const BUILD_ID = '2026-11-25-1800';
   const checkForNewBuild = async ()=>{
     try{
       if(!navigator.onLine) return;
@@ -12959,6 +12966,7 @@ function attachHandlers(){
   document.querySelectorAll('[data-ball]').forEach(el=>{
     el.addEventListener('click', ()=>{
       ballRipple(el);
+      try{ if(navigator.vibrate) navigator.vibrate(12); }catch(e){}
       // the ball acts as a back button: sub menu -> main menu -> closed
       if(navMenuOpen && navMenuOpen!=='main'){ navMenuOpen = 'main'; render(); }
       else if(navMenuOpen) closeNavMenu();
