@@ -5453,7 +5453,7 @@ function renderFixtureEditor(id){
     {id:'details', label:'Match details'},
     {id:'squad', label:'Coaches'},
     {id:'lineup', label:'Teamsheet'},
-    {id:'pitch', label:'Pitch view'},
+    {id:'pitch', label:'Game plan'},
     {id:'h2h', label:'Head-to-head'}
   ];
   let tabHtml = '';
@@ -5775,7 +5775,7 @@ function renderMatchSetup(id){
     <div class="toggle-group">
       <button type="button" class="${tab==='details'?'on':''}" data-match-setup-tab="details">1. Match details</button>
       <button type="button" class="${tab==='availability'?'on':''}" data-match-setup-tab="availability">2. Player availability</button>
-      <button type="button" class="${tab==='gridpitch'?'on':''}" data-match-setup-tab="gridpitch">3. Pitch view</button>
+      <button type="button" class="${tab==='gridpitch'?'on':''}" data-match-setup-tab="gridpitch">3. Game plan</button>
     </div>
     <div id="match-setup-tabs-area" style="touch-action:pan-y;">
       ${tabHtml}
@@ -5813,7 +5813,7 @@ function renderLive(id){
   // Lineup are both covered by what Pitch view now does, and only add clutter there.
   // A live match still needs all of them for real-time management.
   const tabs = isReview
-    ? [{id:'details', label:'Details'}, {id:'timeline', label:'Timeline'}, {id:'report', label:'Match report'}, {id:'awards', label:'Awards'}, {id:'test', label:'Pitch view'}]
+    ? [{id:'details', label:'Details'}, {id:'timeline', label:'Timeline'}, {id:'report', label:'Match report'}, {id:'awards', label:'Awards'}, {id:'test', label:'Game'}]
     : [{id:'timeline', label:'Timeline'}, {id:'test', label:'Manage game'}, {id:'mins', label:'Player mins'}];
   if(!isReview && liveTab==='lineup') liveTab = 'test';      // the Grid view tab no longer exists
   let tabHtml = '';
@@ -6579,7 +6579,7 @@ function renderResultDetail(id){
   const tabs = [
     {id:'timeline', label:'Timeline'},
     {id:'report', label:'Match report'},
-    {id:'gridpitch', label:'Pitch view'}
+    {id:'gridpitch', label:'Game'}
   ];
 
   let tabHtml = '';
@@ -9176,7 +9176,7 @@ if('serviceWorker' in navigator && /^https?:/.test(location.protocol)){
   window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
   // Stale-page guard: installed/Play Store copies can hold on to an old index.html. Ask the
   // server (bypassing every cache) which build is live and reload once if this isn't it.
-  const BUILD_ID = '2026-11-25-2300';
+  const BUILD_ID = '2026-11-25-2330';
   const checkForNewBuild = async ()=>{
     try{
       if(!navigator.onLine) return;
@@ -9918,7 +9918,7 @@ function openFixtureQuickActionsModal(fixtureId){
     <div class="small" style="color:var(--ink-soft); margin-bottom:16px;">${esc(competitionDisplayLabel(f))} · ${gameTypeForFixture(f)==='development'?'Development':'Competitive'}</div>
     <div style="display:flex; gap:8px;">
       ${f.status==='live' ? '' : `<button class="btn ghost small" data-quick-edit-fixture="${fixtureId}" style="flex:1; padding:16px 6px; font-size:12.5px;">Edit details</button>
-      <button class="btn amber small" data-open-match-setup="${fixtureId}" style="flex:1; padding:16px 6px; font-size:12.5px;">Team selection</button>`}
+      <button class="btn amber small" data-open-match-setup="${fixtureId}" style="flex:1; padding:16px 6px; font-size:12.5px;">Match prep</button>`}
       <button class="btn ${f.status==='live' ? 'amber' : 'ghost'} small" data-quick-go-live="${fixtureId}" style="flex:1; padding:16px 6px; font-size:12.5px;">${f.status==='live' ? 'Resume live' : 'Go live'}</button>
     </div>
   `;
@@ -9927,7 +9927,7 @@ function openFixtureQuickActionsModal(fixtureId){
   const deleteBtn = document.querySelector('[data-quick-delete-fixture]');
   if(deleteBtn) deleteBtn.onclick = ()=> openDeleteFixtureConfirm(fixtureId);
   const setupBtn = document.querySelector('[data-open-match-setup]');
-  if(setupBtn) setupBtn.onclick = ()=>{ closeModal(); go(VIEW.tab,'matchSetup',{id:fixtureId}); };
+  if(setupBtn) setupBtn.onclick = ()=>{ closeModal(); go(VIEW.tab,'matchSetup',{id:fixtureId}); matchSetupTab = 'availability'; render(); };
   const goLiveBtn = document.querySelector('[data-quick-go-live]');
   if(goLiveBtn) goLiveBtn.onclick = ()=>{
     closeModal();
@@ -10094,6 +10094,8 @@ function openStartMatchConfirm(fixtureId){
     <h3>Start the match</h3>
     <button class="icon-x" data-close-modal>&times;</button>
     <div class="small" style="color:var(--ink-soft); margin-top:-6px; margin-bottom:16px;">vs ${esc(f.opponent||'TBC')} · ${fmtDate(f.dateTime)}</div>
+    <button class="btn amber" data-start-match-prep="${fixtureId}" style="margin-bottom:0;">Match prep</button>
+    <div style="border-top:1px solid var(--line); margin:16px 0;"></div>
     <button class="btn amber" data-match-starting-now="${fixtureId}" style="margin-bottom:10px;">⚽ Match is starting now</button>
     <button class="btn ghost" data-match-already-started="${fixtureId}" style="margin-bottom:10px;">Match already started</button>
     <button class="btn ghost" data-match-already-finished="${fixtureId}" style="margin-bottom:10px;">Match already finished</button>
@@ -10101,6 +10103,8 @@ function openStartMatchConfirm(fixtureId){
   `;
   openModal(body, {floating:true});
   attachModalHandlers();
+  const prepBtn = document.querySelector('[data-start-match-prep]');
+  if(prepBtn) prepBtn.onclick = ()=>{ closeModal(); go(VIEW.tab,'matchSetup',{id:fixtureId}); matchSetupTab = 'availability'; render(); };
   const startingNowBtn = document.querySelector('[data-match-starting-now]');
   if(startingNowBtn) startingNowBtn.onclick = ()=> openKickoffTimeConfirm(fixtureId);
   const alreadyStartedBtn = document.querySelector('[data-match-already-started]');
