@@ -175,10 +175,13 @@
   .navmenu-wrap{ position:fixed; left:0; right:0; margin:0 auto; width:100%; max-width:480px; bottom:calc(var(--tabbar-h, 76px) + 6px); height:0; z-index:31; pointer-events:none; }
   .navmenu{ position:absolute; bottom:0; left:50%; transform:translateX(-50%); background:var(--panel); border:2px solid var(--pitch); border-radius:18px; box-shadow:0 8px 28px rgba(0,0,0,.45); pointer-events:auto; animation:navmenu-in .16s ease-out; padding:8px; }
   .navmenu-main{ width:min(270px, 82vw); display:flex; flex-direction:column; gap:2px; }
+  .dash-badge{ position:fixed; z-index:0; pointer-events:none; left:50%; top:52%; width:min(86vw, 400px); height:min(86vw, 400px); transform:translate(-50%,-50%); background-repeat:no-repeat; background-position:center; background-size:contain; opacity:.16; }
+  .dash-content{ position:relative; z-index:1; }
   .navmain-head{ display:grid; grid-template-columns:44px 1fr 44px; align-items:center; padding:2px 0 8px; margin-bottom:6px; border-bottom:2px solid var(--pitch); }
   .navmain-title{ text-align:center; font-family:'Inter',sans-serif; font-size:16px; font-weight:700; color:var(--ink); letter-spacing:.04em; }
   .navmain-cog{ width:40px; height:40px; border:none; border-radius:50%; background:none; color:var(--ink); display:flex; align-items:center; justify-content:center; justify-self:end; cursor:pointer; }
   .navmain-cog svg{ width:24px; height:24px; }
+  .navmain-home{ justify-self:start; }
   .navmain-cog.on{ background:var(--pitch); color:#fff; }
   .navmain-item{ display:flex; align-items:center; gap:14px; width:100%; padding:13px 12px; border:none; border-radius:12px; background:none; color:var(--ink); font-family:'Inter',sans-serif; font-size:16px; font-weight:600; text-align:left; cursor:pointer; }
   .navmain-item svg{ width:26px; height:26px; flex-shrink:0; }
@@ -1030,7 +1033,7 @@ let DATA = { players: [], fixtures: [], coaches: [], config: null, teamName: '',
 // whichever team is currently active - every existing DATA.xxx reference in the app
 // keeps working unchanged. Switching teams swaps what DATA points to underneath.
 let TEAMS_STORE = { teams: [], activeTeamId: null };
-let VIEW = { tab: 'home', screen: null, params: {} };
+let VIEW = { tab: 'dash', screen: null, params: {} };
 let timerInterval = null;
 let timerFixtureId = null; // which fixture the running interval (if any) belongs to
 let playersChartMetric = 'apps';
@@ -3027,7 +3030,7 @@ function goHomeOrWizard(){
   if(TEAMS_STORE.teams.length === 0 || !DATA.teamSetupCompleted){
     renderNoTeamScreen();
   } else {
-    go('home', null, {});
+    go('dash', null, {});
   }
 }
 function enterTeamSetupWizard(){
@@ -4343,7 +4346,8 @@ function render(){
   } else if(VIEW.screen === 'matchSetup'){
     html = renderMatchSetup(VIEW.params.id);
   } else {
-    if(VIEW.tab==='home') html = renderHomeTab();
+    if(VIEW.tab==='dash') html = renderDashboardTab();
+    else if(VIEW.tab==='home') html = renderHomeTab();
     else if(VIEW.tab==='fixtures'){ homeTab = 'fixtures'; html = renderHomeTab(); }
     else if(VIEW.tab==='results'){ homeTab = 'results'; html = renderHomeTab(); }
     else if(VIEW.tab==='matchday') html = renderMatchdayTab();
@@ -5005,6 +5009,7 @@ const ICO_CAL = _ico('<rect x="4" y="5.5" width="16" height="14" rx="2"/><path d
 const ICO_FLAG = _ico('<path d="M6 20.5V4M6 5h11l-2.2 4L17 13H6"/>');
 const ICO_BARS = _ico('<path d="M5 20V12M12 20V5M19 20v-9"/>', 2.2);
 const ICO_LINE = _ico('<path d="M4 18l5-6 4 3 7-9"/><path d="M4 20.5h16"/>');
+const ICO_HOME = _ico('<path d="M4 11l8-6.5 8 6.5"/><path d="M6 9.8V19.5h12V9.8"/><path d="M10 19.5v-5h4v5"/>');
 const ICO_TEAM = _ico('<circle cx="9" cy="8.5" r="3"/><path d="M3 19c.8-3.2 3.2-4.8 6-4.8s5.2 1.6 6 4.8"/><circle cx="17" cy="9.5" r="2.4"/><path d="M16.5 14.4c2.4.2 4 1.6 4.5 4.2"/>');
 const NAV_DEFS = [
   {id:'stats', label:'Stats', icon:ICO_BARS, sub:[{k:'teamstats',label:'Season',icon:ICO_LINE},{k:'playerstats',label:'Players',icon:ICO_PLAYERS}]},
@@ -5016,6 +5021,7 @@ const NAV_DEFS = [
 let navMenuOpen = null, navAnchorTop = null, navMainH = 0;   // id of the main tab whose sub-menu is showing
 function navGroupOfView(){
   const t = VIEW.tab;
+  if(t==='dash') return 'dash';
   if(t==='players' || t==='coaches') return 'myteam';
   if(t==='fixtures' || t==='results') return 'fixres';
   if(t==='home') return (homeTab==='fixtures' || homeTab==='results') ? 'fixres' : 'stats';
@@ -5069,7 +5075,7 @@ function navMenuHtml(){
     const cog = NAV_DEFS.find(n=>n.id==='team');
     return `<div class="navmenu-bg" data-nav-menu-bg></div>
     <div class="navmenu-wrap"><div class="navmenu navmenu-main">
-      <div class="navmain-head"><span></span><span class="navmain-title">Menu</span>${admin ? `<button type="button" class="navmain-cog ${grp==='team'?'on':''}" data-nav-item="team" aria-label="Settings"><svg viewBox="0 0 24 24">${cog.icon}</svg></button>` : '<span></span>'}</div>
+      <div class="navmain-head"><button type="button" class="navmain-cog navmain-home ${grp==='dash'?'on':''}" data-nav-item="dash" aria-label="Home"><svg viewBox="0 0 24 24">${ICO_HOME}</svg></button><span class="navmain-title">Menu</span>${admin ? `<button type="button" class="navmain-cog ${grp==='team'?'on':''}" data-nav-item="team" aria-label="Settings"><svg viewBox="0 0 24 24">${cog.icon}</svg></button>` : '<span></span>'}</div>
       ${items.filter(n=>n.id!=='team').map(n=>`<button type="button" class="navmain-item ${grp===n.id?'on':''}" data-nav-item="${n.id}"><svg viewBox="0 0 24 24">${n.icon}</svg><span>${n.label}</span>${n.sub?'<b class="navarrow">&rsaquo;</b>':''}</button>`).join('')}
     </div></div>`;
   }
@@ -5311,16 +5317,74 @@ function renderHomeTab(){
     ${teamLogoWatermarkHtml()}
     <div class="team-switch" data-open-team-switcher>${safeBadgeSrc(DATA.teamBadge) ? `<img class="team-switch-badge" src="${safeBadgeSrc(DATA.teamBadge)}">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     <h1 style="margin-top:-16px;">${(homeTab==='fixtures'||homeTab==='results') ? 'Fixtures &amp; Results' : 'Stats'}</h1>
-    <div class="sub">Welcome back${myFirstName() ? ', ' + esc(myFirstName()) : ''}</div>
-    ${nextMatch ? `<div class="tap" data-open-fixture="${nextMatch.id}" style="margin:12px auto 0; width:fit-content; max-width:94%; text-align:center; cursor:pointer; background:rgba(255,255,255,0.16); border:1px solid rgba(255,255,255,0.3); border-radius:14px; padding:6px 18px 7px;">
-      <div class="nm-label" style="font-weight:700; text-transform:uppercase; letter-spacing:0.05em;">Next match</div>
-      <div class="nm-opp" style="font-weight:700; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:1px;">vs ${esc(nextMatch.opponent||'TBC')}</div>
-      <div class="nm-date" style="margin-top:1px;">${fmtDate(nextMatch.dateTime)}</div>
-    </div>` : ''}
   </div>
   <div class="content fs-area">
     <div class="season-chip-wrap">${seasonChipHtml('home', homeSeasonFilter)}</div>
     ${tabHtml}
+  </div>`;
+}
+
+// ---------- HOME (landing) PAGE ----------
+function renderDashboardTab(){
+  subTabsHtml = '';
+  const all = DATA.fixtures || [];
+  const form = recentFormList(5, all);
+  const nextMatch = all.filter(f=>f.status!=='finished').sort((a,b)=> new Date(a.dateTime) - new Date(b.dateTime))[0] || null;
+  const last = all.filter(f=>f.status==='finished').sort((a,b)=> new Date(b.dateTime) - new Date(a.dateTime))[0] || null;
+  const badge = safeBadgeSrc(DATA.teamBadge);
+  const first = myFirstName();
+  const nextHtml = nextMatch ? `
+    <div class="card tap fixture-card" data-open-fixture="${nextMatch.id}">
+      <div class="row">
+        <div>
+          <div class="opp">vs ${esc(nextMatch.opponent||'TBC')}${venueBadge(nextMatch)}</div>
+          <div class="meta">${fmtDate(nextMatch.dateTime)}${nextMatch.location?' · '+esc(nextMatch.location):''}</div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-end; flex-shrink:0;">
+          <span class="pill ${nextMatch.competitionType.toLowerCase()} ${nextMatch.status==='live'?'live':''}" style="text-align:right;">${nextMatch.status==='live'?'LIVE':esc(competitionDisplayLabel(nextMatch))}</span>
+        </div>
+      </div>
+    </div>` : `<div class="card"><div class="small" style="color:var(--ink-soft);">No upcoming fixtures</div></div>`;
+  let lastHtml = `<div class="card"><div class="small" style="color:var(--ink-soft);">No results yet</div></div>`;
+  if(last){
+    const res = fixtureResultLabel(last);
+    lastHtml = `<div class="card tap fixture-card" data-open-result="${last.id}">
+      <div class="row">
+        <div>
+          <div class="opp">vs ${esc(last.opponent||'TBC')}${venueBadge(last)}</div>
+          <div class="meta">${shortDate(last.dateTime)} · ${esc(competitionDisplayLabel(last))}</div>
+        </div>
+        <div style="text-align:right; flex-shrink:0; white-space:nowrap;">
+          <div class="num hm-score" style="font-weight:600;">${last.finalScore.us} – ${last.finalScore.them}</div>
+          <span class="pill ${res}">${res.toUpperCase()}</span>
+        </div>
+      </div>
+    </div>`;
+  }
+  return `
+  <div class="topbar topbar-main home-top" style="position:relative;">
+    ${teamLogoWatermarkHtml()}
+    <div class="team-switch" data-open-team-switcher>${badge ? `<img class="team-switch-badge" src="${badge}">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <h1 style="margin-top:-16px;">Home</h1>
+    <div class="sub">Hi${first ? ' ' + esc(first) : ''}</div>
+  </div>
+  ${badge ? `<div class="dash-badge" style="background-image:url('${badge}');"></div>` : ''}
+  <div class="content fs-area dash-content">
+    <div class="section-title" style="margin-top:0;">Form guide <span style="font-weight:400; color:var(--ink-soft);">— last 5 matches</span></div>
+    <div class="card">
+      ${form.length===0 ? `<div class="small" style="color:var(--ink-soft);">No matches played yet</div>` : `
+      <div class="hm-form-row" style="display:flex; justify-content:center;">
+        ${form.map(x=>`
+          <div class="tap" data-open-form-result="${x.fixture.id}" style="cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:4px;">
+            <div class="hm-form-dot" style="display:flex; align-items:center; justify-content:center; font-weight:700; color:#fff; background:${x.result==='win'?'var(--win)':x.result==='draw'?'var(--draw)':'var(--loss)'};">${x.result[0].toUpperCase()}</div>
+            <div class="small hm-form-date" style="color:var(--ink-soft);">${shortDate(x.fixture.dateTime)}</div>
+          </div>`).join('')}
+      </div>`}
+    </div>
+    <div class="section-title">Next fixture</div>
+    ${nextHtml}
+    <div class="section-title">Last result</div>
+    ${lastHtml}
   </div>`;
 }
 
@@ -9032,7 +9096,7 @@ if('serviceWorker' in navigator && /^https?:/.test(location.protocol)){
   window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
   // Stale-page guard: installed/Play Store copies can hold on to an old index.html. Ask the
   // server (bypassing every cache) which build is live and reload once if this isn't it.
-  const BUILD_ID = '2026-11-25-1800';
+  const BUILD_ID = '2026-11-25-1900';
   const checkForNewBuild = async ()=>{
     try{
       if(!navigator.onLine) return;
@@ -12977,6 +13041,7 @@ function attachHandlers(){
     el.addEventListener('click', ()=>{
       const id = el.dataset.navItem;
       const def = NAV_DEFS.find(n=>n.id===id);
+      if(id==='dash'){ navMenuOpen = null; if(_modalHist) modalHistRelease(); go('dash', null, {}); return; }
       if(def && def.sub){ const mm = document.querySelector('.navmenu-main'); if(mm) navMainH = mm.offsetHeight; navMenuOpen = id; render(); return; }
       navMenuOpen = null; if(_modalHist) modalHistRelease();
       if(id === 'matchday'){ goToMatchday(); return; }
