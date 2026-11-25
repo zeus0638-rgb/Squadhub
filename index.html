@@ -162,6 +162,15 @@
     cursor:pointer;
   }
   .tabbtn.active{ background:var(--pitch); color:#fff; }
+  .tabbtn{ white-space:normal; text-align:center; line-height:1.15; }
+  .tabbtn.has-menu::after{ content:''; width:0; height:0; border-left:4px solid transparent; border-right:4px solid transparent; border-bottom:4px solid currentColor; opacity:.55; margin-top:-1px; }
+  .navmenu-bg{ position:fixed; inset:0; bottom:var(--tabbar-h, 64px); background:rgba(0,0,0,.35); z-index:29; }
+  .navmenu-wrap{ position:fixed; left:50%; transform:translateX(-50%); width:100%; max-width:480px; bottom:calc(var(--tabbar-h, 64px) + 10px); height:0; z-index:31; pointer-events:none; }
+  .navmenu{ position:absolute; bottom:0; left:clamp(120px, var(--nm-x, 50%), calc(100% - 120px)); transform:translateX(-50%); display:flex; gap:10px; padding:12px; background:var(--panel); border:2px solid var(--pitch); border-radius:18px; box-shadow:0 8px 28px rgba(0,0,0,.45); pointer-events:auto; animation:navmenu-in .16s ease-out; }
+  .navmenu-item{ width:100px; padding:12px 6px 10px; border:1px solid var(--line, rgba(255,255,255,.18)); border-radius:14px; background:var(--bg, transparent); color:var(--ink); display:flex; flex-direction:column; align-items:center; gap:6px; font-family:'Inter',sans-serif; font-size:13px; font-weight:600; cursor:pointer; }
+  .navmenu-item svg{ width:28px; height:28px; }
+  .navmenu-item.on{ background:var(--pitch); color:#fff; border-color:var(--pitch); }
+  @keyframes navmenu-in{ from{ opacity:0; transform:translateX(-50%) translateY(8px); } to{ opacity:1; transform:translateX(-50%) translateY(0); } }
   .tabbtn svg{width:20px; height:20px;}
   .fab{
     position:fixed;
@@ -4964,6 +4973,67 @@ const TAB_DEFS = [
   {id:'coaches', label:'Coaches', icon:'<circle cx="12" cy="9" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M9 13l-2 7 5-3 5 3-2-7" fill="none" stroke="currentColor" stroke-width="1.6"/>'},
   {id:'team', label:'Settings', icon:'<circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M19.4 13a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V19a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H4a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H10a1.65 1.65 0 001-1.51V4a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V10a1.65 1.65 0 001.51 1H20a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z" fill="none" stroke="currentColor" stroke-width="1.6"/>'}
 ];
+// ---- Main navigation: My Team / Fixtures & Results / Live / Stats / Settings.
+// My Team, Fixtures & Results and Stats open a small pop-up of sub-options above the bar.
+const _ico = (inner, extra)=>`<g fill="none" stroke="currentColor" stroke-width="${extra||1.6}" stroke-linecap="round" stroke-linejoin="round">${inner}</g>`;
+const ICO_PLAYERS = TAB_DEFS.find(t=>t.id==='players').icon;
+const ICO_COACHES = TAB_DEFS.find(t=>t.id==='coaches').icon;
+const ICO_CAL = _ico('<rect x="4" y="5.5" width="16" height="14" rx="2"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>');
+const ICO_FLAG = _ico('<path d="M6 20.5V4M6 5h11l-2.2 4L17 13H6"/>');
+const ICO_BARS = _ico('<path d="M5 20V12M12 20V5M19 20v-9"/>', 2.2);
+const ICO_LINE = _ico('<path d="M4 18l5-6 4 3 7-9"/><path d="M4 20.5h16"/>');
+const ICO_TEAM = _ico('<circle cx="9" cy="8.5" r="3"/><path d="M3 19c.8-3.2 3.2-4.8 6-4.8s5.2 1.6 6 4.8"/><circle cx="17" cy="9.5" r="2.4"/><path d="M16.5 14.4c2.4.2 4 1.6 4.5 4.2"/>');
+const NAV_DEFS = [
+  {id:'myteam', label:'My Team', icon:ICO_TEAM, sub:[{k:'players',label:'Players',icon:ICO_PLAYERS},{k:'coaches',label:'Coaches',icon:ICO_COACHES}]},
+  {id:'fixres', label:'Fixtures &amp; Results', icon:ICO_CAL, sub:[{k:'fixtures',label:'Fixtures',icon:ICO_CAL},{k:'results',label:'Results',icon:ICO_FLAG}]},
+  {id:'matchday', label:'Live', bold:true, icon:TAB_DEFS.find(t=>t.id==='matchday').icon},
+  {id:'stats', label:'Stats', icon:ICO_BARS, sub:[{k:'teamstats',label:'Season',icon:ICO_LINE},{k:'playerstats',label:'Players',icon:ICO_PLAYERS}]},
+  {id:'team', label:'Settings', icon:TAB_DEFS.find(t=>t.id==='team').icon}
+];
+let navMenuOpen = null;   // id of the main tab whose sub-menu is showing
+function navGroupOfView(){
+  const t = VIEW.tab;
+  if(t==='players' || t==='coaches') return 'myteam';
+  if(t==='fixtures' || t==='results') return 'fixres';
+  if(t==='home') return (homeTab==='fixtures' || homeTab==='results') ? 'fixres' : 'stats';
+  return t;   // matchday, team
+}
+function navCurrentSub(){
+  const t = VIEW.tab;
+  if(t==='players' || t==='coaches') return t;
+  if(t==='fixtures' || t==='results') return t;
+  if(t==='home') return homeTab;
+  return null;
+}
+function closeNavMenu(){
+  if(!navMenuOpen) return;
+  navMenuOpen = null;
+  render();
+  if(typeof modalHistRelease==='function' && _modalHist) modalHistRelease();
+}
+function openNavMenu(id){
+  navMenuOpen = id;
+  modalHistPush();
+  render();
+}
+function navSubGo(k){
+  navMenuOpen = null;
+  if(typeof modalHistRelease==='function' && _modalHist) modalHistRelease();
+  if(k==='players') go('players', null, {});
+  else if(k==='coaches') go('coaches', null, {});
+  else { homeTab = k; go('home', null, {}); }
+}
+function navMenuHtml(){
+  if(!navMenuOpen) return '';
+  const i = NAV_DEFS.findIndex(n=>n.id===navMenuOpen);
+  const def = NAV_DEFS[i]; if(!def || !def.sub) return '';
+  const cur = navCurrentSub();
+  const x = ((i+0.5)/NAV_DEFS.filter(n=>n.id!=='team' || myEffectivePermission()==='admin').length*100).toFixed(1);
+  return `<div class="navmenu-bg" data-nav-menu-bg></div>
+  <div class="navmenu-wrap"><div class="navmenu" style="--nm-x:${x}%;">
+    ${def.sub.map(o=>`<button type="button" class="navmenu-item ${cur===o.k?'on':''}" data-nav-sub="${o.k}"><svg viewBox="0 0 24 24">${o.icon}</svg><span>${o.label}</span></button>`).join('')}
+  </div></div>`;
+}
 const HOME_SUBTABS = [
   {id:'teamstats', label:'Season stats'},
   {id:'fixtures', label:'Fixtures'},
@@ -4972,13 +5042,14 @@ const HOME_SUBTABS = [
 ];
 function renderTabBar(){
   const hasPendingMatchToday = todaysFixtures().some(f=>f.status!=='finished');
-  const visibleTabs = myEffectivePermission()==='admin' ? TAB_DEFS : TAB_DEFS.filter(t=>t.id!=='team');
+  const visibleTabs = myEffectivePermission()==='admin' ? NAV_DEFS : NAV_DEFS.filter(t=>t.id!=='team');
   const showSubTabs = !!subTabsHtml;
-  return `<div class="tabbar${showSubTabs?' has-subtabs':''}">${subTabsHtml}${visibleTabs.map(t=>{
-    const isActive = VIEW.tab===t.id || (t.id==='home' && (VIEW.tab==='fixtures' || VIEW.tab==='results'));
+  const grp = navGroupOfView();
+  return `${navMenuHtml()}<div class="tabbar${showSubTabs?' has-subtabs':''}">${subTabsHtml}${visibleTabs.map(t=>{
+    const isActive = navMenuOpen ? navMenuOpen===t.id : grp===t.id;
     const vibrate = (t.id==='matchday' && hasPendingMatchToday) ? 'icon-vibrate' : '';
     return `
-    <button class="tabbtn ${isActive?'active':''}" data-nav-tab="${t.id}">
+    <button class="tabbtn ${isActive?'active':''}${t.sub?' has-menu':''}" data-nav-tab="${t.id}">
       <svg viewBox="0 0 24 24" class="${vibrate}" style="${t.bold?'width:27px;height:27px;':''}">${t.icon}</svg>${t.label}
     </button>`;
   }).join('')}</div>
@@ -5107,7 +5178,9 @@ function renderHomeTab(){
   const s = teamSeasonStats(seasonFixtures);
   const form = recentFormList(5, seasonFixtures);
   const tab = homeTab;
-  subTabsHtml = `<div class="toggle-group subtabs-row">${HOME_SUBTABS.map(t=>`<button type="button" class="${homeTab===t.id?'on':''}" data-home-tab="${t.id}">${t.label}</button>`).join('')}</div>`;
+  // Sub-sections are chosen from the bottom menu now; these hidden buttons only let swiping move between the pair.
+  const _pair = (homeTab==='fixtures' || homeTab==='results') ? ['fixtures','results'] : ['teamstats','playerstats'];
+  subTabsHtml = `<div style="display:none;">${_pair.map(id=>`<button type="button" data-home-tab="${id}"></button>`).join('')}</div>`;
   const tabs = [
     {id:'teamstats', label:'Season stats'},
     {id:'fixtures', label:'Fixtures'},
@@ -5196,7 +5269,7 @@ function renderHomeTab(){
   <div class="topbar topbar-main home-top" style="position:relative;">
     ${teamLogoWatermarkHtml()}
     <div class="team-switch" data-open-team-switcher>${safeBadgeSrc(DATA.teamBadge) ? `<img class="team-switch-badge" src="${safeBadgeSrc(DATA.teamBadge)}">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-    <h1 style="margin-top:-16px;">Home</h1>
+    <h1 style="margin-top:-16px;">${(homeTab==='fixtures'||homeTab==='results') ? 'Fixtures &amp; Results' : 'Stats'}</h1>
     <div class="sub">Welcome back${myFirstName() ? ', ' + esc(myFirstName()) : ''}</div>
     ${nextMatch ? `<div class="tap" data-open-fixture="${nextMatch.id}" style="margin:12px auto 0; width:fit-content; max-width:94%; text-align:center; cursor:pointer; background:rgba(255,255,255,0.16); border:1px solid rgba(255,255,255,0.3); border-radius:14px; padding:6px 18px 7px;">
       <div class="nm-label" style="font-weight:700; text-transform:uppercase; letter-spacing:0.05em;">Next match</div>
@@ -5204,7 +5277,7 @@ function renderHomeTab(){
       <div class="nm-date" style="margin-top:1px;">${fmtDate(nextMatch.dateTime)}</div>
     </div>` : ''}
   </div>
-  <div class="content fs-area has-subtabs">
+  <div class="content fs-area">
     <div class="season-chip-wrap">${seasonChipHtml('home', homeSeasonFilter)}</div>
     ${tabHtml}
   </div>`;
@@ -8351,9 +8424,12 @@ function modalHistRelease(){
 window.addEventListener('popstate', ()=>{
   if(_ignorePop>0){ _ignorePop--; return; }
   _modalHist = false;
+  const hadModal = !!document.getElementById('modal-root');
   document.querySelectorAll('#modal-root').forEach(m=> m.remove());
+  if(!hadModal && navMenuOpen){ navMenuOpen = null; render(); }
 });
 function openModal(html, opts){
+  if(navMenuOpen){ navMenuOpen = null; try{ render(); }catch(e){} }
   document.querySelectorAll('#modal-root').forEach(m=> m.remove());
   modalHistPush();
   const floating = !!(opts && opts.floating);
@@ -8914,7 +8990,7 @@ if('serviceWorker' in navigator && /^https?:/.test(location.protocol)){
   window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
   // Stale-page guard: installed/Play Store copies can hold on to an old index.html. Ask the
   // server (bypassing every cache) which build is live and reload once if this isn't it.
-  const BUILD_ID = '2026-11-24-2320';
+  const BUILD_ID = '2026-11-25-0800';
   const checkForNewBuild = async ()=>{
     try{
       if(!navigator.onLine) return;
@@ -12847,10 +12923,22 @@ function attachHandlers(){
   });
   document.querySelectorAll('[data-nav-tab]').forEach(el=>{
     el.addEventListener('click', ()=>{
-      if(el.dataset.navTab === 'matchday'){ goToMatchday(); return; }
-      if(el.dataset.navTab === 'home'){ homeTab = 'teamstats'; }
-      go(el.dataset.navTab, null, {});
+      const id = el.dataset.navTab;
+      const def = NAV_DEFS.find(n=>n.id===id);
+      if(def && def.sub){
+        if(navMenuOpen === id) closeNavMenu(); else openNavMenu(id);
+        return;
+      }
+      if(navMenuOpen){ navMenuOpen = null; if(_modalHist) modalHistRelease(); }
+      if(id === 'matchday'){ goToMatchday(); return; }
+      go(id, null, {});
     });
+  });
+  document.querySelectorAll('[data-nav-sub]').forEach(el=>{
+    el.addEventListener('click', ()=> navSubGo(el.dataset.navSub));
+  });
+  document.querySelectorAll('[data-nav-menu-bg]').forEach(el=>{
+    el.addEventListener('click', ()=> closeNavMenu());
   });
   const newFix = document.querySelector('[data-new-fixture]');
   if(newFix) newFix.addEventListener('click', ()=> openNewFixtureWizard());
