@@ -176,6 +176,14 @@
   .navmenu{ position:absolute; bottom:0; left:50%; transform:translateX(-50%); background:var(--panel); border:2px solid var(--pitch); border-radius:18px; box-shadow:0 8px 28px rgba(0,0,0,.45); pointer-events:auto; animation:navmenu-in .16s ease-out; padding:8px; }
   .navmenu-main{ width:min(270px, 82vw); display:flex; flex-direction:column; gap:2px; }
   .dash-badge{ position:fixed; z-index:0; pointer-events:none; left:50%; top:52%; width:min(86vw, 400px); height:min(86vw, 400px); transform:translate(-50%,-50%); background-repeat:no-repeat; background-position:center; background-size:contain; opacity:.16; -webkit-mask-image:radial-gradient(closest-side, #000 40%, rgba(0,0,0,0) 100%); mask-image:radial-gradient(closest-side, #000 40%, rgba(0,0,0,0) 100%); filter:blur(1.5px); }
+  .acc{ border:1px solid var(--line, rgba(0,0,0,.12)); border-radius:16px; margin-bottom:10px; background:var(--panel); overflow:hidden; }
+  .acc-head{ display:flex; align-items:center; gap:14px; width:100%; padding:15px 14px; border:none; background:none; color:var(--ink); font-family:'Inter',sans-serif; font-size:16px; font-weight:600; text-align:left; cursor:pointer; }
+  .acc-head svg{ width:24px; height:24px; flex-shrink:0; }
+  .acc-head span{ flex:1; }
+  .acc-chev{ font-size:24px; line-height:1; opacity:.55; font-weight:400; transition:transform .2s ease; }
+  .acc.open .acc-chev{ transform:rotate(90deg); }
+  .acc.open > .acc-head{ border-bottom:2px solid var(--pitch); }
+  .acc-body{ padding:14px 12px 6px; }
   .dash-sec{ border:1px solid var(--line, rgba(0,0,0,.12)); border-radius:18px; padding:12px 12px 4px; margin-bottom:14px; background:rgba(255,255,255,.04); }
   .dash-sec .card{ margin-bottom:8px; }
   .tap-hint{ position:fixed; left:50%; bottom:calc(var(--tabbar-h, 76px) + 2px); transform:translateX(-50%); z-index:28; pointer-events:none; display:flex; flex-direction:column; align-items:center; color:var(--pitch); font-family:'Inter',sans-serif; font-weight:700; font-size:14px; animation:tap-hint-bounce 1.4s ease-in-out infinite; }
@@ -5132,7 +5140,6 @@ function renderTabBar(){
     ${(!VIEW.screen && (VIEW.tab==='fixtures' || (VIEW.tab==='home' && homeTab==='fixtures'))) ? '<button class="fab" data-new-fixture>+</button>' : ''}
     ${(!VIEW.screen && VIEW.tab==='players') ? '<button class="fab" data-new-player>+</button>' : ''}
     ${(!VIEW.screen && VIEW.tab==='coaches' && DATA.coaches.length<10) ? '<button class="fab" data-add-coach>+</button>' : ''}
-    ${(!VIEW.screen && VIEW.tab==='team' && teamTab==='seasons') ? '<button class="fab" data-add-season>+</button>' : ''}
   `;
 }
 
@@ -8058,19 +8065,7 @@ function renderQualificationsSectionHtml(){
     }
   return tabHtml;
 }
-function renderTeamTab(){
-  const tab = teamTab;
-  const teamTabsDef = [{id:'identity',label:'Identity'},{id:'colour',label:'Colour'},{id:'format',label:'Format'},{id:'configure',label:'Configure'},{id:'seasons',label:'Seasons'},{id:'notifications',label:'Notifications'},{id:'backup',label:'Backup'}];
-  subTabsHtml = `<div class="toggle-group-scroll subtabs-row">${teamTabsDef.map(t=>`<button type="button" class="${tab===t.id?'on':''}" data-team-tab="${t.id}">${t.label}</button>`).join('')}</div>`;
-  const tabs = [
-    {id:'identity', label:'Identity'},
-    {id:'colour', label:'Colour'},
-    {id:'format', label:'Format'},
-    {id:'configure', label:'Configure'},
-    {id:'seasons', label:'Seasons'},
-    {id:'notifications', label:'Notifications'},
-    {id:'backup', label:'Backup'}
-  ];
+function teamSectionHtml(tab){
   let tabHtml = '';
   if(tab==='identity'){
     if(identityViewMode==='edit'){
@@ -8201,6 +8196,7 @@ function renderTeamTab(){
     tabHtml = `
     <div class="row" style="margin:0 0 8px; align-items:center;">
       <div class="section-title" style="margin:0;">Seasons</div>
+      <button type="button" data-add-season style="background:none; border:none; padding:6px 8px; font:inherit; font-size:13px; font-weight:700; cursor:pointer; color:var(--pitch); margin-left:auto;">+ Add</button>
     </div>
     <div class="small" style="color:var(--ink-soft); margin-bottom:10px;">
       New seasons are created automatically from your fixture dates (August to June by default). Exactly one is current at a time — that's the default shown throughout the app. Tap the radio to switch it.
@@ -8300,6 +8296,41 @@ function renderTeamTab(){
 
     <div class="small" style="color:var(--ink-soft); text-align:center; margin-top:6px;">SquadHub · version ${APP_VERSION}</div>`;
   }
+  return tabHtml;
+}
+
+// Settings is one page of collapsible sections, all closed to begin with.
+let teamOpen = {};
+const TEAM_SECTIONS = [
+  {id:'identity', label:'Identity', icon:'<rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6.5 16c.4-1.4 1.4-2 2.5-2s2.1.6 2.5 2M14 10h4M14 13h3"/>'},
+  {id:'colour', label:'Colour & display', icon:'<path d="M12 3a9 9 0 100 18c1.2 0 2-.8 1.6-1.8-.4-1 .2-2.2 1.4-2.2H17a4 4 0 004-4c0-5-4-10-9-10z"/><circle cx="8" cy="11" r="1"/><circle cx="12" cy="7.5" r="1"/><circle cx="16" cy="11" r="1"/>'},
+  {id:'format', label:'Format', icon:'<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>'},
+  {id:'configure', label:'Configure', icon:'<circle cx="12" cy="9" r="5"/><path d="M9 13.5L7.5 21l4.5-2.5 4.5 2.5L15 13.5"/>'},
+  {id:'seasons', label:'Seasons', icon:'<rect x="4" y="5.5" width="16" height="14" rx="2"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>'},
+  {id:'notifications', label:'Notifications', icon:'<path d="M6 16V11a6 6 0 0112 0v5l1.5 2h-15L6 16z"/><path d="M10 20.5a2.2 2.2 0 004 0"/>'},
+  {id:'backup', label:'Backup', icon:'<path d="M7 18a4 4 0 01-.6-7.9 5.5 5.5 0 0110.6-1A4.5 4.5 0 0117.5 18H7z"/><path d="M12 11v6m0 0l-2.4-2.4M12 17l2.4-2.4"/>'}
+];
+function toggleTeamSection(id){
+  teamOpen[id] = !teamOpen[id];
+  if(teamOpen[id]){
+    if(id==='format'){ formatViewMode = 'summary'; pendingConfig = null; }
+    if(id==='identity'){ identityViewMode = 'summary'; }
+    if(id==='configure'){ awardsViewMode = 'summary'; qualificationsViewMode = 'summary'; }
+    if(id==='qualifications'){ qualificationsViewMode = 'summary'; }
+  }
+}
+function renderTeamTab(){
+  subTabsHtml = '';
+  const sections = TEAM_SECTIONS.map(d=>{
+    const open = !!teamOpen[d.id];
+    return `<div class="acc ${open?'open':''}">
+      <button type="button" class="acc-head" data-team-acc="${d.id}" aria-expanded="${open}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${d.icon}</svg>
+        <span>${d.label}</span><b class="acc-chev">&rsaquo;</b>
+      </button>
+      ${open ? `<div class="acc-body">${teamSectionHtml(d.id)}</div>` : ''}
+    </div>`;
+  }).join('');
   return `
   <div class="topbar topbar-main" style="position:relative;">
     ${teamLogoWatermarkHtml()}
@@ -8311,8 +8342,8 @@ function renderTeamTab(){
       Finish setup
     </button>` : ''}
   </div>
-  <div class="content fs-area fs-map has-subtabs">
-    ${tabHtml}
+  <div class="content fs-area fs-map">
+    ${sections}
   </div>`;
 }
 // ---------- backup / restore ----------
@@ -9135,7 +9166,7 @@ if('serviceWorker' in navigator && /^https?:/.test(location.protocol)){
   window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
   // Stale-page guard: installed/Play Store copies can hold on to an old index.html. Ask the
   // server (bypassing every cache) which build is live and reload once if this isn't it.
-  const BUILD_ID = '2026-11-25-2000';
+  const BUILD_ID = '2026-11-25-2030';
   const checkForNewBuild = async ()=>{
     try{
       if(!navigator.onLine) return;
@@ -14417,17 +14448,13 @@ function attachHandlers(){
   // qualifications library
   const addQual = document.querySelector('[data-add-qual]');
   if(addQual) addQual.addEventListener('click', ()=> openQualificationModal(null));
-  document.querySelectorAll('[data-team-tab]').forEach(btn=>{
+  document.querySelectorAll('[data-team-acc]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
-      const bar = document.querySelector('.toggle-group-scroll');
-      const scrollLeft = bar ? bar.scrollLeft : 0;
-      teamTab = btn.dataset.teamTab;
-      if(teamTab==='format'){ formatViewMode = 'summary'; pendingConfig = null; }
-      if(teamTab==='identity'){ identityViewMode = 'summary'; }
-      if(teamTab==='configure'){ awardsViewMode = 'summary'; qualificationsViewMode = 'summary'; }
+      const y = window.scrollY, sc = document.querySelector('.content') ? document.querySelector('.content').scrollTop : 0;
+      toggleTeamSection(btn.dataset.teamAcc);
       render();
-      const newBar = document.querySelector('.toggle-group-scroll');
-      if(newBar) newBar.scrollLeft = scrollLeft;
+      window.scrollTo(0, y);
+      const c2 = document.querySelector('.content'); if(c2) c2.scrollTop = sc;
     });
   });
   document.querySelectorAll('[data-home-tab]').forEach(btn=>{
