@@ -2827,6 +2827,7 @@ if('serviceWorker' in navigator){
 // Each producer hands the server the complete list for one "scope"; the server queues what's new, re-times what moved
 // and cancels what's gone. Who actually receives each kind is decided on the server (team audience + personal switches).
 const _ns = {};
+let _notifErr = null;   // last server problem while queuing a notification (shown in Settings -> Notifications)
 function syncNotifItems(teamId, scope, items, opts){
   opts = opts || {};
   const st = _ns[scope] || (_ns[scope] = {sig:'', dsig:'', dat:0, busy:false, fails:0, until:0});
@@ -2837,7 +2838,7 @@ function syncNotifItems(teamId, scope, items, opts){
   st.busy = true;
   supabaseClient.rpc('notification_sync_schedule', {p_team_id:teamId, p_scope:scope, p_items:items.slice(-50)}).then(({error})=>{
     st.busy = false;
-    if(error){ st.fails++; st.until = Date.now() + Math.min(600000, 30000*st.fails); return; }
+    if(error){ _notifErr = {at:Date.now(), scope, msg:(error.message||String(error))}; try{ console.warn('notify sync failed', scope, error); }catch(e){} st.fails++; st.until = Date.now() + Math.min(600000, 30000*st.fails); return; }
     st.fails = 0; st.sig = sig;
   }, ()=>{ st.busy = false; st.fails++; st.until = Date.now() + Math.min(600000, 30000*st.fails); });
 }
@@ -8127,6 +8128,7 @@ function renderTeamTab(){
       <button type="button" class="btn amber" data-open-notifications style="margin-bottom:10px;">Notification settings</button>
       <div class="small" style="color:var(--ink-soft); margin:0 0 12px;">Phone status: ${permText}. Each coach switches notifications on for their own phone from there.</div>
       <button type="button" class="btn ghost" data-notif-test style="margin-bottom:0;">Show a test reminder here</button>
+      ${_notifErr ? `<div class="small" style="color:#e0393e; margin-top:12px;">Last problem queuing a notification (${Math.round((Date.now()-_notifErr.at)/60000)} min ago): ${esc(_notifErr.msg)}</div>` : '<div class="small" style="color:var(--ink-soft); margin-top:12px;">No problems queuing notifications since the app opened.</div>'}
     </div>
 
     <div class="section-title">Live match</div>
@@ -9007,7 +9009,7 @@ if('serviceWorker' in navigator && /^https?:/.test(location.protocol)){
   window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
   // Stale-page guard: installed/Play Store copies can hold on to an old index.html. Ask the
   // server (bypassing every cache) which build is live and reload once if this isn't it.
-  const BUILD_ID = '2026-11-25-0850';
+  const BUILD_ID = '2026-11-25-1340';
   const checkForNewBuild = async ()=>{
     try{
       if(!navigator.onLine) return;
