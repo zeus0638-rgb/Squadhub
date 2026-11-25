@@ -264,6 +264,9 @@
   .pill.loss{background:var(--loss-bg); color:var(--loss);}
   .pill.live{background:var(--loss-bg); color:var(--loss); animation:pulse 1.6s infinite;}
   @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.55;}}
+  @keyframes startFlash{ 0%,100%{ transform:scale(1); box-shadow:0 0 0 0 rgba(255,170,0,0); } 50%{ transform:scale(1.12); box-shadow:0 0 0 6px rgba(255,170,0,.55); } }
+  .flash-start{ animation:startFlash .9s ease-in-out infinite; }
+  .topbar > button.q-finished-btn{ position:absolute !important; top:14px; right:56px; height:34px; padding:0 12px; border-radius:999px; border:none; background:#f5a300 !important; color:#1d1d1f !important; font-family:'Inter',sans-serif; font-weight:700; font-size:12.5px; cursor:pointer; white-space:nowrap; }
   /* Live-quarter indicators, reusing the same red + pulse already used for the "LIVE"
      pill elsewhere (e.g. the fixtures list) so this reads as the same signal. */
   .live-cell-border{ border:2px solid var(--loss) !important; animation:pulse 1.6s infinite; }
@@ -1111,6 +1114,7 @@ function orderedQuarterIdx(n, kind){ const a = Array.from({length:n},(_,i)=>i); 
 let liveTab = 'timeline';
 let subTabsHtml = '';   // set by whichever screen wants a sub-tab row docked above the main tab bar
 let liveViewingQuarter = null;
+let flashStartQuarter = false;   // makes the Start quarter/half button flash after the coach confirms the previous period ended
 const APP_VERSION = 2;
 function getViewingQuarter(f){
   return liveViewingQuarter !== null ? liveViewingQuarter : f.liveState.quarter;
@@ -2939,23 +2943,26 @@ function liveEventNotifyTick(){
   });
   syncNotifItems(teamId, `fixture:${f.id}:live_events`, items);
 }
-// The clock reaching zero is scheduled on the server ahead of time, so it still goes out if the coach's phone locks or dies.
-function periodEndNotifyTick(){
-  if(!supabaseClient || !currentUser || !DATA || !DATA.fixtures) return;
-  const teamId = activeCloudTeamId(); if(!teamId) return;
-  const f = DATA.fixtures.find(x=>x.status==='live' && x.liveState && x.liveLock && x.liveLock.userId===currentUser.id);
-  if(!f) return;
-  const ls = f.liveState, items = [];
-  if(ls.running && ls.lastTickAt){
-    const last = ls.quarter >= (f.periods||4);
-    const at = Math.max(Date.now(), ls.lastTickAt + ls.secondsLeft*1000);
-    items.push({
-      dedupe_key: last ? 'fulltime' : 'pe-'+ls.quarter, topic: last ? 'match_kickoff' : 'period_end', tag: (last?'ft-':'pe-')+f.id+'-'+ls.quarter,
-      title: last ? 'Full time' : `End of ${periodBadgeLabel(f, ls.quarter)}`, body: matchScoreLine(f),
-      send_at: new Date(Math.round(at/1000)*1000).toISOString(), sched:true, url:'./', data:{fixtureId:f.id, ov:matchOv(f, last?'match_kickoff':'period_end')}
-    });
-  }
-  syncNotifItems(teamId, `fixture:${f.id}:period_end`, items, {debounce:2500});
+// End of a quarter / half: sent the moment the coach confirms it (the "has it ended?" pop-up, the Quarter finished button,
+// or starting the next period) - never from the clock alone. Full time is only ever sent when the match is ended.
+function notifyPeriodEnded(f, q){
+  try{
+    if(!supabaseClient || !currentUser || !f) return;
+    const teamId = activeCloudTeamId(); if(!teamId) return;
+    if(!(f.liveLock && f.liveLock.userId===currentUser.id)) return;
+    syncNotifItems(teamId, `fixture:${f.id}:pe${q}`, [{
+      dedupe_key:'pe-'+q, topic:'period_end', tag:'pe-'+f.id+'-'+q, title:`End of ${periodBadgeLabel(f, q)}`, body:matchScoreLine(f),
+      send_at:new Date().toISOString(), url:'./', data:{fixtureId:f.id, exclude_user:currentUser.id, ov:matchOv(f,'period_end')}
+    }]);
+  }catch(e){}
+}
+// Confirms the current period is over (once). Returns true if this call did it.
+function markPeriodEnded(f){
+  const ls = f && f.liveState; if(!ls || f.status!=='live') return false;
+  if(ls.endedQ===ls.quarter || ls.quarter >= (f.periods||4)) return false;
+  ls.endedQ = ls.quarter;
+  notifyPeriodEnded(f, ls.quarter);
+  return true;
 }
 // The coach ends the match: full time goes out now with the final score (a clock-expiry one that already went is not repeated).
 function notifyMatchEnded(f){
@@ -3007,7 +3014,6 @@ function notifyNewFixtures(){
   }catch(e){}
 }
 setInterval(liveEventNotifyTick, 3000);
-setInterval(periodEndNotifyTick, 3000);
 async function protectLockedFixtures(team){
   // Before a locked-out coach saves, take the locked match from the cloud so their copy can never overwrite it.
   const fx = (team.data && team.data.fixtures) || [];
@@ -4579,7 +4585,7 @@ function renderGridPitchEnlargeOverlay(){
       ${isActuallyLive && isFutureQuarter ? `
       <div style="grid-column:2; grid-row:2; align-self:end; justify-self:center; position:relative; width:0; height:34px; margin-bottom:2px;">
         <div style="position:absolute; left:0; bottom:0; transform:translateX(-50%); white-space:nowrap;">
-          <button type="button" class="btn amber small" data-start-this-quarter="${gridPitchEnlargedQuarter}" style="margin:0; width:auto; padding:7px 8px; font-size:12px; white-space:nowrap;">Start this ${f.periods===2?'half':'quarter'}</button>
+          <button type="button" class="btn amber small${flashStartQuarter?' flash-start':''}" data-start-this-quarter="${gridPitchEnlargedQuarter}" style="margin:0; width:auto; padding:7px 8px; font-size:12px; white-space:nowrap;">Start this ${f.periods===2?'half':'quarter'}</button>
         </div>
       </div>
       ${isLastQuarter ? `<div style="grid-column:3; grid-row:2; align-self:end; justify-self:end; margin-bottom:2px;"><button type="button" class="btn ghost small" data-enlarge-game-ended style="margin:0; width:auto; padding:7px 10px; font-size:12px; white-space:nowrap; border-color:var(--loss); color:var(--loss);">End game</button></div>` : ''}` : ''}
@@ -5956,6 +5962,7 @@ function renderLive(id){
     ${bannerScore}
     ${bannerInfo}
     ${!isReview ? `<div style="position:absolute; top:14px; right:14px;">${matchBellBtn(f)}</div>` : ''}
+    ${(!isReview && f.status==='live' && f.liveState && !f.liveState.running && f.liveState.secondsLeft<=0 && f.liveState.endedQ!==f.liveState.quarter && f.liveState.quarter < (f.periods||4)) ? `<button type="button" class="q-finished-btn" data-period-finished="${f.id}">${f.periods===2?'Half':'Quarter'} finished</button>` : ''}
     ${isReview ? `<button data-review-save-now="${f.id}" title="Save" style="position:absolute; top:14px; right:14px; background:rgba(255,255,255,0.15); border:none; border-radius:50%; width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:#fff; cursor:pointer;">
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M4 4.5A1.5 1.5 0 015.5 3H15l5 5v10.5a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.5v-14z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8 3v5h7V3" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><rect x="7" y="13" width="10" height="6.5" stroke="currentColor" stroke-width="1.7"/></svg>
     </button>` : ''}
@@ -9176,7 +9183,7 @@ if('serviceWorker' in navigator && /^https?:/.test(location.protocol)){
   window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
   // Stale-page guard: installed/Play Store copies can hold on to an old index.html. Ask the
   // server (bypassing every cache) which build is live and reload once if this isn't it.
-  const BUILD_ID = '2026-11-25-2330';
+  const BUILD_ID = '2026-11-26-0000';
   const checkForNewBuild = async ()=>{
     try{
       if(!navigator.onLine) return;
@@ -10285,6 +10292,68 @@ function openMatchAlreadyStartedModal(fixtureId){
     }
   };
 }
+function ensureOnLiveScreen(fid){
+  if(VIEW.screen==='live' && VIEW.params && VIEW.params.id===fid) return;
+  reviewMode = false;
+  go('matchday','live',{id:fid});
+}
+// The period's clock has hit zero: ask whether it really ended (the referee may be playing on).
+function openPeriodEndedPrompt(fid){
+  const f = DATA.fixtures.find(x=>x.id===fid);
+  if(!f || !f.liveState) return;
+  const q = f.liveState.quarter, last = q >= (f.periods||4);
+  const body = `
+    <h3>${last ? 'Has the game ended?' : `Has ${esc(periodFullLabel(f,q))} ended?`}</h3>
+    <button class="icon-x" data-close-modal>&times;</button>
+    <div class="small" style="color:var(--ink-soft); margin-bottom:16px;">${last ? 'The clock has reached zero.' : 'The clock has reached zero. Say yes to move on to the next ' + (f.periods===2?'half':'quarter') + '.'}</div>
+    <div style="display:flex; gap:10px;">
+      <button class="btn amber" data-pe-yes style="flex:1; margin-bottom:0;">Yes</button>
+      <button class="btn ghost" data-pe-no style="flex:1; margin-bottom:0;">No</button>
+    </div>`;
+  openModal(body, {floating:true});
+  attachModalHandlers();
+  const yes = document.querySelector('[data-pe-yes]'), no = document.querySelector('[data-pe-no]');
+  if(no) no.onclick = ()=>{
+    closeModal();
+    if(!last){ ensureOnLiveScreen(fid); gridPitchEnlargedQuarter = null; render(); }   // back to the live view, where Quarter finished is waiting
+  };
+  if(yes) yes.onclick = ()=>{
+    closeModal();
+    if(last){ ensureOnLiveScreen(fid); openDynamicAwardsModal(fid, true); }
+    else periodFinishedConfirmed(fid);
+  };
+}
+// Quarter / half confirmed as over: tell followers, then show the next period's pitch view with its start button flashing.
+function periodFinishedConfirmed(fid){
+  const f = DATA.fixtures.find(x=>x.id===fid);
+  if(!f || !f.liveState) return;
+  const q = f.liveState.quarter;
+  if(q >= (f.periods||4)) return;
+  setLiveRunning(f, false); stopTimer();
+  markPeriodEnded(f);
+  saveData();
+  ensureOnLiveScreen(fid);
+  flashStartQuarter = true;
+  pitchQuarterTransitionDir = 1;
+  setEnlargedQuarter(q+1);
+  render();
+}
+// Ask once per period when its clock reaches zero.
+function periodEndAskTick(){
+  try{
+    if(!DATA || !DATA.fixtures) return;
+    const f = DATA.fixtures.find(x=>x.status==='live' && x.liveState);
+    if(!f || liveLockOwnerIsOther(f)) return;
+    const ls = f.liveState;
+    if(ls.running || typeof ls.secondsLeft!=='number' || ls.secondsLeft > 0) return;
+    if(ls.askedQ===ls.quarter || ls.endedQ===ls.quarter) return;
+    if(reviewMode && reviewFixtureId===f.id) return;
+    if(document.getElementById('modal-root')) return;                // wait until whatever is open is dealt with
+    ls.askedQ = ls.quarter; saveData();
+    openPeriodEndedPrompt(f.id);
+  }catch(e){}
+}
+setInterval(periodEndAskTick, 1000);
 function openEndGameConfirm(fixtureId){
   // Ending a match is hard to cleanly undo (it moves screens and marks the fixture
   // finished), so this is a real confirm/cancel step rather than a bare button -
@@ -10416,6 +10485,8 @@ function openStartQuarterModal(fixtureId, quarterNum){
   if(!f) return;
   const mpp = f.minutesPerPeriod || DEFAULT_CONFIG.minutesPerPeriod;
   const commitStart = (secondsLeft)=>{
+    if(quarterNum > f.liveState.quarter) markPeriodEnded(f);
+    flashStartQuarter = false;
     f.liveState.quarter = quarterNum;
     f.liveState.secondsLeft = Math.max(0, Math.min(mpp*60, secondsLeft));
     f.liveState.stoppageSeconds = 0;
@@ -13730,6 +13801,7 @@ function attachHandlers(){
       render();
     });
   });
+  document.querySelectorAll('[data-period-finished]').forEach(btn=>{ btn.addEventListener('click', ()=> periodFinishedConfirmed(btn.dataset.periodFinished)); });
   const nextQ = document.querySelector('[data-next-quarter]');
   if(nextQ) nextQ.addEventListener('click', ()=>{
     const f = DATA.fixtures.find(x=>x.id===VIEW.params.id);
@@ -13740,6 +13812,7 @@ function attachHandlers(){
       // The score is already kept live-synced as Goal/Oppo goal events are logged, so
       // there's nothing left to confirm here - just move straight into the next period.
       setLiveRunning(f, false);          // catch the old period's clock up and stop it first
+      markPeriodEnded(f);
       f.liveState.quarter = Math.min(f.periods, f.liveState.quarter+1);
       f.liveState.secondsLeft = f.minutesPerPeriod * 60;
       f.liveState.stoppageSeconds = 0;
@@ -14652,7 +14725,7 @@ function attachHandlers(){
     });
   });
   document.querySelectorAll('[data-start-this-quarter]').forEach(btn=>{
-    btn.addEventListener('click', ()=> openStartQuarterModal(VIEW.params.id, parseInt(btn.dataset.startThisQuarter)));
+    btn.addEventListener('click', ()=>{ flashStartQuarter = false; btn.classList.remove('flash-start'); openStartQuarterModal(VIEW.params.id, parseInt(btn.dataset.startThisQuarter)); });
   });
   if(VIEW.screen==='matchSetup'){
     // Bound to its own touch-action:pan-y area rather than .content directly - the
