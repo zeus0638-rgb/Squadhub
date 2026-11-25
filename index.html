@@ -8591,12 +8591,30 @@ function modalHistRelease(){
     }
   }, 80);
 }
+// Phone back button on any screen that has an in-app Back / Exit: one history entry is held while such a screen
+// is showing, and the phone's back press is turned into a tap on that screen's own Back button (so any
+// "unsaved changes" or similar checks still run). Pop-ups and the menu take the press first.
+let _screenHist = false;
+function syncScreenHist(){
+  try{
+    if(_modalHist || document.getElementById('modal-root') || navMenuOpen) return;   // never stack under a pop-up's entry
+    const hasBack = !!(VIEW.screen && document.querySelector('#app .backbar'));
+    if(hasBack && !_screenHist){ history.pushState({sqhScreen:1}, ''); _screenHist = true; }
+    else if(!hasBack && _screenHist){ _screenHist = false; _ignorePop++; history.back(); }
+  }catch(e){}
+}
+setInterval(syncScreenHist, 250);
 window.addEventListener('popstate', ()=>{
   if(_ignorePop>0){ _ignorePop--; return; }
   _modalHist = false;
   const hadModal = !!document.getElementById('modal-root');
   document.querySelectorAll('#modal-root').forEach(m=> m.remove());
-  if(!hadModal && navMenuOpen){ navMenuOpen = null; render(); }
+  if(!hadModal && navMenuOpen){ navMenuOpen = null; render(); return; }
+  if(!hadModal && _screenHist){
+    _screenHist = false;
+    const b = document.querySelector('#app .backbar');
+    if(b) b.click();
+  }
 });
 function openModal(html, opts){
   if(navMenuOpen){ navMenuOpen = null; try{ render(); }catch(e){} }
@@ -9147,7 +9165,7 @@ if('serviceWorker' in navigator && /^https?:/.test(location.protocol)){
   window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
   // Stale-page guard: installed/Play Store copies can hold on to an old index.html. Ask the
   // server (bypassing every cache) which build is live and reload once if this isn't it.
-  const BUILD_ID = '2026-11-25-2130';
+  const BUILD_ID = '2026-11-25-2200';
   const checkForNewBuild = async ()=>{
     try{
       if(!navigator.onLine) return;
