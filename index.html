@@ -203,6 +203,9 @@
   .navmain-item svg{ width:26px; height:26px; flex-shrink:0; }
   .navmain-item span{ flex:1; }
   .navmain-item .navarrow{ font-size:24px; line-height:1; opacity:.6; font-weight:400; }
+  .navmain-item .md-txt{ font-size:11.5px; font-weight:600; }
+  @keyframes md-pulse{ 0%,100%{ background:rgba(255,160,0,.08); box-shadow:0 0 0 0 rgba(255,160,0,0); } 50%{ background:rgba(255,160,0,.38); box-shadow:0 0 0 3px rgba(255,160,0,.35); } }
+  .navmain-item.matchday-pulse{ animation:md-pulse 1.4s ease-in-out infinite; }
   .navmain-item.on{ background:var(--pitch); color:#fff; }
   .navmenu-sub{ width:min(270px, 82vw); display:flex; flex-direction:column; padding:8px; box-sizing:border-box; }
   .navsub-back{ display:block; width:calc(100% - 4px); text-align:center; border:none; border-bottom:2px solid var(--pitch); border-radius:0; background:none; color:var(--ink); font-family:'Inter',sans-serif; font-size:16px; font-weight:700; padding:10px 2px 12px; margin:0 2px 6px; cursor:pointer; }
@@ -1540,7 +1543,7 @@ function seasonLabelForDate(dateStr){
 }
 const CLOSE_X = '<span class="back-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg></span>';
 function mainCloseHtml(){
-  if(VIEW.screen || VIEW.tab==='dash') return '';
+  if(VIEW.screen || VIEW.tab!=='team') return '';
   return `<div class="backbar main-close" data-main-close>${CLOSE_X}<span>Close</span></div>`;
 }
 const BACK_ARROW = '<span class="back-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';
@@ -5058,8 +5061,8 @@ const ICO_LINE = _ico('<path d="M4 18l5-6 4 3 7-9"/><path d="M4 20.5h16"/>');
 const ICO_HOME = _ico('<path d="M4 11l8-6.5 8 6.5"/><path d="M6 9.8V19.5h12V9.8"/><path d="M10 19.5v-5h4v5"/>');
 const ICO_TEAM = _ico('<circle cx="9" cy="8.5" r="3"/><path d="M3 19c.8-3.2 3.2-4.8 6-4.8s5.2 1.6 6 4.8"/><circle cx="17" cy="9.5" r="2.4"/><path d="M16.5 14.4c2.4.2 4 1.6 4.5 4.2"/>');
 const NAV_DEFS = [
-  {id:'stats', label:'Stats', icon:ICO_BARS, sub:[{k:'teamstats',label:'Season stats',icon:ICO_LINE},{k:'playerstats',label:'Player stats',icon:ICO_PLAYERS}]},
   {id:'fixres', label:'Fixtures &amp; Results', icon:ICO_CAL, sub:[{k:'fixtures',label:'Fixtures',icon:ICO_CAL},{k:'results',label:'Results',icon:ICO_FLAG}]},
+  {id:'stats', label:'Stats', icon:ICO_BARS, sub:[{k:'teamstats',label:'Season stats',icon:ICO_LINE},{k:'playerstats',label:'Player stats',icon:ICO_PLAYERS}]},
   {id:'myteam', label:'My Team', icon:ICO_TEAM, sub:[{k:'players',label:'Players',icon:ICO_PLAYERS},{k:'coaches',label:'Coaches',icon:ICO_COACHES}]},
   {id:'matchday', label:'Live', bold:true, icon:TAB_DEFS.find(t=>t.id==='matchday').icon},
   {id:'team', label:'Settings', icon:TAB_DEFS.find(t=>t.id==='team').icon}
@@ -5122,7 +5125,7 @@ function navMenuHtml(){
     return `<div class="navmenu-bg" data-nav-menu-bg></div>
     <div class="navmenu-wrap"><div class="navmenu navmenu-main">
       <div class="navmain-head"><button type="button" class="navmain-cog navmain-home ${grp==='dash'?'on':''}" data-nav-item="dash" aria-label="Home"><svg viewBox="0 0 24 24">${ICO_HOME}</svg></button><span class="navmain-title">Menu</span>${admin ? `<button type="button" class="navmain-cog ${grp==='team'?'on':''}" data-nav-item="team" aria-label="Settings"><svg viewBox="0 0 24 24">${cog.icon}</svg></button>` : '<span></span>'}</div>
-      ${items.filter(n=>n.id!=='team').map(n=>`<button type="button" class="navmain-item ${grp===n.id?'on':''}" data-nav-item="${n.id}"><svg viewBox="0 0 24 24">${n.icon}</svg><span>${n.label}</span>${n.sub?'<b class="navarrow">&rsaquo;</b>':''}</button>`).join('')}
+      ${items.filter(n=>n.id!=='team').map(n=>{ const md = n.id==='matchday' && todaysFixtures().some(f=>f.status!=='finished'); return `<button type="button" class="navmain-item ${grp===n.id?'on':''}${md?' matchday-pulse':''}" data-nav-item="${n.id}"><svg viewBox="0 0 24 24">${n.icon}</svg><span>${n.label}${md?' <small class="md-txt">&ndash; it&rsquo;s match day, tap here!</small>':''}</span>${n.sub?'<b class="navarrow">&rsaquo;</b>':''}</button>`; }).join('')}
     </div></div>`;
   }
   const def = NAV_DEFS.find(n=>n.id===navMenuOpen);
@@ -8606,7 +8609,7 @@ let _screenHist = false;
 function syncScreenHist(){
   try{
     if(_modalHist || document.getElementById('modal-root') || navMenuOpen) return;   // never stack under a pop-up's entry
-    const hasBack = !!(document.querySelector('#app .backbar'));
+    const hasBack = !!(document.querySelector('#app .backbar')) || (!VIEW.screen && VIEW.tab!=='dash');
     if(hasBack && !_screenHist){ history.pushState({sqhScreen:1}, ''); _screenHist = true; }
     else if(!hasBack && _screenHist){ _screenHist = false; _ignorePop++; history.back(); }
   }catch(e){}
@@ -8621,7 +8624,7 @@ window.addEventListener('popstate', ()=>{
   if(!hadModal && _screenHist){
     _screenHist = false;
     const b = document.querySelector('#app .backbar');
-    if(b) b.click();
+    if(b) b.click(); else if(!VIEW.screen && VIEW.tab!=='dash') go('dash', null, {});
   }
 });
 function openModal(html, opts){
@@ -9173,7 +9176,7 @@ if('serviceWorker' in navigator && /^https?:/.test(location.protocol)){
   window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
   // Stale-page guard: installed/Play Store copies can hold on to an old index.html. Ask the
   // server (bypassing every cache) which build is live and reload once if this isn't it.
-  const BUILD_ID = '2026-11-25-2230';
+  const BUILD_ID = '2026-11-25-2300';
   const checkForNewBuild = async ()=>{
     try{
       if(!navigator.onLine) return;
