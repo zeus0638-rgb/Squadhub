@@ -10,7 +10,7 @@
 
    It does not cache anything, so changes to index.html still reach everyone the next time they open the app. */
 
-var SW_VERSION = '2026-11-24a';
+var SW_VERSION = '2026-11-25a';
 self.addEventListener('install', function(e){ self.skipWaiting(); });
 self.addEventListener('activate', function(e){ e.waitUntil(self.clients.claim()); });
 
@@ -32,10 +32,10 @@ self.addEventListener('push', function(e){
       // tell every open window the push arrived (the Notifications pop-up uses this to report on its test)
       list.forEach(function(c){ c.postMessage({type: 'push-received', id: d.id, topic: d.topic, at: Date.now(), version: SW_VERSION}); });
       var visible = list.filter(function(c){ return c.visibilityState === 'visible'; });
-      if(visible.length){
-        visible.forEach(function(c){ c.postMessage({type: 'push', payload: d}); });
-        return;                          // the app is on screen and shows this itself
-      }
+      // The coach app on screen shows these itself. The parent follow page only refreshes silently, so it still gets the real notification.
+      var appOnScreen = visible.filter(function(c){ return c.url.indexOf('follow.html') < 0; });
+      visible.forEach(function(c){ c.postMessage({type: 'push', payload: d}); });
+      if(appOnScreen.length) return;
       return self.registration.showNotification(title, options).catch(function(err){
         list.forEach(function(c){ c.postMessage({type: 'push-show-failed', error: String(err && err.message || err)}); });
       });
