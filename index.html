@@ -3965,7 +3965,105 @@ function liveMinutesSplit(fixture, playerId){
   });
   return { played: Math.round(played*10)/10, projected: Math.round(projected*10)/10 };
 }
+// ---------- game sounds (synthesised - no audio files) ----------
+const SOUNDS_KEY = 'sh_game_sounds';
+function soundsOn(){ try{ return localStorage.getItem(SOUNDS_KEY) !== 'off'; }catch(e){ return true; } }
+function setSounds(on){
+  try{ localStorage.setItem(SOUNDS_KEY, on ? 'on' : 'off'); }catch(e){}
+  document.querySelectorAll('[data-sounds-filter]').forEach(b=> b.classList.toggle('on', (b.dataset.soundsFilter==='on') === on));
+  if(on) playGameSound('preview');   // a little chime so they can hear it straight away
+}
+function soundsToggleHtml(){
+  const on = soundsOn();
+  return `<div class="toggle-group" style="margin-bottom:0;">
+    <button type="button" class="${on?'on':''}" data-sounds-filter="on">On</button>
+    <button type="button" class="${!on?'on':''}" data-sounds-filter="off">Off</button>
+  </div>`;
+}
+function wireSoundsToggle(root){
+  (root || document).querySelectorAll('[data-sounds-filter]').forEach(btn=>{
+    if(btn._sdWired) return;
+    btn._sdWired = true;
+    btn.addEventListener('click', ()=> setSounds(btn.dataset.soundsFilter==='on'));
+  });
+}
+function _sfxCtx(){
+  const AC = window.AudioContext || window.webkitAudioContext; if(!AC) return null;
+  if(typeof _audioCtx === 'undefined' || !_audioCtx) _audioCtx = new AC();
+  if(_audioCtx.state === 'suspended'){ try{ _audioCtx.resume(); }catch(e){} }
+  return _audioCtx;
+}
+function _sfxNoise(ctx, secs){
+  const buf = ctx.createBuffer(1, Math.max(1, Math.floor(ctx.sampleRate*secs)), ctx.sampleRate), d = buf.getChannelData(0);
+  for(let i=0;i<d.length;i++) d[i] = Math.random()*2-1;
+  const src = ctx.createBufferSource(); src.buffer = buf; return src;
+}
+function _sfxTone(ctx, t, o){
+  const osc = ctx.createOscillator(), g = ctx.createGain();
+  osc.type = o.type || 'sine';
+  osc.frequency.setValueAtTime(o.f, t);
+  if(o.f2) osc.frequency.linearRampToValueAtTime(o.f2, t + o.dur);
+  const vol = o.vol == null ? 0.25 : o.vol;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + (o.atk || 0.015));
+  g.gain.setValueAtTime(vol, t + Math.max(0.02, o.dur - (o.rel || 0.06)));
+  g.gain.exponentialRampToValueAtTime(0.0001, t + o.dur);
+  let out = osc;
+  if(o.lp){ const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = o.lp; osc.connect(f); out = f; }
+  out.connect(g); g.connect(ctx.destination);
+  osc.start(t); osc.stop(t + o.dur + 0.03);
+}
+// A referee whistle: a high tone with fast vibrato plus a breath of noise.
+function _sfxWhistle(ctx, t, dur, vol){
+  vol = vol == null ? 0.22 : vol;
+  const osc = ctx.createOscillator(), lfo = ctx.createOscillator(), lg = ctx.createGain(), g = ctx.createGain();
+  osc.type = 'sine'; osc.frequency.value = 2900;
+  lfo.frequency.value = 36; lg.gain.value = 90; lfo.connect(lg); lg.connect(osc.frequency);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.02);
+  g.gain.setValueAtTime(vol, t + Math.max(0.03, dur - 0.05)); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  osc.connect(g); g.connect(ctx.destination);
+  osc.start(t); lfo.start(t); osc.stop(t + dur + 0.03); lfo.stop(t + dur + 0.03);
+  const n = _sfxNoise(ctx, dur), bp = ctx.createBiquadFilter(), ng = ctx.createGain();
+  bp.type = 'bandpass'; bp.frequency.value = 3200; bp.Q.value = 3; ng.gain.setValueAtTime(vol*0.35, t); ng.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  n.connect(bp); bp.connect(ng); ng.connect(ctx.destination); n.start(t); n.stop(t + dur + 0.03);
+}
+function _sfxCrowd(ctx, t, dur, vol){
+  const n = _sfxNoise(ctx, dur), bp = ctx.createBiquadFilter(), g = ctx.createGain();
+  bp.type = 'bandpass'; bp.frequency.setValueAtTime(700, t); bp.frequency.linearRampToValueAtTime(1500, t + dur*0.5); bp.Q.value = 0.7;
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + dur*0.3); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  n.connect(bp); bp.connect(g); g.connect(ctx.destination); n.start(t); n.stop(t + dur + 0.03);
+}
+function playGameSound(kind){
+  try{
+    if(!soundsOn()) return;
+    const ctx = _sfxCtx(); if(!ctx) return;
+    const t = ctx.currentTime + 0.03;
+    if(kind==='goal'){
+      _sfxCrowd(ctx, t, 2.2, 0.5);
+      [523.25, 659.25, 783.99, 1046.5].forEach((f,i)=> _sfxTone(ctx, t + i*0.11, {f, dur: i===3 ? 0.7 : 0.2, type:'triangle', vol:0.22}));
+    } else if(kind==='oppgoal'){
+      [330, 311, 294, 262].forEach((f,i)=> _sfxTone(ctx, t + i*0.3, {f, f2:f*0.97, dur: i===3 ? 0.8 : 0.28, type:'sawtooth', vol:0.16, lp:900}));
+    } else if(kind==='kickoff'){
+      _sfxWhistle(ctx, t, 0.55);
+    } else if(kind==='yellow'){
+      _sfxWhistle(ctx, t, 0.22);
+      _sfxTone(ctx, t + 0.3, {f:880, dur:0.12, type:'square', vol:0.08, lp:2000});
+    } else if(kind==='red'){
+      _sfxWhistle(ctx, t, 0.2); _sfxWhistle(ctx, t + 0.28, 0.2);
+      _sfxTone(ctx, t + 0.6, {f:110, f2:80, dur:0.6, type:'sawtooth', vol:0.2, lp:600});
+    } else if(kind==='sub'){
+      _sfxTone(ctx, t, {f:660, dur:0.2, vol:0.25}); _sfxTone(ctx, t + 0.2, {f:880, dur:0.35, vol:0.25});
+    } else if(kind==='period'){
+      _sfxWhistle(ctx, t, 0.45);
+    } else if(kind==='fulltime'){
+      _sfxWhistle(ctx, t, 0.28); _sfxWhistle(ctx, t + 0.4, 0.28); _sfxWhistle(ctx, t + 0.8, 0.8);
+    } else if(kind==='preview'){
+      _sfxTone(ctx, t, {f:784, dur:0.14, vol:0.2}); _sfxTone(ctx, t + 0.12, {f:1047, dur:0.3, vol:0.2});
+    }
+  }catch(e){}
+}
 function showGoalCelebration(){
+  playGameSound('goal');
   const overlay = document.createElement('div');
   overlay.className = 'celebration-overlay';
   const colors = ['#C8102E','#FFFFFF','#1A1A1A','#FFD700','#38BDF8'];
@@ -3984,6 +4082,7 @@ function showGoalCelebration(){
   setTimeout(()=>{ overlay.remove(); }, 2700);
 }
 function showOppoGoalReaction(){
+  playGameSound('oppgoal');
   const bg = document.createElement('div');
   bg.className = 'angry-overlay-bg';
   document.body.appendChild(bg);
@@ -3994,6 +4093,7 @@ function showOppoGoalReaction(){
   setTimeout(()=>{ bg.remove(); face.remove(); }, 1800);
 }
 function showKickoffAnimation(){
+  playGameSound('kickoff');
   const bg = document.createElement('div');
   bg.className = 'card-overlay-bg yellow';
   document.body.appendChild(bg);
@@ -4008,6 +4108,7 @@ function showKickoffAnimation(){
 }
 function showCardAnimation(playerName, type){
   const isRed = type==='redcard';
+  playGameSound(isRed ? 'red' : 'yellow');
   const bg = document.createElement('div');
   bg.className = 'card-overlay-bg ' + (isRed?'red':'yellow');
   document.body.appendChild(bg);
@@ -4022,6 +4123,7 @@ function showCardAnimation(playerName, type){
   setTimeout(()=>{ bg.remove(); overlay.remove(); }, 1800);
 }
 function showSubAnimation(outName, inName){
+  playGameSound('sub');
   const overlay = document.createElement('div');
   overlay.className = 'celebration-overlay';
   overlay.innerHTML = `<div class="sub-text">
@@ -4036,6 +4138,7 @@ function showSubAnimation(outName, inName){
   setTimeout(()=>{ overlay.remove(); }, 2100);
 }
 function showPeriodAnimation(fixture){
+  playGameSound('period');
   const overlay = document.createElement('div');
   overlay.className = 'celebration-overlay';
   const whistleSvg = `<svg class="whistle-icon" viewBox="0 0 100 60" width="66" height="40" fill="none">
@@ -4050,6 +4153,7 @@ function showPeriodAnimation(fixture){
   setTimeout(()=>{ overlay.remove(); }, 2300);
 }
 function showFullTimeAnimation(){
+  playGameSound('fulltime');
   const overlay = document.createElement('div');
   overlay.className = 'celebration-overlay';
   const whistleSvg = `<svg class="whistle-icon" viewBox="0 0 100 60" width="66" height="40" fill="none"><path d="M6 24h46l8-6h22c9 0 16 8 16 17 0 10-8 18-18 18-9 0-16-5-19-12H6z" fill="#fff"/><path d="M6 24h46v8H6z" fill="#fff"/><circle cx="76" cy="36" r="9" fill="#333"/><path d="M52 24l8-6" stroke="#333" stroke-width="2"/><rect x="26" y="28" width="16" height="3" rx="1.5" fill="#333"/><circle cx="86" cy="12" r="6" fill="none" stroke="#fff" stroke-width="3.5"/></svg>`;
@@ -7482,6 +7586,14 @@ function openTeamSwitcherModal(){
       <div class="small" style="color:var(--ink-soft); font-weight:600; margin-bottom:6px;">Text size</div>
       ${textSizeToggleHtml()}
     </div>
+    <div class="text-size-row">
+      <div class="small" style="color:var(--ink-soft); font-weight:600; margin-bottom:6px;">Tap vibration</div>
+      ${hapticsToggleHtml()}
+    </div>
+    <div class="text-size-row">
+      <div class="small" style="color:var(--ink-soft); font-weight:600; margin-bottom:6px;">Game sounds</div>
+      ${soundsToggleHtml()}
+    </div>
     <button class="btn ghost" data-open-notifications style="margin-top:14px; display:flex; align-items:center; justify-content:center; gap:8px;">
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
       Notifications
@@ -7499,6 +7611,8 @@ function openTeamSwitcherModal(){
   openModal(body, {floating:true, anchorToBanner:true});
   attachModalHandlers();
   wireTextSizeToggle(document.getElementById('modal-root'));
+  wireHapticsToggle(document.getElementById('modal-root'));
+  wireSoundsToggle(document.getElementById('modal-root'));
   document.querySelectorAll('[data-switch-team]').forEach(el=>{
     el.addEventListener('click', ()=>{
       closeModal();
@@ -8245,6 +8359,14 @@ function teamSectionHtml(tab){
       <div class="small" style="color:var(--ink-soft); margin:2px 0 10px;">Standard or larger. Your own setting, only affects you.</div>
       ${textSizeToggleHtml()}
       <div style="border-top:1px solid var(--line); margin:16px 0 14px;"></div>
+      <div style="font-weight:600;">Tap vibration</div>
+      <div class="small" style="color:var(--ink-soft); margin:2px 0 10px;">A tiny buzz when you tap buttons. The ball always vibrates. Your own setting, only affects this phone.</div>
+      ${hapticsToggleHtml()}
+      <div style="border-top:1px solid var(--line); margin:16px 0 14px;"></div>
+      <div style="font-weight:600;">Game sounds</div>
+      <div class="small" style="color:var(--ink-soft); margin:2px 0 10px;">Whistles, cheers and chimes for goals, cards, subs, kick-off, quarter ends and full time. Your own setting, only affects this phone.</div>
+      ${soundsToggleHtml()}
+      <div style="border-top:1px solid var(--line); margin:16px 0 14px;"></div>
       <div class="row">
         <div>
           <div style="font-weight:600;">Dark mode</div>
@@ -8807,6 +8929,37 @@ function setTextSize(mode){
   const m = document.getElementById('modal-root');
   if(m && m.dataset.anchorBanner) anchorModalToBanner(m);   // the banner title just changed size
 }
+// ---------- tap vibration (per phone) ----------
+// On by default. The ball ALWAYS vibrates (its own handler, never gated by this), whatever is chosen here.
+const HAPTICS_KEY = 'sh_tap_vibration';
+function hapticsOn(){ try{ return localStorage.getItem(HAPTICS_KEY) !== 'off'; }catch(e){ return true; } }
+function setHaptics(on){
+  try{ localStorage.setItem(HAPTICS_KEY, on ? 'on' : 'off'); }catch(e){}
+  document.querySelectorAll('[data-haptics-filter]').forEach(b=> b.classList.toggle('on', (b.dataset.hapticsFilter==='on') === on));
+  if(on){ try{ if(navigator.vibrate) navigator.vibrate(12); }catch(e){} }   // a little buzz so they can feel it straight away
+}
+function hapticsToggleHtml(){
+  const on = hapticsOn();
+  return `<div class="toggle-group" style="margin-bottom:0;">
+    <button type="button" class="${on?'on':''}" data-haptics-filter="on">On</button>
+    <button type="button" class="${!on?'on':''}" data-haptics-filter="off">Off</button>
+  </div>`;
+}
+function wireHapticsToggle(root){
+  (root || document).querySelectorAll('[data-haptics-filter]').forEach(btn=>{
+    if(btn._hpWired) return;
+    btn._hpWired = true;
+    btn.addEventListener('click', ()=> setHaptics(btn.dataset.hapticsFilter==='on'));
+  });
+}
+document.addEventListener('click', (e)=>{
+  try{
+    if(!hapticsOn() || !navigator.vibrate) return;
+    const t = e.target && e.target.closest ? e.target.closest('button, a[href], [role=button], .tap, label, select, summary, input[type=checkbox], input[type=radio], [data-nav-item], [data-nav-sub]') : null;
+    if(!t || t.disabled || t.closest('[data-ball]')) return;   // the ball has its own always-on buzz
+    navigator.vibrate(8);
+  }catch(err){}
+});
 // (the attribute ends in "-filter" so it stays usable for view-only coaches, like the other display controls)
 function textSizeToggleHtml(){
   const cur = getTextSize();
@@ -14537,6 +14690,8 @@ function attachHandlers(){
     el.addEventListener('click', openCustomColourModal);
   });
   wireTextSizeToggle(document);
+  wireHapticsToggle(document);
+  wireSoundsToggle(document);
   const darkModeToggle = document.getElementById('dark-mode-toggle');
   if(darkModeToggle) darkModeToggle.addEventListener('change', ()=>{
     DATA.darkMode = darkModeToggle.checked;
@@ -15374,7 +15529,8 @@ function tourStart(){
     {sel:'.navmain-home', menu:true, title:'Home', text:'Tap the house to jump back to the Home page from anywhere.'},
     admin ? {sel:'[data-nav-item="team"]', menu:true, title:'Settings', text:'Set up your team, coaches, match format, awards and more.'} : null,
     {sel:'[data-open-team-switcher]', menu:false, title:'Team switcher', text:'Tap your team name to switch team, turn on Notifications, change text size or log out.'},
-    {sel:'.dash-sec', all:true, place:'bottom', menu:false, title:'Explore everything', text:'Almost everything is tappable. Try the form guide, your next fixture and your last result to open them and see what is inside.'}
+    {sel:'.dash-sec', all:true, place:'bottom', menu:false, title:'Explore everything', text:'Almost everything is tappable. Try the form guide, your next fixture and your last result to open them and see what is inside.'},
+    {final:true, menu:false, title:'Have a great season!', text:'You are all set. Good luck out there. \u26bd'}
   ].filter(Boolean);
   const root = document.createElement('div');
   root.id = 'tour-root';
@@ -15402,6 +15558,19 @@ function tourStart(){
     else if(!st.menu && navMenuOpen) closeNavMenu();
     setTimeout(()=>{
       if(!document.getElementById('tour-root')) return;
+      if(st.final){
+        hole.style.cssText = 'left:50%; top:50%; width:0; height:0; border-width:0;';
+        card.querySelector('.tour-step').textContent = 'All done';
+        card.querySelector('.tour-title').textContent = st.title;
+        card.querySelector('.tour-text').textContent = st.text;
+        card.querySelector('[data-tour-next]').textContent = 'Done';
+        const sk = card.querySelector('[data-tour-skip]'); if(sk) sk.style.display = 'none';
+        card.style.visibility = 'hidden'; card.style.top = '0px'; card.style.left = '0px';
+        card.querySelector('.tour-title').style.fontSize = '26px';
+        const fh = card.offsetHeight, fw = card.offsetWidth;
+        card.style.top = Math.max(12, (window.innerHeight - fh)/2) + 'px'; card.style.left = Math.max(14, (window.innerWidth - fw)/2) + 'px'; card.style.visibility = 'visible';
+        return;
+      }
       const els = st.all ? Array.from(document.querySelectorAll(st.sel)) : [document.querySelector(st.sel)].filter(Boolean);
       let r = null;
       els.forEach(e=>{ const b = e.getBoundingClientRect(); if(!b.width) return; r = r ? {left:Math.min(r.left,b.left), top:Math.min(r.top,b.top), right:Math.max(r.right,b.right), bottom:Math.max(r.bottom,b.bottom)} : {left:b.left, top:b.top, right:b.right, bottom:b.bottom}; });
