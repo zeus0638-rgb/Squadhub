@@ -809,6 +809,30 @@
   #signin-hold.leaving{ opacity:0; pointer-events:none; }
   #signin-hold img{ width:84px; height:84px; border-radius:21px; display:block; }
   /* Brief branded greeting straight after logging in */
+  /* Logo jiggle on the new-team wizard screen */
+  @keyframes logoJiggle{ 0%,55%,100%{transform:rotate(0) scale(1);} 8%{transform:rotate(-9deg) scale(1.05);} 16%{transform:rotate(8deg) scale(1.05);} 24%{transform:rotate(-6deg);} 32%{transform:rotate(5deg);} 40%{transform:rotate(-3deg);} 48%{transform:rotate(2deg);} }
+  .wiz-jiggle{ animation:logoJiggle 3s ease-in-out infinite; transform-origin:50% 60%; }
+  @media (prefers-reduced-motion: reduce){ .wiz-jiggle{ animation:none; } }
+  /* Very dark team colour (Black) in dark mode: anything drawn in the team colour vanishes into the dark panel */
+  body.dark-theme.pitch-very-dark .ng-cell input, body.dark-theme.pitch-very-dark input[type=range]{ accent-color:#fff; }
+  body.dark-theme.pitch-very-dark .btn.primary, body.dark-theme.pitch-very-dark .sub-alert .sa-btns button.primary{ background:#fff; color:#1a1a1a; }
+  body.dark-theme.pitch-very-dark .toggle-group button.on, body.dark-theme.pitch-very-dark .toggle-group-scroll button.on{ background:#fff; color:#1a1a1a; }
+  body.dark-theme.pitch-very-dark .sub-alert .sa-btns button, body.dark-theme.pitch-very-dark .stat-box .v, body.dark-theme.pitch-very-dark .sub-alert .sa-head{ color:#fff; border-color:rgba(255,255,255,0.65); }
+  body.dark-theme.pitch-very-dark [style*="color:var(--pitch)"]{ color:#fff !important; }
+  /* First-login tips tour */
+  #tour-root{ position:fixed; inset:0; z-index:100000; }
+  #tour-root .tour-hole{ position:absolute; border-radius:16px; border:2px solid #fff; box-shadow:0 0 0 100vmax rgba(0,0,0,0.74); pointer-events:none; transition:all .25s ease; }
+  #tour-root .tour-card{ position:absolute; width:min(320px, calc(100vw - 28px)); background:var(--panel); color:var(--ink); border-radius:16px; padding:16px 16px 14px; box-shadow:0 12px 36px rgba(0,0,0,0.45); font-family:'Inter',sans-serif; }
+  #tour-root .tour-step{ font-size:11.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft); }
+  #tour-root .tour-title{ font-family:'Oswald',sans-serif; font-weight:700; font-size:21px; margin:3px 0 4px; }
+  #tour-root .tour-text{ font-size:14px; line-height:1.4; color:var(--ink-soft); }
+  #tour-root .tour-off{ display:flex; align-items:center; gap:8px; margin-top:12px; font-size:13px; cursor:pointer; }
+  #tour-root .tour-off input{ width:18px; height:18px; accent-color:var(--pitch); flex-shrink:0; }
+  body.dark-theme.pitch-very-dark #tour-root .tour-off input{ accent-color:#fff; }
+  #tour-root .tour-btns{ display:flex; gap:8px; margin-top:12px; }
+  #tour-root .tour-btns button{ flex:1; border-radius:10px; padding:10px 8px; font-weight:700; font-size:14px; font-family:'Inter',sans-serif; cursor:pointer; border:1px solid var(--line); background:none; color:var(--ink); }
+  #tour-root .tour-btns button.go{ background:var(--pitch); color:#fff; border-color:var(--pitch); }
+  body.dark-theme.pitch-very-dark #tour-root .tour-btns button.go{ background:#fff; color:#1a1a1a; }
   .hello-intro{
     position:fixed; inset:0; z-index:1200; display:flex; flex-direction:column; align-items:center; justify-content:center;
     background:linear-gradient(160deg, var(--pitch) 0%, color-mix(in srgb, var(--pitch) 75%, #000) 100%);
@@ -1056,6 +1080,7 @@ let DATA = { players: [], fixtures: [], coaches: [], config: null, teamName: '',
 // whichever team is currently active - every existing DATA.xxx reference in the app
 // keeps working unchanged. Switching teams swaps what DATA points to underneath.
 let TEAMS_STORE = { teams: [], activeTeamId: null };
+let newTeamPending = false;   // 'Add another team' tapped, but no option chosen yet - nothing is created until one is
 let VIEW = { tab: 'dash', screen: null, params: {} };
 let timerInterval = null;
 let timerFixtureId = null; // which fixture the running interval (if any) belongs to
@@ -1320,6 +1345,13 @@ function applyTheme(){
   document.documentElement.style.setProperty('--pitch-light', theme.pitchLight);
   document.body.classList.toggle('rainbow-theme', !!theme.rainbow);
   document.body.classList.toggle('dark-theme', !!DATA.darkMode);
+  // Black (or any near-black team colour) disappears against the dark-mode panels - flag it so the CSS can lift those bits to white.
+  let veryDark = false;
+  try{
+    const m = /^#?([0-9a-f]{6})$/i.exec(String(theme.pitch||'').trim());
+    if(m){ const n = parseInt(m[1],16); const lum = (0.2126*((n>>16)&255) + 0.7152*((n>>8)&255) + 0.0722*(n&255))/255; veryDark = lum < 0.16; }
+  }catch(e){}
+  document.body.classList.toggle('pitch-very-dark', veryDark);
 }
 const DEFAULT_CONFIG = {
   onField: 7,
@@ -1401,6 +1433,7 @@ function runTeamSetupWizard(w){
     });
   });
   DATA.teamSetupCompleted = true;
+  tourMarkDue();   // first login after setting up: show the tips tour
   saveData();
 }
 function periodKeys(fixture){
@@ -2048,8 +2081,11 @@ function normalizeFixtureLineup(f){
 }
 
 function switchTeam(teamId){
+  const wasPending = newTeamPending;
+  newTeamPending = false;
   const target = TEAMS_STORE.teams.find(t=>t.id===teamId);
-  if(!target || teamId===TEAMS_STORE.activeTeamId) return;
+  if(!target) return;
+  if(teamId===TEAMS_STORE.activeTeamId){ if(wasPending) goHomeOrWizard(); return; }   // picked the current team again = cancel the add
   syncActiveTeamData(); // persist whatever's currently active before swapping away from it
   TEAMS_STORE.activeTeamId = teamId;
   DATA = target.data;
@@ -2091,6 +2127,14 @@ async function deleteTeamById(teamId){
   return true;
 }
 function addNewTeam(){
+  // Deliberately creates nothing yet - just shows the three choices. A team is only made once
+  // "Setup new team" is tapped (or an import / invite actually completes), so backing out
+  // leaves no empty placeholder team behind.
+  newTeamPending = true;
+  renderNoTeamScreen();
+}
+function createTeamAndStartWizard(){
+  newTeamPending = false;
   syncActiveTeamData();
   const teamId = newTeamId();
   const freshData = {
@@ -2103,6 +2147,7 @@ function addNewTeam(){
   TEAMS_STORE.teams.push(newTeam);
   if(currentUser) pushTeamToCloud(newTeam);
   switchTeam(teamId);
+  enterTeamSetupWizard();
 }
 let LAST_CLOUD_ERROR = '';
 function describeCloudError(err){
@@ -2410,6 +2455,8 @@ async function redeemTeamInvite(code){
     return false;
   }
   closeModal();
+  newTeamPending = false;
+  tourMarkDue();   // first login after joining: show the tips tour
   await loadTeamsFromCloud();
   // This invite was generated from a specific coach's own record - now that this
   // account has joined, link the two so that coach's profile shows they actually have
@@ -3077,6 +3124,7 @@ function linkMyCoachRecord(){
 }
 function goHomeOrWizard(){
   navMenuOpen = null;
+  if(!newTeamPending || TEAMS_STORE.teams.length===0 || !DATA.teamSetupCompleted){ newTeamPending = false; }
   try{ linkMyCoachRecord(); }catch(e){}
   // An unfinished team (started the wizard, never completed it) shouldn't force
   // straight back into that wizard either - land on the same choice screen as having
@@ -4425,6 +4473,7 @@ function render(){
   applyViewOnlyLock(app);
   renderViewOnlyBadge();
   pitchQuarterTransitionDir = 0; // consumed by this render already - don't replay the slide on an unrelated later re-render
+  tourMaybeStart();
 }
 function renderViewOnlyBadge(){
   let badge = document.getElementById('view-only-badge');
@@ -7433,6 +7482,10 @@ function openTeamSwitcherModal(){
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
       Notifications
     </button>
+    <button class="btn ghost" data-show-tips style="margin-top:10px; display:flex; align-items:center; justify-content:center; gap:8px;">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 11v5M12 8v.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      Show app tips
+    </button>
     ${currentUser ? `<button class="btn ghost" data-log-out style="margin-top:10px; color:var(--loss); border-color:var(--loss); display:flex; align-items:center; justify-content:center; gap:7px;">
       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" style="flex-shrink:0;"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 17l5-5-5-5M21 12H9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
       Log out${currentUser.email ? ` (${esc(currentUser.email)})` : ''}
@@ -7450,6 +7503,12 @@ function openTeamSwitcherModal(){
   });
   const notifBtn = document.querySelector('#modal-root [data-open-notifications]');
   if(notifBtn) notifBtn.addEventListener('click', ()=>{ closeModal(); openNotificationsPopup(); });
+  const tipsBtn = document.querySelector('#modal-root [data-show-tips]');
+  if(tipsBtn) tipsBtn.addEventListener('click', ()=>{
+    closeModal();
+    go('dash', null, {});
+    setTimeout(tourStart, 450);
+  });
   const logOutBtn = document.querySelector('[data-log-out]');
   if(logOutBtn) logOutBtn.addEventListener('click', ()=>{
     closeModal();
@@ -7485,6 +7544,7 @@ function renderNoTeamScreen(){
   // having none at all here - "Continue" picks the unfinished one back up instead of
   // starting yet another from scratch.
   const hasIncompleteTeam = TEAMS_STORE.teams.length > 0 && !DATA.teamSetupCompleted;
+  const showWizard = hasIncompleteTeam || newTeamPending;
   app.innerHTML = `
   <div style="min-height:100%; display:flex; flex-direction:column; justify-content:center; padding:36px 22px; position:relative; background:linear-gradient(160deg, var(--pitch) 0%, color-mix(in srgb, var(--pitch) 75%, #000) 100%);">
     <div style="position:absolute; top:16px; right:16px; display:flex; align-items:center; gap:14px;">
@@ -7498,16 +7558,19 @@ function renderNoTeamScreen(){
       </button>
     </div>
     <div style="text-align:center; margin-bottom:26px;">
-      <div style="width:76px; height:76px; margin:0 auto 14px; border-radius:20px; overflow:hidden; box-shadow:0 10px 24px rgba(0,0,0,0.3);"><img src="icon-192.png" alt="" style="width:100%; height:100%; object-fit:cover; display:block;"></div>
-      <div style="font-family:'Oswald',sans-serif; font-weight:700; font-size:28px; color:#fff; letter-spacing:.02em;">${hasIncompleteTeam ? 'New team wizard' : 'No team yet'}</div>
-      <div style="color:rgba(255,255,255,0.78); font-size:14px; margin-top:6px; max-width:300px; margin-left:auto; margin-right:auto;">${hasIncompleteTeam ? "Set up a new team from scratch, import an existing team, or join a team with an invite code from a coach." : `You're logged in${currentUser && currentUser.email ? ` as ${esc(currentUser.email)}` : ''}, but you're not part of a team right now.`}</div>
+      <div class="wiz-jiggle" style="width:76px; height:76px; margin:0 auto 14px; border-radius:20px; overflow:hidden; box-shadow:0 10px 24px rgba(0,0,0,0.3);"><img src="icon-192.png" alt="" style="width:100%; height:100%; object-fit:cover; display:block;"></div>
+      <div style="font-family:'Oswald',sans-serif; font-weight:700; font-size:28px; color:#fff; letter-spacing:.02em;">${showWizard ? 'New team wizard' : 'No team yet'}</div>
+      <div style="color:rgba(255,255,255,0.78); font-size:14px; margin-top:6px; max-width:300px; margin-left:auto; margin-right:auto;">${showWizard ? "Set up a new team from scratch, import an existing team, or join a team with an invite code from a coach." : `You're logged in${currentUser && currentUser.email ? ` as ${esc(currentUser.email)}` : ''}, but you're not part of a team right now.`}</div>
     </div>
     <button type="button" class="btn amber" data-no-team-create style="max-width:340px; width:100%; margin:0 auto;">Setup new team</button>
     <button type="button" class="btn" data-no-team-import style="max-width:340px; width:100%; margin:10px auto 0; background:rgba(255,255,255,0.16); border:1.5px solid rgba(255,255,255,0.4); color:#fff;">Import existing team</button>
     ${(supabaseClient && currentUser) ? `<button type="button" class="btn" data-no-team-join style="max-width:340px; width:100%; margin:10px auto 0; background:rgba(255,255,255,0.16); border:1.5px solid rgba(255,255,255,0.4); color:#fff;">Join with invite code</button>` : ''}
+    ${newTeamPending ? `<button type="button" data-no-team-cancel style="background:none; border:none; color:rgba(255,255,255,0.78); font-size:13.5px; text-decoration:underline; cursor:pointer; margin:18px auto 0; display:block;">Cancel</button>` : ''}
   </div>`;
+  const cancelBtn = document.querySelector('[data-no-team-cancel]');
+  if(cancelBtn) cancelBtn.addEventListener('click', ()=>{ newTeamPending = false; goHomeOrWizard(); });
   const createBtn = document.querySelector('[data-no-team-create]');
-  if(createBtn) createBtn.addEventListener('click', hasIncompleteTeam ? enterTeamSetupWizard : addNewTeam);
+  if(createBtn) createBtn.addEventListener('click', hasIncompleteTeam ? enterTeamSetupWizard : createTeamAndStartWizard);
   const importBtn = document.querySelector('[data-no-team-import]');
   if(importBtn) importBtn.addEventListener('click', startImportAsNewTeam);
   const joinBtn = document.querySelector('[data-no-team-join]');
@@ -8500,6 +8563,8 @@ function openImportConfirm(incoming, forNewTeam){
       TEAMS_STORE.activeTeamId = teamId;
       DATA = incoming;
       if(currentUser) pushTeamToCloud(newTeam);
+      newTeamPending = false;
+      tourMarkDue();   // first login after importing: show the tips tour
     } else {
       DATA = incoming;
     }
@@ -15251,6 +15316,96 @@ function playHelloIntroIfHome(){
   if(!DATA || !DATA.teamSetupCompleted || !TEAMS_STORE.teams || TEAMS_STORE.teams.length === 0) return;
   if(VIEW.tab!=='dash' || VIEW.screen) return;      // the Home landing page
   showHelloIntro();
+}
+
+// ---------- first-login tips tour ----------
+// Shown on the Home page, once per app launch, after someone first sets up / imports / joins a team -
+// and on every launch after that until they tick "Don't show this again".
+const TOUR_DUE_KEY = 'sh_tour_due', TOUR_OFF_KEY = 'sh_tour_off';
+let tourDueMem = false, tourShownThisLaunch = false, tourTimer = null;
+function tourLsGet(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function tourLsSet(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+function tourMarkDue(){
+  if(tourLsGet(TOUR_OFF_KEY)==='1') return;
+  tourDueMem = true;
+  tourLsSet(TOUR_DUE_KEY,'1');
+}
+function tourCanShowNow(){
+  return !!DATA && !!DATA.teamSetupCompleted && VIEW.tab==='dash' && !VIEW.screen && !navMenuOpen
+    && !document.getElementById('modal-root') && !document.getElementById('hello-intro') && !document.getElementById('tour-root');
+}
+function tourMaybeStart(){
+  if(tourShownThisLaunch || tourTimer) return;
+  if(tourLsGet(TOUR_OFF_KEY)==='1') return;
+  if(!(tourDueMem || tourLsGet(TOUR_DUE_KEY)==='1')) return;
+  if(!DATA || !DATA.teamSetupCompleted || VIEW.tab!=='dash' || VIEW.screen) return;   // only ever starts from the Home page
+  let tries = 0;
+  const tick = ()=>{
+    tourTimer = null;
+    if(tourShownThisLaunch) return;
+    if(tourCanShowNow()){ tourStart(); return; }
+    // The hello splash or a pop-up is in the way while still on Home: wait a moment and look again.
+    if(VIEW.tab==='dash' && !VIEW.screen && !navMenuOpen && ++tries < 15) tourTimer = setTimeout(tick, 1000);
+  };
+  tourTimer = setTimeout(tick, 1500);
+}
+function tourStart(){
+  if(document.getElementById('tour-root')) return;
+  tourShownThisLaunch = true;
+  const admin = myEffectivePermission()==='admin';
+  const steps = [
+    {sel:'[data-ball]', menu:false, title:'Tap the ball', text:'The ball opens your main menu: Fixtures & Results, Stats, My Team and Live match mode.'},
+    {sel:'.navmain-home', menu:true, title:'Home', text:'Tap the house to jump back to the Home page from anywhere.'},
+    admin ? {sel:'[data-nav-item="team"]', menu:true, title:'Settings', text:'Set up your team, coaches, match format, awards and more.'} : null,
+    {sel:'[data-open-team-switcher]', menu:false, title:'Team switcher', text:'Tap your team name to switch team, turn on Notifications, change text size or log out.'}
+  ].filter(Boolean);
+  const root = document.createElement('div');
+  root.id = 'tour-root';
+  root.innerHTML = `<div class="tour-hole" style="left:50%; top:50%; width:0; height:0;"></div>
+    <div class="tour-card" style="visibility:hidden;">
+      <div class="tour-step"></div><div class="tour-title"></div><div class="tour-text"></div>
+      <label class="tour-off"><input type="checkbox" id="tour-off-cb"> Don't show this again</label>
+      <div class="tour-btns"><button type="button" data-tour-skip>Skip</button><button type="button" class="go" data-tour-next>Next</button></div>
+    </div>`;
+  document.body.appendChild(root);
+  let i = 0;
+  const hole = root.querySelector('.tour-hole'), card = root.querySelector('.tour-card');
+  const finish = ()=>{
+    const cb = document.getElementById('tour-off-cb');
+    if(cb && cb.checked){ tourLsSet(TOUR_OFF_KEY,'1'); tourLsSet(TOUR_DUE_KEY,''); tourDueMem = false; }
+    root.remove();
+    if(navMenuOpen) closeNavMenu();
+  };
+  const show = (idx, dir)=>{
+    if(idx < 0) idx = 0;
+    if(idx >= steps.length){ finish(); return; }
+    i = idx;
+    const st = steps[idx];
+    if(st.menu && !navMenuOpen) openNavMenu('main');
+    else if(!st.menu && navMenuOpen) closeNavMenu();
+    setTimeout(()=>{
+      if(!document.getElementById('tour-root')) return;
+      const el = document.querySelector(st.sel);
+      const r = el ? el.getBoundingClientRect() : null;
+      if(!r || !r.width){ show(idx + (dir||1), dir||1); return; }   // that button isn't on this screen - skip the step
+      const pad = 7, vw = window.innerWidth, vh = window.innerHeight;
+      hole.style.cssText = `left:${r.left-pad}px; top:${r.top-pad}px; width:${r.width+pad*2}px; height:${r.height+pad*2}px; border-radius:${Math.min(22, (r.height+pad*2)/2)}px;`;
+      card.querySelector('.tour-step').textContent = `Tip ${idx+1} of ${steps.length}`;
+      card.querySelector('.tour-title').textContent = st.title;
+      card.querySelector('.tour-text').textContent = st.text;
+      card.querySelector('[data-tour-next]').textContent = idx===steps.length-1 ? 'Done' : 'Next';
+      card.style.visibility = 'hidden'; card.style.top = '0px'; card.style.left = '0px';
+      const ch = card.offsetHeight, cw = card.offsetWidth;
+      let top = (r.top + r.height/2 < vh/2) ? r.bottom + pad + 14 : r.top - pad - 14 - ch;
+      top = Math.max(12, Math.min(vh - ch - 12, top));
+      let left = r.left + r.width/2 - cw/2;
+      left = Math.max(14, Math.min(vw - cw - 14, left));
+      card.style.top = top + 'px'; card.style.left = left + 'px'; card.style.visibility = 'visible';
+    }, st.menu ? 420 : (navMenuOpen ? 320 : 120));
+  };
+  root.querySelector('[data-tour-next]').addEventListener('click', ()=> show(i+1, 1));
+  root.querySelector('[data-tour-skip]').addEventListener('click', finish);
+  show(0, 1);
 }
 
 let passwordRecoveryInProgress = false;
