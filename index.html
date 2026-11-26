@@ -809,6 +809,8 @@
   #signin-hold.leaving{ opacity:0; pointer-events:none; }
   #signin-hold img{ width:84px; height:84px; border-radius:21px; display:block; }
   /* Brief branded greeting straight after logging in */
+  .go-live-today{ display:flex; align-items:center; justify-content:center; gap:9px; margin:0 0 14px; font-size:16px; }
+  .go-live-today .gl-dot{ width:9px; height:9px; border-radius:50%; background:#ff4d5e; animation:pulse 1.6s infinite; }
   /* Logo jiggle on the new-team wizard screen */
   @keyframes logoJiggle{ 0%,55%,100%{transform:rotate(0) scale(1);} 8%{transform:rotate(-9deg) scale(1.05);} 16%{transform:rotate(8deg) scale(1.05);} 24%{transform:rotate(-6deg);} 32%{transform:rotate(5deg);} 40%{transform:rotate(-3deg);} 48%{transform:rotate(2deg);} }
   .wiz-jiggle{ animation:logoJiggle 3s ease-in-out infinite; transform-origin:50% 60%; }
@@ -5702,6 +5704,7 @@ function renderFixtureEditor(id){
   </div>
   ${isDraft ? `<div style="background:var(--amber-soft); padding:9px 20px; font-size:12.5px; color:var(--ink); text-align:center;">Not saved yet — tap the <strong>save icon</strong> above at any point to keep this fixture.</div>` : ''}
   <div class="content">
+    ${!isDraft ? goLiveTodayBtnHtml(f) : ''}
     <div class="toggle-group">
       ${tabs.map(t=>`<button type="button" class="${tab===t.id?'on':''}" data-fixture-editor-tab="${t.id}">${t.label}</button>`).join('')}
     </div>
@@ -5829,6 +5832,7 @@ function renderMatchSetup(id){
     </div>
   </div>
   <div class="content">
+    ${goLiveTodayBtnHtml(f)}
     <div class="toggle-group">
       <button type="button" class="${tab==='details'?'on':''}" data-match-setup-tab="details">1. Match details</button>
       <button type="button" class="${tab==='availability'?'on':''}" data-match-setup-tab="availability">2. Player availability</button>
@@ -10159,6 +10163,12 @@ function openEditFixtureDetailsModal(fixtureId){
     render();
   };
 }
+function isFixtureToday(f){ return !!(f && f.dateTime) && new Date(f.dateTime).toDateString()===new Date().toDateString(); }
+// A big "Go live" shortcut on a fixture that is dated today and hasn't started yet.
+function goLiveTodayBtnHtml(f){
+  if(!f || f.status!=='planned' || !isFixtureToday(f)) return '';
+  return `<button type="button" class="btn amber go-live-today" data-go-live-today="${f.id}"><span class="gl-dot"></span>Go live</button>`;
+}
 function openStartMatchConfirm(fixtureId){
   { const lf = DATA.fixtures.find(x=>x.id===fixtureId); if(liveLockOwnerIsOther(lf)){ liveLockedToast(lf); return; } }
   const f = DATA.fixtures.find(x=>x.id===fixtureId);
@@ -13633,6 +13643,12 @@ function attachHandlers(){
   });
   const startMatch = document.querySelector('[data-start-match]');
   if(startMatch) startMatch.addEventListener('click', ()=> openStartMatchConfirm(startMatch.dataset.startMatch));
+  document.querySelectorAll('[data-go-live-today]').forEach(b=> b.addEventListener('click', ()=>{
+    const lf = DATA.fixtures.find(x=>x.id===b.dataset.goLiveToday);
+    if(lf && liveLockOwnerIsOther(lf)){ liveLockedToast(lf); return; }
+    try{ saveData(); }catch(e){}
+    openKickoffTimeConfirm(b.dataset.goLiveToday);   // "Go live?" - one confirm, then the clock starts and the live view opens
+  }));
   const gotoLive = document.querySelector('[data-goto-live]');
   if(gotoLive) gotoLive.addEventListener('click', ()=> go(VIEW.tab,'live',{id:gotoLive.dataset.gotoLive}));
   document.querySelectorAll('[data-edit-goal]').forEach(el=>{
@@ -15357,7 +15373,8 @@ function tourStart(){
     {sel:'[data-ball]', menu:false, title:'Tap the ball', text:'The ball opens your main menu: Fixtures & Results, Stats, My Team and Live match mode.'},
     {sel:'.navmain-home', menu:true, title:'Home', text:'Tap the house to jump back to the Home page from anywhere.'},
     admin ? {sel:'[data-nav-item="team"]', menu:true, title:'Settings', text:'Set up your team, coaches, match format, awards and more.'} : null,
-    {sel:'[data-open-team-switcher]', menu:false, title:'Team switcher', text:'Tap your team name to switch team, turn on Notifications, change text size or log out.'}
+    {sel:'[data-open-team-switcher]', menu:false, title:'Team switcher', text:'Tap your team name to switch team, turn on Notifications, change text size or log out.'},
+    {sel:'.dash-sec', all:true, place:'bottom', menu:false, title:'Explore everything', text:'Almost everything is tappable. Try the form guide, your next fixture and your last result to open them and see what is inside.'}
   ].filter(Boolean);
   const root = document.createElement('div');
   root.id = 'tour-root';
@@ -15385,8 +15402,10 @@ function tourStart(){
     else if(!st.menu && navMenuOpen) closeNavMenu();
     setTimeout(()=>{
       if(!document.getElementById('tour-root')) return;
-      const el = document.querySelector(st.sel);
-      const r = el ? el.getBoundingClientRect() : null;
+      const els = st.all ? Array.from(document.querySelectorAll(st.sel)) : [document.querySelector(st.sel)].filter(Boolean);
+      let r = null;
+      els.forEach(e=>{ const b = e.getBoundingClientRect(); if(!b.width) return; r = r ? {left:Math.min(r.left,b.left), top:Math.min(r.top,b.top), right:Math.max(r.right,b.right), bottom:Math.max(r.bottom,b.bottom)} : {left:b.left, top:b.top, right:b.right, bottom:b.bottom}; });
+      if(r){ r.width = r.right - r.left; r.height = r.bottom - r.top; }
       if(!r || !r.width){ show(idx + (dir||1), dir||1); return; }   // that button isn't on this screen - skip the step
       const pad = 7, vw = window.innerWidth, vh = window.innerHeight;
       hole.style.cssText = `left:${r.left-pad}px; top:${r.top-pad}px; width:${r.width+pad*2}px; height:${r.height+pad*2}px; border-radius:${Math.min(22, (r.height+pad*2)/2)}px;`;
@@ -15397,6 +15416,7 @@ function tourStart(){
       card.style.visibility = 'hidden'; card.style.top = '0px'; card.style.left = '0px';
       const ch = card.offsetHeight, cw = card.offsetWidth;
       let top = (r.top + r.height/2 < vh/2) ? r.bottom + pad + 14 : r.top - pad - 14 - ch;
+      if(st.place==='bottom') top = vh - ch - 14;
       top = Math.max(12, Math.min(vh - ch - 12, top));
       let left = r.left + r.width/2 - cw/2;
       left = Math.max(14, Math.min(vw - cw - 14, left));
