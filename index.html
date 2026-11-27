@@ -5551,16 +5551,7 @@ function renderMatchdayTab(){
         <div class="big">No fixture scheduled for today</div>
         <div class="small">${upcoming ? "Here's your next one:" : 'Add a fixture to get started.'}</div>
       </div>
-      ${upcoming ? `
-      <div class="card tap fixture-card ${highlightFixtureId===upcoming.id?'new-fixture-pulse':''}" data-open-fixture="${upcoming.id}">
-        <div class="row">
-          <div>
-            <div class="opp">vs ${esc(upcoming.opponent||'TBC')}${venueBadge(upcoming)}</div>
-            <div class="meta">${fmtDate(upcoming.dateTime)}</div>${upcoming.location?`<div class="meta" style="margin-top:1px;">${esc(upcoming.location)}</div>`:''}
-          </div>
-          <span class="pill ${upcoming.competitionType.toLowerCase()}">${esc(competitionDisplayLabel(upcoming))}</span>
-        </div>
-      </div>` : ''}
+      ${upcoming ? fixtureCardHtml(upcoming) : ''}
     `;
   }
   return `
