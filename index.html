@@ -254,6 +254,12 @@
     padding:14px 16px;
     margin-bottom:12px;
   }
+  .card.has-date-bar{ position:relative; padding-left:60px; }
+  .date-bar{ position:absolute; left:0; top:0; bottom:0; width:42px; display:flex; align-items:center; justify-content:center; background:color-mix(in srgb, var(--accent) 16%, var(--panel)); border-right:1px solid var(--line); border-radius:10px 0 0 10px; overflow:hidden; }
+  .date-bar span{ writing-mode:vertical-rl; transform:rotate(180deg); white-space:nowrap; font-size:12.5px; font-weight:700; letter-spacing:.3px; color:var(--ink); }
+  html.text-large .fs-area .card.has-date-bar{ padding-left:68px; }
+  html.text-large .fs-area .date-bar{ width:50px; }
+  html.text-large .fs-area .date-bar span{ font-size:15px; }
   .card.tap{cursor:pointer;}
   .card.tap:active{background:var(--surface-2);}
   .row{display:flex; align-items:center; justify-content:space-between; gap:10px;}
@@ -3268,6 +3274,16 @@ function fmtDate(iso){
   return d.toLocaleDateString(undefined,{weekday:'short', day:'numeric', month:'short'}) + ' · ' +
          d.toLocaleTimeString(undefined,{hour:'numeric', minute:'2-digit'});
 }
+function dateBarHtml(iso){
+  if(!iso) return '';
+  const d = new Date(iso), n = d.getDate();
+  const suf = (n%100>=11 && n%100<=13) ? 'th' : ({1:'st',2:'nd',3:'rd'}[n%10] || 'th');
+  return `<div class="date-bar"><span>${n}${suf} ${d.toLocaleDateString(undefined,{month:'short'})}</span></div>`;
+}
+function dayTimeStr(iso){
+  if(!iso) return '';
+  return new Date(iso).toLocaleDateString(undefined,{weekday:'short'}) + ' · ' + koTime(iso);
+}
 function koTime(iso){
   if(!iso) return '';
   return new Date(iso).toLocaleTimeString(undefined,{hour:'numeric', minute:'2-digit'});
@@ -5602,11 +5618,12 @@ function renderHomeTab(){
       upcomingAll.map(upcoming=>{
         const h2h = upcoming.opponentId ? opponentStats(upcoming.opponentId) : null;
         return `
-      <div class="card tap fixture-card ${highlightFixtureId===upcoming.id?'new-fixture-pulse':''}" data-open-fixture="${upcoming.id}">
+      <div class="card tap fixture-card has-date-bar ${highlightFixtureId===upcoming.id?'new-fixture-pulse':''}" data-open-fixture="${upcoming.id}">
+        ${dateBarHtml(upcoming.dateTime)}
         <div class="row">
           <div>
             <div class="opp">vs ${esc(upcoming.opponent||'TBC')}${venueBadge(upcoming)}</div>
-            <div class="meta">${fmtDate(upcoming.dateTime)}</div>${upcoming.location?`<div class="meta" style="margin-top:1px;">${esc(upcoming.location)}</div>`:''}
+            <div class="meta">${dayTimeStr(upcoming.dateTime)}</div>${upcoming.location?`<div class="meta" style="margin-top:1px;">${esc(upcoming.location)}</div>`:''}
           </div>
           <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-end; flex-shrink:0;">
             <span class="pill ${upcoming.competitionType.toLowerCase()} ${upcoming.status==='live'?'live':''}" style="text-align:right;">${upcoming.status==='live'?'LIVE':esc(competitionDisplayLabel(upcoming))}</span>
@@ -5630,11 +5647,12 @@ function renderHomeTab(){
           const player = pid ? getPlayer(pid) : null;
           return player ? `${esc(a.acronym||a.name)}: ${esc(player.name)}` : null;
         }).filter(Boolean);
-        return `<div class="card tap fixture-card ${highlightFixtureId===f.id?'new-fixture-pulse':''}" data-open-result="${f.id}">
+        return `<div class="card tap fixture-card has-date-bar ${highlightFixtureId===f.id?'new-fixture-pulse':''}" data-open-result="${f.id}">
+          ${dateBarHtml(f.dateTime)}
           <div class="row">
             <div>
               <div class="opp">vs ${esc(f.opponent||'TBC')}${venueBadge(f)}${resultPillHtml(res)}</div>
-              <div class="meta">${shortDate(f.dateTime)} · ${koTime(f.dateTime)}</div>
+              <div class="meta">${dayTimeStr(f.dateTime)}</div>
               <div class="meta" style="margin-top:1px;">${esc(competitionDisplayLabel(f))}</div>
               <div class="small hm-gt" style="color:var(--ink-soft); margin-top:1px;">${gameTypeForFixture(f)==='development'?'Development':'Competitive'}</div>
             </div>
@@ -5695,11 +5713,12 @@ function renderDashboardTab(){
   const badge = safeBadgeSrc(DATA.teamBadge);
   const first = myFirstName();
   const nextHtml = nextMatch ? `
-    <div class="card tap fixture-card ${highlightFixtureId===nextMatch.id?'new-fixture-pulse':''}" data-open-fixture="${nextMatch.id}">
+    <div class="card tap fixture-card has-date-bar ${highlightFixtureId===nextMatch.id?'new-fixture-pulse':''}" data-open-fixture="${nextMatch.id}">
+      ${dateBarHtml(nextMatch.dateTime)}
       <div class="row">
         <div>
           <div class="opp">vs ${esc(nextMatch.opponent||'TBC')}${venueBadge(nextMatch)}</div>
-          <div class="meta">${fmtDate(nextMatch.dateTime)}</div>${nextMatch.location?`<div class="meta" style="margin-top:1px;">${esc(nextMatch.location)}</div>`:''}
+          <div class="meta">${dayTimeStr(nextMatch.dateTime)}</div>${nextMatch.location?`<div class="meta" style="margin-top:1px;">${esc(nextMatch.location)}</div>`:''}
         </div>
         <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-end; flex-shrink:0;">
           <span class="pill ${nextMatch.competitionType.toLowerCase()} ${nextMatch.status==='live'?'live':''}" style="text-align:right;">${nextMatch.status==='live'?'LIVE':esc(competitionDisplayLabel(nextMatch))}</span>
@@ -5709,11 +5728,12 @@ function renderDashboardTab(){
   let lastHtml = `<div class="card"><div class="small" style="color:var(--ink-soft);">No results yet</div></div>`;
   if(last){
     const res = fixtureResultLabel(last);
-    lastHtml = `<div class="card tap fixture-card ${highlightFixtureId===last.id?'new-fixture-pulse':''}" data-open-result="${last.id}">
+    lastHtml = `<div class="card tap fixture-card has-date-bar ${highlightFixtureId===last.id?'new-fixture-pulse':''}" data-open-result="${last.id}">
+      ${dateBarHtml(last.dateTime)}
       <div class="row">
         <div>
           <div class="opp">vs ${esc(last.opponent||'TBC')}${venueBadge(last)}${resultPillHtml(res)}</div>
-          <div class="meta">${shortDate(last.dateTime)} · ${koTime(last.dateTime)}</div>
+          <div class="meta">${dayTimeStr(last.dateTime)}</div>
           <div class="meta" style="margin-top:1px;">${esc(competitionDisplayLabel(last))}</div>
         </div>
         <div style="text-align:right; flex-shrink:0; white-space:nowrap;">
@@ -14992,7 +15012,7 @@ function attachHandlers(){
       deliverSubReminder({key:'test-'+Date.now(), fixtureId:null, qNum:1, title:'Test reminder', main:'<b>Louie</b> on for <b>Jude</b>', plain:'Louie on for Jude (RM) - test reminder', sub:'RM \u00b7 this is just a test'});
     });
   });
-  document.querySelectorAll('[data-open-theme-picker]').forEach(el=>{ el.addEventListener('click', openThemePickerModal); });
+  document.querySelectorAll('[data-open-theme-picker]').forEach(el=>{ el.addEventListener('click', openCustomColourModal); });
   document.querySelectorAll('[data-open-custom-colour]').forEach(el=>{
     el.addEventListener('click', openCustomColourModal);
   });
