@@ -273,6 +273,7 @@
   .topbar > button.q-finished-btn{ position:absolute !important; top:14px; right:56px; height:34px; padding:0 12px; border-radius:999px; border:none; background:#f5a300 !important; color:#1d1d1f !important; font-family:'Inter',sans-serif; font-weight:700; font-size:12.5px; cursor:pointer; white-space:nowrap; }
   /* Live-quarter indicators, reusing the same red + pulse already used for the "LIVE"
      pill elsewhere (e.g. the fixtures list) so this reads as the same signal. */
+  .next-cell-border{ border:2px solid #F59E0B !important; animation:pulse 1.6s infinite; }
   .live-cell-border{ border:2px solid var(--loss) !important; animation:pulse 1.6s infinite; }
   .live-corner-badge{ position:absolute; top:8px; left:8px; z-index:5; display:flex; align-items:center; gap:4px; background:var(--loss-bg); color:var(--loss); font-weight:800; font-size:10px; padding:3px 7px; border-radius:8px; letter-spacing:0.03em; animation:pulse 1.6s infinite; }
   .live-inline-badge{ display:inline-flex; align-items:center; gap:5px; background:var(--loss-bg); color:var(--loss); font-weight:800; font-size:11.5px; padding:4px 9px; border-radius:9px; letter-spacing:0.03em; animation:pulse 1.6s infinite; }
@@ -6152,7 +6153,9 @@ function renderLive(id){
     const liveCellNum = betweenQ ? null : liveQuarterNum;
     const finishedUpTo = betweenQ ? liveQuarterNum : (liveQuarterNum!==null ? liveQuarterNum-1 : 0);
     let quickBar = '';
-    if(liveQuarterNum!==null && f.status==='live' && !liveLockOwnerIsOther(f) && liveQuarterNum < tPeriods.length){
+    if(liveQuarterNum!==null && f.status==='live' && !liveLockOwnerIsOther(f) && liveQuarterNum >= tPeriods.length){
+      quickBar = `<button type="button" class="btn danger" data-quick-end-game="${f.id}" style="margin:0 0 12px;">End game</button>`;
+    } else if(liveQuarterNum!==null && f.status==='live' && !liveLockOwnerIsOther(f) && liveQuarterNum < tPeriods.length){
       const pw = f.periods===2 ? 'half' : 'quarter';
       quickBar = f.liveState.endedQ===liveQuarterNum
         ? `<button type="button" class="btn amber" data-quick-start-period="${f.id}" style="margin:0 0 12px;">Start ${esc(periodFullLabel(f, liveQuarterNum+1))}</button>`
@@ -6163,7 +6166,7 @@ function renderLive(id){
     ${squad.length===0 ? '<div class="card"><div class="small" style="color:var(--ink-soft); padding:16px;">No squad recorded</div></div>' : `
     <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px;">
       ${tPeriods.map((qk,i)=>`
-        <div class="card tap lp-card ${liveCellNum===i+1?'live-cell-border':''}" data-enlarge-grid-pitch="${i+1}" data-lp-quarter="${i+1}" style="padding:0; overflow:hidden; position:relative;">
+        <div class="card tap lp-card ${liveCellNum===i+1?'live-cell-border':(betweenQ && i+1===liveQuarterNum+1)?'next-cell-border':''}" data-enlarge-grid-pitch="${i+1}" data-lp-quarter="${i+1}" style="padding:0; overflow:hidden; position:relative;">
           ${liveCellNum===i+1 ? `<div class="live-corner-badge"><span style="width:5px; height:5px; border-radius:50%; background:var(--loss);"></span>LIVE</div>` : ''}
           ${liveCellNum===i+1 ? `<div data-grid-live-timer style="position:absolute; right:6px; top:6px; z-index:5; background:rgba(0,0,0,.72); color:#fff; font-family:'Oswald',sans-serif; font-weight:700; font-size:15px; padding:2px 9px; border-radius:10px; pointer-events:none;">${esc(liveTimerDisplay(f.liveState).text)}</div>` : ''}
           <div class="pitch-cover${liveCellNum===i+1?' is-live':''}"><span class="pitch-cover-label">${liveCellNum===i+1 ? 'Currently live' : (betweenQ && i+1===liveQuarterNum+1) ? 'Starting after the break' : ('Open ' + esc(periodBadgeLabel(f, i+1)) + ((liveQuarterNum!==null && i+1<=finishedUpTo) || f.status==='finished' ? '<br><span style="font-size:11px; font-weight:700; opacity:.85;">(finished)</span>' : ''))}</span></div>
@@ -14152,6 +14155,7 @@ function attachHandlers(){
     render();
     openPeriodEndedPrompt(f.id, {manual:true, wasRunning});
   }); });
+  document.querySelectorAll('[data-quick-end-game]').forEach(btn=>{ btn.addEventListener('click', ()=> openEndGameConfirm(btn.dataset.quickEndGame)); });
   document.querySelectorAll('[data-quick-end-period]').forEach(btn=>{ btn.addEventListener('click', ()=>{
     const f = DATA.fixtures.find(x=>x.id===btn.dataset.quickEndPeriod);
     if(!f || !f.liveState) return;
