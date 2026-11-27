@@ -6154,7 +6154,7 @@ function renderLive(id){
     const finishedUpTo = betweenQ ? liveQuarterNum : (liveQuarterNum!==null ? liveQuarterNum-1 : 0);
     let quickBar = '';
     if(liveQuarterNum!==null && f.status==='live' && !liveLockOwnerIsOther(f) && liveQuarterNum >= tPeriods.length){
-      quickBar = `<button type="button" class="btn danger" data-quick-end-game="${f.id}" style="margin:0 0 12px;">End game</button>`;
+      quickBar = `<button type="button" class="btn danger" data-quick-end-game="${f.id}" style="margin:0 0 12px; width:100%;">End game</button>`;
     } else if(liveQuarterNum!==null && f.status==='live' && !liveLockOwnerIsOther(f) && liveQuarterNum < tPeriods.length){
       const pw = f.periods===2 ? 'half' : 'quarter';
       quickBar = f.liveState.endedQ===liveQuarterNum
@@ -14155,6 +14155,7 @@ function attachHandlers(){
     render();
     openPeriodEndedPrompt(f.id, {manual:true, wasRunning});
   }); });
+  document.querySelectorAll('[data-nav-tab]').forEach(btn=>{ if(btn.tagName==='BUTTON' && btn.classList.contains('btn')) btn.addEventListener('click', ()=> go(btn.dataset.navTab, null, {})); });
   document.querySelectorAll('[data-quick-end-game]').forEach(btn=>{ btn.addEventListener('click', ()=> openEndGameConfirm(btn.dataset.quickEndGame)); });
   document.querySelectorAll('[data-quick-end-period]').forEach(btn=>{ btn.addEventListener('click', ()=>{
     const f = DATA.fixtures.find(x=>x.id===btn.dataset.quickEndPeriod);
