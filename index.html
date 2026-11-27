@@ -3268,6 +3268,12 @@ function fmtDate(iso){
   return d.toLocaleDateString(undefined,{weekday:'short', day:'numeric', month:'short'}) + ' · ' +
          d.toLocaleTimeString(undefined,{hour:'numeric', minute:'2-digit'});
 }
+function koTime(iso){
+  if(!iso) return '';
+  return new Date(iso).toLocaleTimeString(undefined,{hour:'numeric', minute:'2-digit'});
+}
+function resultWord(res){ return res==='win' ? 'Won' : res==='loss' ? 'Lost' : res==='draw' ? 'Drew' : ''; }
+function resultPillHtml(res){ return res ? `<span class="pill ${res}" style="margin-left:8px; vertical-align:middle; font-family:'Inter',sans-serif; font-size:11px;">${resultWord(res)}</span>` : ''; }
 function shortDate(iso){
   const d = new Date(iso);
   return d.toLocaleDateString(undefined,{day:'numeric', month:'short'});
@@ -5534,7 +5540,7 @@ function renderMatchdayTab(){
         <div class="row">
           <div>
             <div class="opp">vs ${esc(upcoming.opponent||'TBC')}${venueBadge(upcoming)}</div>
-            <div class="meta">${fmtDate(upcoming.dateTime)}${upcoming.location?' · '+esc(upcoming.location):''}</div>
+            <div class="meta">${fmtDate(upcoming.dateTime)}</div>${upcoming.location?`<div class="meta" style="margin-top:1px;">${esc(upcoming.location)}</div>`:''}
           </div>
           <span class="pill ${upcoming.competitionType.toLowerCase()}">${esc(competitionDisplayLabel(upcoming))}</span>
         </div>
@@ -5600,7 +5606,7 @@ function renderHomeTab(){
         <div class="row">
           <div>
             <div class="opp">vs ${esc(upcoming.opponent||'TBC')}${venueBadge(upcoming)}</div>
-            <div class="meta">${fmtDate(upcoming.dateTime)}${upcoming.location?' · '+esc(upcoming.location):''}</div>
+            <div class="meta">${fmtDate(upcoming.dateTime)}</div>${upcoming.location?`<div class="meta" style="margin-top:1px;">${esc(upcoming.location)}</div>`:''}
           </div>
           <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-end; flex-shrink:0;">
             <span class="pill ${upcoming.competitionType.toLowerCase()} ${upcoming.status==='live'?'live':''}" style="text-align:right;">${upcoming.status==='live'?'LIVE':esc(competitionDisplayLabel(upcoming))}</span>
@@ -5627,13 +5633,13 @@ function renderHomeTab(){
         return `<div class="card tap fixture-card ${highlightFixtureId===f.id?'new-fixture-pulse':''}" data-open-result="${f.id}">
           <div class="row">
             <div>
-              <div class="opp">vs ${esc(f.opponent||'TBC')}${venueBadge(f)}</div>
-              <div class="meta">${shortDate(f.dateTime)} · ${esc(competitionDisplayLabel(f))}</div>
+              <div class="opp">vs ${esc(f.opponent||'TBC')}${venueBadge(f)}${resultPillHtml(res)}</div>
+              <div class="meta">${shortDate(f.dateTime)} · ${koTime(f.dateTime)}</div>
+              <div class="meta" style="margin-top:1px;">${esc(competitionDisplayLabel(f))}</div>
               <div class="small hm-gt" style="color:var(--ink-soft); margin-top:1px;">${gameTypeForFixture(f)==='development'?'Development':'Competitive'}</div>
             </div>
             <div style="text-align:right; flex-shrink:0; white-space:nowrap;">
               <div class="num hm-score" style="font-weight:600;">${f.finalScore.us} – ${f.finalScore.them}</div>
-              <span class="pill ${res}">${res.toUpperCase()}</span>
             </div>
           </div>
           ${awardLines.length>0 ? `<div class="hm-award" style="color:var(--ink-soft); margin-top:6px;">${awardLines.join(' · ')}</div>` : ''}
@@ -5693,7 +5699,7 @@ function renderDashboardTab(){
       <div class="row">
         <div>
           <div class="opp">vs ${esc(nextMatch.opponent||'TBC')}${venueBadge(nextMatch)}</div>
-          <div class="meta">${fmtDate(nextMatch.dateTime)}${nextMatch.location?' · '+esc(nextMatch.location):''}</div>
+          <div class="meta">${fmtDate(nextMatch.dateTime)}</div>${nextMatch.location?`<div class="meta" style="margin-top:1px;">${esc(nextMatch.location)}</div>`:''}
         </div>
         <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-end; flex-shrink:0;">
           <span class="pill ${nextMatch.competitionType.toLowerCase()} ${nextMatch.status==='live'?'live':''}" style="text-align:right;">${nextMatch.status==='live'?'LIVE':esc(competitionDisplayLabel(nextMatch))}</span>
@@ -5706,12 +5712,12 @@ function renderDashboardTab(){
     lastHtml = `<div class="card tap fixture-card ${highlightFixtureId===last.id?'new-fixture-pulse':''}" data-open-result="${last.id}">
       <div class="row">
         <div>
-          <div class="opp">vs ${esc(last.opponent||'TBC')}${venueBadge(last)}</div>
-          <div class="meta">${shortDate(last.dateTime)} · ${esc(competitionDisplayLabel(last))}</div>
+          <div class="opp">vs ${esc(last.opponent||'TBC')}${venueBadge(last)}${resultPillHtml(res)}</div>
+          <div class="meta">${shortDate(last.dateTime)} · ${koTime(last.dateTime)}</div>
+          <div class="meta" style="margin-top:1px;">${esc(competitionDisplayLabel(last))}</div>
         </div>
         <div style="text-align:right; flex-shrink:0; white-space:nowrap;">
           <div class="num hm-score" style="font-weight:600;">${last.finalScore.us} – ${last.finalScore.them}</div>
-          <span class="pill ${res}">${res.toUpperCase()}</span>
         </div>
       </div>
     </div>`;
@@ -7768,6 +7774,10 @@ function openAppMenuModal(){
     <h3>Notifications &amp; settings</h3>
     <button class="icon-x" data-close-modal>&times;</button>
     <div class="text-size-row">
+      <div class="small" style="color:var(--ink-soft); font-weight:600; margin-bottom:6px;">Dark mode</div>
+      ${darkModeToggleHtml()}
+    </div>
+    <div class="text-size-row">
       <div class="small" style="color:var(--ink-soft); font-weight:600; margin-bottom:6px;">Text size</div>
       ${textSizeToggleHtml()}
     </div>
@@ -7796,6 +7806,7 @@ function openAppMenuModal(){
   openModal(body, {floating:true, anchorToBanner:true});
   attachModalHandlers();
   wireTextSizeToggle(document.getElementById('modal-root'));
+  wireDarkModeToggle(document.getElementById('modal-root'));
   wireHapticsToggle(document.getElementById('modal-root'));
   wireSoundsToggle(document.getElementById('modal-root'));
   const notifBtn = document.querySelector('#modal-root [data-open-notifications]');
@@ -8519,7 +8530,7 @@ function teamSectionHtml(tab){
         <button type="button" class="btn ghost small" data-open-theme-picker style="margin:0; width:auto;">Change</button>
       </div>
     </div>
-    <div class="section-title">Display</div>
+    <div class="section-title">Display and sounds</div>
     <div class="card" style="margin-bottom:16px;">
       <div style="font-weight:600;">Text size</div>
       <div class="small" style="color:var(--ink-soft); margin:2px 0 10px;">Standard or larger. Your own setting, only affects you.</div>
@@ -8662,7 +8673,7 @@ function teamSectionHtml(tab){
 let teamOpen = {};
 const TEAM_SECTIONS = [
   {id:'identity', label:'Identity', icon:'<rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6.5 16c.4-1.4 1.4-2 2.5-2s2.1.6 2.5 2M14 10h4M14 13h3"/>'},
-  {id:'colour', label:'Display', icon:'<path d="M12 3a9 9 0 100 18c1.2 0 2-.8 1.6-1.8-.4-1 .2-2.2 1.4-2.2H17a4 4 0 004-4c0-5-4-10-9-10z"/><circle cx="8" cy="11" r="1"/><circle cx="12" cy="7.5" r="1"/><circle cx="16" cy="11" r="1"/>'},
+  {id:'colour', label:'Display and sounds', icon:'<path d="M12 3a9 9 0 100 18c1.2 0 2-.8 1.6-1.8-.4-1 .2-2.2 1.4-2.2H17a4 4 0 004-4c0-5-4-10-9-10z"/><circle cx="8" cy="11" r="1"/><circle cx="12" cy="7.5" r="1"/><circle cx="16" cy="11" r="1"/>'},
   {id:'format', label:'Match format', icon:'<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>'},
   {id:'configure', label:'Awards & qualifications library', icon:'<circle cx="12" cy="9" r="5"/><path d="M9 13.5L7.5 21l4.5-2.5 4.5 2.5L15 13.5"/>'},
   {id:'seasons', label:'Seasons', icon:'<rect x="4" y="5.5" width="16" height="14" rx="2"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>'},
@@ -9094,6 +9105,25 @@ function setHaptics(on){
   try{ localStorage.setItem(HAPTICS_KEY, on ? 'on' : 'off'); }catch(e){}
   document.querySelectorAll('[data-haptics-filter]').forEach(b=> b.classList.toggle('on', (b.dataset.hapticsFilter==='on') === on));
   if(on){ try{ if(navigator.vibrate) navigator.vibrate(12); }catch(e){} }   // a little buzz so they can feel it straight away
+}
+function darkModeToggleHtml(){
+  const on = !!DATA.darkMode;
+  return `<div class="toggle-group" style="margin-bottom:0;">
+    <button type="button" class="${on?'on':''}" data-darkmode-filter="on">On</button>
+    <button type="button" class="${!on?'on':''}" data-darkmode-filter="off">Off</button>
+  </div>`;
+}
+function wireDarkModeToggle(root){
+  (root || document).querySelectorAll('[data-darkmode-filter]').forEach(btn=>{
+    if(btn._dmWired) return;
+    btn._dmWired = true;
+    btn.addEventListener('click', ()=>{
+      DATA.darkMode = btn.dataset.darkmodeFilter==='on';
+      applyTheme(); saveData();
+      btn.parentElement.querySelectorAll('[data-darkmode-filter]').forEach(b=> b.classList.toggle('on', b===btn));
+      const sw = document.getElementById('dark-mode-toggle'); if(sw) sw.checked = DATA.darkMode;
+    });
+  });
 }
 function hapticsToggleHtml(){
   const on = hapticsOn();
