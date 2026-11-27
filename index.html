@@ -5592,6 +5592,52 @@ function teamLogoWatermarkHtml(){
   if(!safeBadgeSrc(DATA.teamBadge)) return '';
   return `<div class="topbar-watermark-wrap"><img class="topbar-watermark" src="${safeBadgeSrc(DATA.teamBadge)}" alt=""></div>`;
 }
+function fixtureCardHtml(f){
+  const h2h = f.opponentId ? opponentStats(f.opponentId) : null;
+  const live = f.status==='live';
+  return `
+      <div class="card tap fixture-card has-date-bar ${highlightFixtureId===f.id?'new-fixture-pulse':''}" data-open-fixture="${f.id}">
+        ${dateBarHtml(f.dateTime)}
+        <div class="opp">vs ${esc(f.opponent||'TBC')}${venueBadge(f)}</div>
+        <div class="row" style="align-items:flex-end; margin-top:3px;">
+          <div style="min-width:0;">
+            <div class="meta">${dayTimeStr(f.dateTime)}</div>${f.location?`<div class="meta" style="margin-top:1px;">${esc(f.location)}</div>`:''}
+          </div>
+          <div style="text-align:right; flex-shrink:0; max-width:50%;">
+            ${live ? `<span class="pill live" style="margin-bottom:3px; display:inline-block;">LIVE</span>` : ''}
+            <div class="meta" style="margin-top:0;">${esc(competitionDisplayLabel(f))}</div>
+            <div class="meta" style="margin-top:1px;">${gameTypeForFixture(f)==='development'?'Development':'Competitive'}</div>
+          </div>
+        </div>
+        ${h2h ? `<div class="small" style="color:var(--ink-soft); margin-top:6px; padding-top:6px; border-top:1px solid var(--line);">Head-to-head: <span style="color:var(--win); font-weight:700;">${h2h.w}W</span> <span style="color:var(--draw); font-weight:700;">${h2h.d}D</span> <span style="color:var(--loss); font-weight:700;">${h2h.l}L</span> · ${h2h.gf}-${h2h.ga}</div>` : ''}
+      </div>`;
+}
+function resultCardHtml(f){
+  const res = fixtureResultLabel(f);
+  const awardLines = DATA.awardTypes.filter(a=>a.active && a.linkedToPlayer).map(a=>{
+    const rec = f.awardRecords && f.awardRecords[a.id];
+    let pid = rec ? rec.playerId : null;
+    if(!pid && a.legacyMapping==='motm') pid = f.motm;
+    if(!pid && a.legacyMapping==='moment') pid = f.momentPlayer;
+    const player = pid ? getPlayer(pid) : null;
+    return player ? `${esc(a.acronym||a.name)}: ${esc(player.name)}` : null;
+  }).filter(Boolean);
+  return `<div class="card tap fixture-card has-date-bar ${highlightFixtureId===f.id?'new-fixture-pulse':''}" data-open-result="${f.id}">
+          ${dateBarHtml(f.dateTime)}
+          <div class="opp">vs ${esc(f.opponent||'TBC')}${venueBadge(f)}${resultPillHtml(res)}</div>
+          <div class="row" style="align-items:flex-end; margin-top:3px;">
+            <div style="min-width:0;">
+              <div class="meta">${dayTimeStr(f.dateTime)}</div>
+              <div class="meta" style="margin-top:1px;">${esc(competitionDisplayLabel(f))}</div>
+              <div class="meta" style="margin-top:1px;">${gameTypeForFixture(f)==='development'?'Development':'Competitive'}</div>
+            </div>
+            <div style="text-align:right; flex-shrink:0; white-space:nowrap;">
+              <div class="num hm-score" style="font-weight:600;">${f.finalScore.us} – ${f.finalScore.them}</div>
+            </div>
+          </div>
+          ${awardLines.length>0 ? `<div class="hm-award" style="color:var(--ink-soft); margin-top:6px;">${awardLines.join(' · ')}</div>` : ''}
+        </div>`;
+}
 function renderHomeTab(){
   const seasonFixtures = fixturesForSeason(homeSeasonFilter);
   const upcomingAll = seasonFixtures.filter(f=>f.status!=='finished')
@@ -5616,52 +5662,14 @@ function renderHomeTab(){
     <div class="section-title" style="margin:0 0 8px;">${upcomingAll.length} upcoming fixture${upcomingAll.length===1?'':'s'}</div>
     ${upcomingAll.length===0 ? '<div class="card"><div class="small" style="color:var(--ink-soft);">No upcoming fixtures</div></div>' :
       upcomingAll.map(upcoming=>{
-        const h2h = upcoming.opponentId ? opponentStats(upcoming.opponentId) : null;
-        return `
-      <div class="card tap fixture-card has-date-bar ${highlightFixtureId===upcoming.id?'new-fixture-pulse':''}" data-open-fixture="${upcoming.id}">
-        ${dateBarHtml(upcoming.dateTime)}
-        <div class="row">
-          <div>
-            <div class="opp">vs ${esc(upcoming.opponent||'TBC')}${venueBadge(upcoming)}</div>
-            <div class="meta">${dayTimeStr(upcoming.dateTime)}</div>${upcoming.location?`<div class="meta" style="margin-top:1px;">${esc(upcoming.location)}</div>`:''}
-          </div>
-          <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-end; flex-shrink:0;">
-            <span class="pill ${upcoming.competitionType.toLowerCase()} ${upcoming.status==='live'?'live':''}" style="text-align:right;">${upcoming.status==='live'?'LIVE':esc(competitionDisplayLabel(upcoming))}</span>
-            <span class="small hm-gt" style="color:var(--ink-soft);">${gameTypeForFixture(upcoming)==='development'?'Development':'Competitive'}</span>
-          </div>
-        </div>
-        ${h2h ? `<div class="small" style="color:var(--ink-soft); margin-top:6px; padding-top:6px; border-top:1px solid var(--line);">Head-to-head: <span style="color:var(--win); font-weight:700;">${h2h.w}W</span> <span style="color:var(--draw); font-weight:700;">${h2h.d}D</span> <span style="color:var(--loss); font-weight:700;">${h2h.l}L</span> · ${h2h.gf}-${h2h.ga}</div>` : ''}
-      </div>`;
+        return fixtureCardHtml(upcoming);
       }).join('')}`;
   } else if(tab==='results'){
     tabHtml = `
     <div class="section-title" style="margin:0 0 8px;">${resultsAll.length} result${resultsAll.length===1?'':'s'}</div>
     ${resultsAll.length===0 ? `<div class="card"><div class="small" style="color:var(--ink-soft);">No results yet</div></div>` :
       resultsAll.map(f=>{
-        const res = fixtureResultLabel(f);
-        const awardLines = DATA.awardTypes.filter(a=>a.active && a.linkedToPlayer).map(a=>{
-          const rec = f.awardRecords && f.awardRecords[a.id];
-          let pid = rec ? rec.playerId : null;
-          if(!pid && a.legacyMapping==='motm') pid = f.motm;
-          if(!pid && a.legacyMapping==='moment') pid = f.momentPlayer;
-          const player = pid ? getPlayer(pid) : null;
-          return player ? `${esc(a.acronym||a.name)}: ${esc(player.name)}` : null;
-        }).filter(Boolean);
-        return `<div class="card tap fixture-card has-date-bar ${highlightFixtureId===f.id?'new-fixture-pulse':''}" data-open-result="${f.id}">
-          ${dateBarHtml(f.dateTime)}
-          <div class="row">
-            <div>
-              <div class="opp">vs ${esc(f.opponent||'TBC')}${venueBadge(f)}${resultPillHtml(res)}</div>
-              <div class="meta">${dayTimeStr(f.dateTime)}</div>
-              <div class="meta" style="margin-top:1px;">${esc(competitionDisplayLabel(f))}</div>
-              <div class="small hm-gt" style="color:var(--ink-soft); margin-top:1px;">${gameTypeForFixture(f)==='development'?'Development':'Competitive'}</div>
-            </div>
-            <div style="text-align:right; flex-shrink:0; white-space:nowrap;">
-              <div class="num hm-score" style="font-weight:600;">${f.finalScore.us} – ${f.finalScore.them}</div>
-            </div>
-          </div>
-          ${awardLines.length>0 ? `<div class="hm-award" style="color:var(--ink-soft); margin-top:6px;">${awardLines.join(' · ')}</div>` : ''}
-        </div>`;
+        return resultCardHtml(f);
       }).join('')}`;
   } else if(tab==='teamstats'){
     tabHtml = `
@@ -5712,35 +5720,10 @@ function renderDashboardTab(){
   const last = all.filter(f=>f.status==='finished').sort((a,b)=> new Date(b.dateTime) - new Date(a.dateTime))[0] || null;
   const badge = safeBadgeSrc(DATA.teamBadge);
   const first = myFirstName();
-  const nextHtml = nextMatch ? `
-    <div class="card tap fixture-card has-date-bar ${highlightFixtureId===nextMatch.id?'new-fixture-pulse':''}" data-open-fixture="${nextMatch.id}">
-      ${dateBarHtml(nextMatch.dateTime)}
-      <div class="row">
-        <div>
-          <div class="opp">vs ${esc(nextMatch.opponent||'TBC')}${venueBadge(nextMatch)}</div>
-          <div class="meta">${dayTimeStr(nextMatch.dateTime)}</div>${nextMatch.location?`<div class="meta" style="margin-top:1px;">${esc(nextMatch.location)}</div>`:''}
-        </div>
-        <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-end; flex-shrink:0;">
-          <span class="pill ${nextMatch.competitionType.toLowerCase()} ${nextMatch.status==='live'?'live':''}" style="text-align:right;">${nextMatch.status==='live'?'LIVE':esc(competitionDisplayLabel(nextMatch))}</span>
-        </div>
-      </div>
-    </div>` : `<div class="card"><div class="small" style="color:var(--ink-soft);">No upcoming fixtures</div></div>`;
+  const nextHtml = nextMatch ? fixtureCardHtml(nextMatch) : `<div class="card"><div class="small" style="color:var(--ink-soft);">No upcoming fixtures</div></div>`;
   let lastHtml = `<div class="card"><div class="small" style="color:var(--ink-soft);">No results yet</div></div>`;
   if(last){
-    const res = fixtureResultLabel(last);
-    lastHtml = `<div class="card tap fixture-card has-date-bar ${highlightFixtureId===last.id?'new-fixture-pulse':''}" data-open-result="${last.id}">
-      ${dateBarHtml(last.dateTime)}
-      <div class="row">
-        <div>
-          <div class="opp">vs ${esc(last.opponent||'TBC')}${venueBadge(last)}${resultPillHtml(res)}</div>
-          <div class="meta">${dayTimeStr(last.dateTime)}</div>
-          <div class="meta" style="margin-top:1px;">${esc(competitionDisplayLabel(last))}</div>
-        </div>
-        <div style="text-align:right; flex-shrink:0; white-space:nowrap;">
-          <div class="num hm-score" style="font-weight:600;">${last.finalScore.us} – ${last.finalScore.them}</div>
-        </div>
-      </div>
-    </div>`;
+    lastHtml = resultCardHtml(last);
   }
   return `
   <div class="topbar topbar-main" style="position:relative;">
@@ -10081,6 +10064,13 @@ function renderNewFixtureWizardStep1(){
   attachModalHandlers();
   const closeX1 = document.querySelector('.icon-x');
   if(closeX1) closeX1.onclick = ()=>{ newFixtureWizard = null; closeModal(); };
+  const legacyLink = document.querySelector('#modal-root [data-new-fixture-legacy]');
+  if(legacyLink) legacyLink.onclick = ()=>{
+    closeModal();
+    newFixtureWizard = null;
+    pendingNewFixture = emptyFixture();
+    go('fixtures','fixtureEditor',{id:pendingNewFixture.id});
+  };
 
   const oppInput = document.getElementById('nf-opponent');
   const oppSuggest = document.getElementById('nf-opponent-suggestions');
