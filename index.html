@@ -6148,6 +6148,9 @@ function renderLive(id){
     // the full tap-to-edit/reset/player-mins functionality lives when unlocked.
     const tPeriods = periodKeys(f);
     const liveQuarterNum = (!isReview && f.status!=='finished' && f.liveState) ? f.liveState.quarter : null;
+    const betweenQ = liveQuarterNum!==null && !!f.liveState && f.liveState.endedQ===liveQuarterNum && liveQuarterNum < tPeriods.length;   // quarter over, next not started yet
+    const liveCellNum = betweenQ ? null : liveQuarterNum;
+    const finishedUpTo = betweenQ ? liveQuarterNum : (liveQuarterNum!==null ? liveQuarterNum-1 : 0);
     let quickBar = '';
     if(liveQuarterNum!==null && f.status==='live' && !liveLockOwnerIsOther(f) && liveQuarterNum < tPeriods.length){
       const pw = f.periods===2 ? 'half' : 'quarter';
@@ -6160,10 +6163,10 @@ function renderLive(id){
     ${squad.length===0 ? '<div class="card"><div class="small" style="color:var(--ink-soft); padding:16px;">No squad recorded</div></div>' : `
     <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px;">
       ${tPeriods.map((qk,i)=>`
-        <div class="card tap lp-card ${liveQuarterNum===i+1?'live-cell-border':''}" data-enlarge-grid-pitch="${i+1}" data-lp-quarter="${i+1}" style="padding:0; overflow:hidden; position:relative;">
-          ${liveQuarterNum===i+1 ? `<div class="live-corner-badge"><span style="width:5px; height:5px; border-radius:50%; background:var(--loss);"></span>LIVE</div>` : ''}
-          ${liveQuarterNum===i+1 ? `<div data-grid-live-timer style="position:absolute; right:6px; bottom:6px; z-index:5; background:rgba(0,0,0,.72); color:#fff; font-family:'Oswald',sans-serif; font-weight:700; font-size:15px; padding:2px 9px; border-radius:10px; pointer-events:none;">${esc(liveTimerDisplay(f.liveState).text)}</div>` : ''}
-          <div class="pitch-cover${liveQuarterNum===i+1?' is-live':''}"><span class="pitch-cover-label">${liveQuarterNum===i+1 ? 'Currently live' : ('Open ' + esc(periodBadgeLabel(f, i+1)) + ((liveQuarterNum!==null && i+1<liveQuarterNum) || f.status==='finished' ? '<br><span style="font-size:11px; font-weight:700; opacity:.85;">(finished)</span>' : ''))}</span></div>
+        <div class="card tap lp-card ${liveCellNum===i+1?'live-cell-border':''}" data-enlarge-grid-pitch="${i+1}" data-lp-quarter="${i+1}" style="padding:0; overflow:hidden; position:relative;">
+          ${liveCellNum===i+1 ? `<div class="live-corner-badge"><span style="width:5px; height:5px; border-radius:50%; background:var(--loss);"></span>LIVE</div>` : ''}
+          ${liveCellNum===i+1 ? `<div data-grid-live-timer style="position:absolute; right:6px; top:6px; z-index:5; background:rgba(0,0,0,.72); color:#fff; font-family:'Oswald',sans-serif; font-weight:700; font-size:15px; padding:2px 9px; border-radius:10px; pointer-events:none;">${esc(liveTimerDisplay(f.liveState).text)}</div>` : ''}
+          <div class="pitch-cover${liveCellNum===i+1?' is-live':''}"><span class="pitch-cover-label">${liveCellNum===i+1 ? 'Currently live' : (betweenQ && i+1===liveQuarterNum+1) ? 'Starting after the break' : ('Open ' + esc(periodBadgeLabel(f, i+1)) + ((liveQuarterNum!==null && i+1<=finishedUpTo) || f.status==='finished' ? '<br><span style="font-size:11px; font-weight:700; opacity:.85;">(finished)</span>' : ''))}</span></div>
           ${renderPitchFormation(f, qk, {showSubs:true, showName:true, fitScreen:false, showQuarterWatermark:true, useActual:true})}
         </div>`).join('')}
     </div>
