@@ -102,6 +102,12 @@
   /* Main-tab banners (Home, Players, Live, Coaches, Settings): centred title + subtitle, with the
      team switcher tucked into the top-right corner. Screens with a back button are untouched. */
   .topbar-main{ text-align:center; }
+  .top-controls{ display:flex; align-items:center; justify-content:space-between; gap:6px; margin:-6px -6px -6px -6px; position:relative; z-index:2; }
+  .top-controls.with-close{ justify-content:flex-end; }
+  .top-controls .team-switch{ margin:0; padding:12px 14px 12px 6px; }
+  .top-controls.with-close .team-switch{ padding:12px 6px 12px 14px; }
+  .top-bell{ background:rgba(255,255,255,0.18); border:none; border-radius:50%; width:36px; height:36px; display:flex; align-items:center; justify-content:center; color:#fff; cursor:pointer; flex-shrink:0; -webkit-tap-highlight-color:transparent; }
+  .top-bell svg{ width:18px; height:18px; }
   .team-switch{
     display:flex; align-items:center; gap:5px; cursor:pointer;
     /* Generous tap area: the whole badge + name + arrow is one big target (padding is offset by negative margin so layout is unchanged) */
@@ -1603,6 +1609,14 @@ function seasonLabelForDate(dateStr){
   return `${String(y-1).slice(-2)}/${String(y).slice(-2)}`;
 }
 const CLOSE_X = '<span class="back-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg></span>';
+function topControlsHtml(){
+  const b = safeBadgeSrc(DATA.teamBadge);
+  const hasClose = !!mainCloseHtml();
+  return `<div class="top-controls${hasClose?' with-close':''}">
+    <div class="team-switch" data-open-team-switcher>${b ? `<img class="team-switch-badge" src="${b}">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <button type="button" class="top-bell" data-open-app-menu title="Notifications and settings">${BELL_ICON}</button>
+  </div>`;
+}
 function mainCloseHtml(){
   if(VIEW.screen || VIEW.tab!=='team') return '';
   return `<div class="backbar main-close" data-main-close>${CLOSE_X}<span>Close</span></div>`;
@@ -5491,7 +5505,7 @@ function renderMatchdayTab(){
   return `
   <div class="topbar topbar-main">
     ${teamLogoWatermarkHtml()}${mainCloseHtml()}
-    <div class="team-switch" data-open-team-switcher>${safeBadgeSrc(DATA.teamBadge) ? `<img class="team-switch-badge" src="${safeBadgeSrc(DATA.teamBadge)}">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    ${topControlsHtml()}
     <h1>Live</h1>
     <div class="sub">${new Date().toLocaleDateString(undefined,{weekday:'long', day:'numeric', month:'long'})}</div>
   </div>
@@ -5615,7 +5629,7 @@ function renderHomeTab(){
   return `
   <div class="topbar topbar-main" style="position:relative;">
     ${teamLogoWatermarkHtml()}${mainCloseHtml()}
-    <div class="team-switch" data-open-team-switcher>${safeBadgeSrc(DATA.teamBadge) ? `<img class="team-switch-badge" src="${safeBadgeSrc(DATA.teamBadge)}">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    ${topControlsHtml()}
     <h1>${(homeTab==='fixtures'||homeTab==='results') ? 'Fixtures &amp; Results' : 'Stats'}</h1>
     <div class="sub">&nbsp;</div>
   </div>
@@ -5666,7 +5680,7 @@ function renderDashboardTab(){
   return `
   <div class="topbar topbar-main" style="position:relative;">
     ${teamLogoWatermarkHtml()}${mainCloseHtml()}
-    <div class="team-switch" data-open-team-switcher>${badge ? `<img class="team-switch-badge" src="${badge}">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    ${topControlsHtml()}
     <h1>Home</h1>
     <div class="sub">${esc(teamShort())} overview</div>
   </div>
@@ -7110,7 +7124,7 @@ function renderPlayersTab(){
   return `
   <div class="topbar topbar-main">
     ${teamLogoWatermarkHtml()}${mainCloseHtml()}
-    <div class="team-switch" data-open-team-switcher>${safeBadgeSrc(DATA.teamBadge) ? `<img class="team-switch-badge" src="${safeBadgeSrc(DATA.teamBadge)}">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    ${topControlsHtml()}
     <h1>My Team</h1>
     <div class="sub">&nbsp;</div>
   </div>
@@ -7620,7 +7634,7 @@ function renderCoachesTab(){
   return `
   <div class="topbar topbar-main" style="position:relative;">
     ${teamLogoWatermarkHtml()}${mainCloseHtml()}
-    <div class="team-switch" data-open-team-switcher>${safeBadgeSrc(DATA.teamBadge) ? `<img class="team-switch-badge" src="${safeBadgeSrc(DATA.teamBadge)}">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    ${topControlsHtml()}
     <h1>My Team</h1>
     <div class="sub">&nbsp;</div>
   </div>
@@ -7685,7 +7699,35 @@ function openTeamSwitcherModal(){
       }).join('')}
     </div>
     <button class="btn ghost" data-add-new-team style="margin-top:14px;">+ Add another team</button>
-    <div style="height:34px;"></div>
+    </div>
+  `;
+  openModal(body, {floating:true, anchorToBanner:true});
+  attachModalHandlers();
+  document.querySelectorAll('[data-switch-team]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      closeModal();
+      switchTeam(el.dataset.switchTeam);
+    });
+  });
+  const addBtn = document.querySelector('[data-add-new-team]');
+  if(addBtn) addBtn.addEventListener('click', ()=>{
+    closeModal();
+    addNewTeam();
+  });
+  document.querySelectorAll('[data-delete-team]').forEach(el=>{
+    el.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      const teamId = el.dataset.deleteTeam;
+      closeModal();
+      openDeleteTeamConfirm(teamId);
+    });
+  });
+}
+function openAppMenuModal(){
+  const body = `
+    <div class="pop-lg">
+    <h3>Notifications &amp; settings</h3>
+    <button class="icon-x" data-close-modal>&times;</button>
     <div class="text-size-row">
       <div class="small" style="color:var(--ink-soft); font-weight:600; margin-bottom:6px;">Text size</div>
       ${textSizeToggleHtml()}
@@ -7717,12 +7759,6 @@ function openTeamSwitcherModal(){
   wireTextSizeToggle(document.getElementById('modal-root'));
   wireHapticsToggle(document.getElementById('modal-root'));
   wireSoundsToggle(document.getElementById('modal-root'));
-  document.querySelectorAll('[data-switch-team]').forEach(el=>{
-    el.addEventListener('click', ()=>{
-      closeModal();
-      switchTeam(el.dataset.switchTeam);
-    });
-  });
   const notifBtn = document.querySelector('#modal-root [data-open-notifications]');
   if(notifBtn) notifBtn.addEventListener('click', ()=>{ closeModal(); openNotificationsPopup(); });
   const tipsBtn = document.querySelector('#modal-root [data-show-tips]');
@@ -7735,19 +7771,6 @@ function openTeamSwitcherModal(){
   if(logOutBtn) logOutBtn.addEventListener('click', ()=>{
     closeModal();
     logOut();
-  });
-  const addBtn = document.querySelector('[data-add-new-team]');
-  if(addBtn) addBtn.addEventListener('click', ()=>{
-    closeModal();
-    addNewTeam();
-  });
-  document.querySelectorAll('[data-delete-team]').forEach(el=>{
-    el.addEventListener('click', (e)=>{
-      e.stopPropagation();
-      const teamId = el.dataset.deleteTeam;
-      closeModal();
-      openDeleteTeamConfirm(teamId);
-    });
   });
 }
 function passwordFieldHtml(id, placeholder, autocomplete){
@@ -8553,7 +8576,7 @@ function teamSectionHtml(tab){
     <div class="card">
       <div class="small" style="color:var(--ink-soft); margin-bottom:12px;">Which notifications you get (and for coaches or parents) is set from the team switcher &rarr; Notifications, or the bell on a match.</div>
       <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
-        <div><div style="font-weight:600;">Sound and vibration</div><div class="small" style="color:var(--ink-soft);">A short alert tone and buzz with each reminder.</div></div>
+        <div><div style="font-weight:600;">Reminder sound and vibration</div><div class="small" style="color:var(--ink-soft);">A short alert tone and buzz with each reminder.</div></div>
         ${sw('subSound', ns.subSound)}
       </div>
     </div>
@@ -8640,7 +8663,7 @@ function renderTeamTab(){
   return `
   <div class="topbar topbar-main" style="position:relative;">
     ${teamLogoWatermarkHtml()}${mainCloseHtml()}
-    <div class="team-switch" data-open-team-switcher>${safeBadgeSrc(DATA.teamBadge) ? `<img class="team-switch-badge" src="${safeBadgeSrc(DATA.teamBadge)}">` : ""}<div class="eyebrow">${esc(teamShort())}</div><svg viewBox="0 0 24 24" width="10" height="10" fill="none" style="opacity:0.75;"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    ${topControlsHtml()}
     <h1>Settings</h1>
     <div class="sub">Format, identity &amp; backup</div>
     ${!DATA.teamSetupCompleted ? `<button type="button" data-open-team-wizard title="Team setup assistant" style="margin:12px auto 0; width:fit-content; background:rgba(255,255,255,0.18); border:1.5px solid rgba(255,255,255,0.4); border-radius:20px; padding:7px 13px; display:flex; align-items:center; gap:6px; color:#fff; cursor:pointer; font-weight:700; font-size:12.5px; white-space:nowrap;">
@@ -13520,6 +13543,9 @@ function attachHandlers(){
   document.querySelectorAll('[data-open-team-switcher]').forEach(el=>{
     el.addEventListener('click', openTeamSwitcherModal);
   });
+  document.querySelectorAll('[data-open-app-menu]').forEach(el=>{
+    el.addEventListener('click', openAppMenuModal);
+  });
   document.querySelectorAll('[data-main-close]').forEach(el=>{
     el.addEventListener('click', ()=>{ navMenuOpen = null; go('dash', null, {}); });
   });
@@ -15702,7 +15728,8 @@ function tourStart(){
     {sel:'[data-ball]', menu:false, title:'Tap the ball', text:'The ball opens your main menu: Fixtures & Results, Stats, My Team and Live match mode.'},
     {sel:'.navmain-home', menu:true, title:'Home', text:'Tap the house to jump back to the Home page from anywhere.'},
     admin ? {sel:'[data-nav-item="team"]', menu:true, title:'Settings', text:'Set up your team, coaches, match format, awards and more.'} : null,
-    {sel:'[data-open-team-switcher]', menu:false, title:'Team switcher', text:'Tap your team name to switch team, turn on Notifications, change text size or log out.'},
+    {sel:'[data-open-team-switcher]', menu:false, title:'Team switcher', text:'Tap your team name to switch team or add another one.'},
+    {sel:'[data-open-app-menu]', menu:false, title:'Notifications & settings', text:'Tap the bell to turn on Notifications, change text size, vibration and sounds, replay these tips or log out.'},
     {sel:'.dash-sec', all:true, place:'bottom', menu:false, title:'Explore everything', text:'Almost everything is tappable. Try the form guide, your next fixture and your last result to open them and see what is inside.'},
     {final:true, menu:false, title:'Have a great season!', text:'You are all set. Good luck out there. \u26bd'}
   ].filter(Boolean);
