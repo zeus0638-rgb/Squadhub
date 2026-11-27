@@ -584,6 +584,8 @@
   .sticky-head{position:sticky; top:-22px; z-index:6; background:var(--panel); margin:-22px -20px 6px; padding:22px 20px 8px; border-bottom:1px solid var(--line);}
   .sticky-head h3{margin:0 0 2px;}
   .sticky-head .icon-x{top:18px;}
+  .backbar.in-modal{ background:rgba(128,128,128,0.14); border:1px solid var(--line); color:var(--ink); margin-bottom:10px; }
+  .backbar.in-modal .back-arrow{ background:var(--accent); color:var(--on-accent); box-shadow:none; }
   .ng-head{display:flex; justify-content:flex-end; align-items:flex-end; gap:6px; font-size:11px; font-weight:700; color:var(--ink-soft); padding:6px 0; position:sticky; top:0; z-index:4; background:var(--panel); border-bottom:1px solid var(--line);}
   .ng-head span, .ng-cell{width:62px; flex-shrink:0; text-align:center;}
   .ng-head span{white-space:nowrap; overflow:hidden; text-overflow:clip;}
@@ -2666,6 +2668,7 @@ function notifMirrorMatchMe(fid, topic, val){
 }
 // a match's own Coaches/Parents changes ride along with each notification it queues
 function matchOv(f, topic){
+  if(topic==='sub_reminders') return {parents:false};      // parents never get planned sub reminders
   const n = f && f.notif; if(!n) return undefined;
   const o = {};
   if(n.coaches && typeof n.coaches[topic]==='boolean') o.coaches = n.coaches[topic];
@@ -2687,7 +2690,7 @@ const NOTIF_UI = [
   {t:'sub_reminders', label:'Planned subs reminders', desc:'During a live match: who comes off, who comes on and where.'},
   {t:'sub_made', label:'Live subs', desc:'When a substitution is made in a live match (planned or not).'},
   {t:'period_end', label:'End of quarter / half', desc:'When the clock reaches zero, with the score at that point (not the final period - that is Match KO & End).'},
-  {t:'new_fixture', label:'New fixtures', desc:'When a fixture is added to the team.', teamOnly:true},
+  {t:'new_fixture', label:'Fixture added', desc:'When a fixture is added to the team.', teamOnly:true},
   {t:'fixture_deleted', label:'Fixture deleted', desc:'When a fixture is removed from the team.', teamOnly:true}
 ];
 function notifUiRows(rows, forMatch){
@@ -2696,12 +2699,13 @@ function notifUiRows(rows, forMatch){
   NOTIF_UI.forEach(u=>{
     if(forMatch && u.teamOnly) return;
     const r = by[u.t];
-    if(r) out.push({...r, label:u.label, description:u.desc});
+    if(r) out.push({...r, label:u.label, description:u.desc, ...(u.t==='sub_reminders' ? {parents:false} : {})});
   });
   return out;
 }
 // one grid for both the team switcher and a match: rows = kinds, columns = Me / Coaches / Parents
-function stickyHeadHtml(title, subHtml){
+function stickyHeadHtml(title, subHtml, opts){
+  if(opts && opts.back) return `<div class="sticky-head has-back"><div class="backbar in-modal" data-modal-back>${BACK_ARROW}<span>Back</span></div><h3>${title}</h3>${subHtml||''}</div>`;
   return `<div class="sticky-head"><h3>${title}</h3><button class="icon-x" data-close-modal>&times;</button>${subHtml||''}</div>`;
 }
 // the column headings stay in view just under the pinned title while the list scrolls
@@ -2714,13 +2718,14 @@ function notifGridHtml(rows, opts){
   if(!rows.length) return `<div class="small" style="color:var(--ink-soft);">Nothing to choose yet.</div>`;
   const cell = (r, col)=>{
     const chg = r.chg && r.chg[col];
-    const off = (col!=='me' && lockTeam);
-    return `<label class="ng-cell ${chg?'chg':''} ${off?'off':''}"><input type="checkbox" data-ng="${esc(r.topic)}|${col}" ${r[col]?'checked':''} ${off?'disabled':''}></label>`;
+    const never = (col==='parents' && r.topic==='sub_reminders');
+    const off = (col!=='me' && lockTeam) || never;
+    return `<label class="ng-cell ${chg?'chg':''} ${off?'off':''}"><input type="checkbox" data-ng="${esc(r.topic)}|${col}" ${(r[col] && !never)?'checked':''} ${off?'disabled':''}></label>`;
   };
-  return `<div class="ng-head"><span>Me</span>${teamCols ? '<span>Coaches</span><span>Parents</span>' : ''}</div>
+  return `<div class="ng-head"><span>Me</span>${teamCols ? '<span>Parents</span>' : ''}</div>
     ${rows.map(r=>`<div class="ng-row">
       <div style="min-width:0; flex:1;"><div style="font-weight:600; font-size:14px;">${esc(r.label)}</div><div class="small" style="color:var(--ink-soft); font-size:11.5px; line-height:1.3;">${esc(r.description||'')}</div></div>
-      ${cell(r,'me')}${teamCols ? cell(r,'coaches') + cell(r,'parents') : ''}
+      ${cell(r,'me')}${teamCols ? cell(r,'parents') : ''}
     </div>`).join('')}`;
 }
 const BELL_ICON = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none"><path d="M6 9a6 6 0 0112 0c0 5 2 6.5 2 6.5H4S6 14 6 9z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M10 19a2 2 0 004 0" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
@@ -2747,7 +2752,7 @@ async function openMatchNotificationsModal(fixtureId){
   };
   await load();
   const perm = myEffectivePermission();
-  const editor = (perm==='admin' || perm==='level3');
+  const editor = (perm==='admin');
   const teamCols = !!(grid && grid.length && grid[0].coaches!=null);
   const lockTeam = !editor || liveLockOwnerIsOther(f) || f.status==='finished';
   const rowsFor = ()=> notifUiRows(grid, true).map(r=>{
@@ -2762,7 +2767,7 @@ async function openMatchNotificationsModal(fixtureId){
     const c = _follow.cfg;
     const msg = (c && c.enabled) ? `<div class="small" style="word-break:break-all; padding:10px; border:1px solid var(--line); border-radius:8px; margin-bottom:10px; color:var(--ink-soft);">${esc(followLink())}</div>
       <div style="display:flex; gap:8px;"><button type="button" class="btn amber" data-mn-share style="flex:1; margin-bottom:0;">Share link</button><button type="button" class="btn ghost" data-mn-copy style="flex:1; margin-bottom:0;">Copy</button></div>
-      <div class="small" id="mn-msg" style="color:var(--ink-soft); margin-top:8px;">Parents see the live score and timeline only (names: ${c.names==='first'?'first names':c.names==='none'?'no names':'initials'}). Change names in Switch team &rarr; Notifications.</div>`
+      <div class="small" id="mn-msg" style="color:var(--ink-soft); margin-top:8px;">Parents see the live score and timeline only (names: ${c.names==='first'?'first names':c.names==='none'?'no names':'initials'}). Change names in the bell menu &rarr; Notifications.</div>`
       : (perm==='admin' ? `<button type="button" class="btn ghost" data-mn-linkon style="margin-bottom:0;">Turn on the parent link</button><div class="small" id="mn-msg" style="color:var(--ink-soft); margin-top:8px;">Gives you a link to share with parents before the match.</div>`
       : `<div class="small" id="mn-msg" style="color:var(--ink-soft);">The parent link is off. A High access coach can turn it on.</div>`);
     return msg;
@@ -7760,7 +7765,7 @@ function openAppMenuModal(){
   wireHapticsToggle(document.getElementById('modal-root'));
   wireSoundsToggle(document.getElementById('modal-root'));
   const notifBtn = document.querySelector('#modal-root [data-open-notifications]');
-  if(notifBtn) notifBtn.addEventListener('click', ()=>{ closeModal(); openNotificationsPopup(); });
+  if(notifBtn) notifBtn.addEventListener('click', ()=>{ closeModal(); openNotificationsPopup({back:openAppMenuModal}); });
   const tipsBtn = document.querySelector('#modal-root [data-show-tips]');
   if(tipsBtn) tipsBtn.addEventListener('click', ()=>{
     closeModal();
@@ -8572,16 +8577,7 @@ function teamSectionHtml(tab){
     const permText = perm==='granted' ? 'Allowed' : perm==='denied' ? 'Blocked in your phone settings' : perm==='unsupported' ? 'Not available on this device' : 'Not asked yet';
     const sw = (key, on)=>`<label class="switch"><input type="checkbox" role="switch" data-notif-toggle="${key}" ${on?'checked':''}><span class="switch-track"></span></label>`;
     tabHtml = `
-    <div class="section-title" style="margin-top:0;">Sub reminders</div>
-    <div class="card">
-      <div class="small" style="color:var(--ink-soft); margin-bottom:12px;">Which notifications you get (and for coaches or parents) is set from the team switcher &rarr; Notifications, or the bell on a match.</div>
-      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
-        <div><div style="font-weight:600;">Reminder sound and vibration</div><div class="small" style="color:var(--ink-soft);">A short alert tone and buzz with each reminder.</div></div>
-        ${sw('subSound', ns.subSound)}
-      </div>
-    </div>
-
-    <div class="section-title">Notifications</div>
+    <div class="section-title" style="margin-top:0;">Notifications</div>
     <div class="card">
       <button type="button" class="btn amber" data-open-notifications style="margin-bottom:10px;">Notification settings</button>
       <div class="small" style="color:var(--ink-soft); margin:0 0 12px;">Phone status: ${permText}. Each coach switches notifications on for their own phone from there.</div>
@@ -9472,7 +9468,8 @@ function showSubReminderCard(info){
 function deliverSubReminder(info){
   showSubReminderCard(info);
   const ns = notifSettings();
-  if(ns.subSound){ playReminderBeep(); try{ if(navigator.vibrate) navigator.vibrate([250,120,250,120,250]); }catch(e){} }
+  if(soundsOn()) playReminderBeep();
+  if(hapticsOn()){ try{ if(navigator.vibrate) navigator.vibrate([250,120,250,120,250]); }catch(e){} }
   if(document.hidden || !document.hasFocus()) showPhoneNotification(info.title, info.plain, info.key);   // on screen = the card is enough
 }
 function showSubReminder(f, qNum, pos, slot, swap, elapsed){
@@ -9751,7 +9748,8 @@ function followCardHtml(){
         <div class="small" id="follow-msg" style="color:var(--ink-soft); margin-top:8px;">Resetting stops the old link working and removes everyone who followed with it.</div>` : `<div class="small" id="follow-msg" style="color:var(--ink-soft);">Switch it on to get a link to share with parents.</div>`}
     </div>`;
 }
-async function openNotificationsPopup(){
+async function openNotificationsPopup(opts){
+  const goBack = (opts && typeof opts.back==='function') ? opts.back : null;
   const teamId = activeCloudTeamId();
   let st = await pushGetState();
   let healed = false;                  // the automatic repair is tried once per visit to this pop-up, never in a loop
@@ -9762,7 +9760,11 @@ async function openNotificationsPopup(){
     if(!teamId){ prefsNote = 'Choose a synced team to pick what you get.'; return; }
     grid = await notifLoadGrid(teamId);
     if(!grid) prefsNote = "Your choices couldn't be loaded yet.";
-    else notifMirrorDefaults(grid);
+    else{
+      notifMirrorDefaults(grid);
+      const sr = grid.find(r=>r.topic==='sub_reminders');
+      if(sr && sr.parents && myEffectivePermission()==='admin'){ try{ await supabaseClient.rpc('notification_set_audience', {p_team_id:teamId, p_topic:'sub_reminders', p_coaches:true, p_parents:false}); sr.parents = false; }catch(e){} }
+    }
     if(myEffectivePermission()==='admin'){ try{ await followCfg(true); }catch(e){} }
   };
   await loadPrefs();
@@ -9776,7 +9778,7 @@ async function openNotificationsPopup(){
   const paint = (msg)=>{
     const canTurnOn = st.supported && st.signedIn && !st.subscribed && st.permission!=='denied';
     const body = `
-      ${stickyHeadHtml('Notifications')}
+      ${stickyHeadHtml('Notifications', '', {back:true})}
       <div class="card" style="margin-bottom:12px;">
         <div style="font-weight:600;">This phone</div>
         <div class="small" style="color:var(--ink-soft); margin:2px 0 12px;">${esc(statusText())}</div>
@@ -9788,14 +9790,16 @@ async function openNotificationsPopup(){
         ${st.subscribed ? '<div class="small" id="np-helper" style="margin-top:8px; color:var(--ink-soft);"></div>' : ''}
       </div>
       <div class="section-title" style="margin-top:4px;">Notifications</div>
-      <div class="small" style="color:var(--ink-soft); margin-bottom:8px;">${grid && grid.length && grid[0].coaches!=null ? 'Defaults for every match. Coaches = High and Medium access. Parents = the parent link (and Basic logins). Coaches can still set their own Me tick, and each match can change its own using the bell on the match.' : 'What you get on this phone. Each match can change its own with the bell on the match.'}</div>
+      <div class="small" style="color:var(--ink-soft); margin-bottom:8px;">${myEffectivePermission()==='admin' ? 'Me is for this phone. Parents is for the parent link.' : 'Choose what this phone gets.'}</div>
       <div class="card" style="margin-bottom:0;">
-        ${grid ? notifGridHtml(notifUiRows(grid, false).map(r=>({topic:r.topic, label:r.label, description:r.description, me:r.me, coaches:r.coaches, parents:r.parents})), {teamCols: grid.length>0 && grid[0].coaches!=null}) : `<div class="small" style="color:var(--ink-soft);">${esc(prefsNote || (st.supported ? '' : 'Not available on this device.'))}</div>`}
+        ${grid ? notifGridHtml(notifUiRows(grid, false).map(r=>({topic:r.topic, label:r.label, description:r.description, me:r.me, coaches:r.coaches, parents:r.parents})), {teamCols: grid.length>0 && grid[0].coaches!=null, lockTeamCols: myEffectivePermission()!=='admin'}) : `<div class="small" style="color:var(--ink-soft);">${esc(prefsNote || (st.supported ? '' : 'Not available on this device.'))}</div>`}
       </div>
       ${(myEffectivePermission()==='admin' && _follow.cfg) ? followCardHtml() : ''}`;
     openModal(body, {floating:true});
     attachModalHandlers();
     pinGridHead();
+    const backEl = document.querySelector('#modal-root [data-modal-back]');
+    if(backEl) backEl.addEventListener('click', ()=>{ closeModal(); if(goBack) goBack(); });
     const note = (t)=>{ const el = document.getElementById('np-msg'); if(el) el.textContent = t; };
     const refresh = async (m)=>{ st = await pushGetState(); await loadPrefs(); paint(m); };
     const enable = document.querySelector('[data-np-enable]');
@@ -9878,7 +9882,8 @@ async function openNotificationsPopup(){
           ({error:err} = await supabaseClient.rpc('notification_set_pref', {p_team_id:teamId, p_topic:topic, p_enabled:val}));
           if(!err){ row.me = val; notifMirrorMe(topic, val); }
         } else {
-          const next = {coaches:row.coaches, parents:row.parents}; next[col] = val;
+          if(myEffectivePermission()!=='admin' || topic==='sub_reminders'){ el.checked = !val; return; }
+          const next = {coaches:true, parents:row.parents}; next[col] = val;
           ({error:err} = await supabaseClient.rpc('notification_set_audience', {p_team_id:teamId, p_topic:topic, p_coaches:next.coaches, p_parents:next.parents}));
           if(!err){
             row[col] = val; notifMirrorDefaults(grid);
@@ -14871,7 +14876,7 @@ function attachHandlers(){
     });
   });
   document.querySelectorAll('#app [data-open-notifications]').forEach(el=>{
-    el.addEventListener('click', openNotificationsPopup);
+    el.addEventListener('click', ()=> openNotificationsPopup());
   });
   document.querySelectorAll('[data-notif-toggle]').forEach(el=>{
     el.addEventListener('change', ()=>{ setNotifSetting(el.dataset.notifToggle, el.checked); });
