@@ -3235,6 +3235,19 @@ function pulseFixtureCardNow(id){
   }, 60);
   setTimeout(()=>{ if(highlightFixtureId===id){ highlightFixtureId = null; try{ render(); }catch(e){} } }, 2600);
 }
+// Press and hold a card for its quick-actions pop-up. A normal tap still works; moving the finger cancels the hold.
+function wireHoldMenu(el, fn){
+  let timer = null, fired = false, sx = 0, sy = 0;
+  const clear = ()=>{ clearTimeout(timer); timer = null; };
+  el.addEventListener('pointerdown', (e)=>{
+    fired = false; sx = e.clientX; sy = e.clientY; clear();
+    timer = setTimeout(()=>{ timer = null; fired = true; try{ if(navigator.vibrate) navigator.vibrate(25); }catch(err){} fn(); }, 500);
+  });
+  el.addEventListener('pointermove', (e)=>{ if(timer && Math.hypot(e.clientX-sx, e.clientY-sy) > 10) clear(); });
+  ['pointerup','pointercancel','pointerleave'].forEach(ev=> el.addEventListener(ev, clear));
+  el.addEventListener('click', (e)=>{ if(fired){ e.stopImmediatePropagation(); e.preventDefault(); fired = false; } }, true);
+  el.addEventListener('contextmenu', (e)=> e.preventDefault());
+}
 // Runs fn once, as soon as the pop-up that is open now has gone (and no other pop-up has taken its place).
 function whenModalClosed(fn){
   const mo = new MutationObserver(()=>{
@@ -10310,7 +10323,7 @@ function openFixtureQuickActionsModal(fixtureId){
   const _qaView = VIEW.screen + '|' + VIEW.tab;
   whenModalClosed(()=>{ if(VIEW.screen + '|' + VIEW.tab === _qaView && DATA.fixtures.some(x=>x.id===fixtureId)){ highlightFixtureId = fixtureId; render(); pulseFixtureCardNow(fixtureId); } });
   const deleteBtn = document.querySelector('[data-quick-delete-fixture]');
-  if(deleteBtn) deleteBtn.onclick = ()=> openDeleteFixtureConfirm(fixtureId);
+  if(deleteBtn) deleteBtn.onclick = ()=> openDeleteFixtureConfirm(fixtureId, ()=> openFixtureQuickActionsModal(fixtureId));
   const setupBtn = document.querySelector('[data-open-match-setup]');
   if(setupBtn) setupBtn.onclick = ()=>{ closeModal(); go(VIEW.tab,'matchSetup',{id:fixtureId}); matchSetupTab = 'availability'; render(); };
   const goLiveBtn = document.querySelector('[data-quick-go-live]');
@@ -12251,7 +12264,36 @@ function openDuplicateFixtureConfirm(fixtureId){
     duplicateFixture(fixtureId);
   };
 }
-function openDeleteFixtureConfirm(fixtureId){
+function openResultQuickActionsModal(fixtureId){
+  const f = DATA.fixtures.find(x=>x.id===fixtureId);
+  if(!f) return;
+  const res = fixtureResultLabel(f);
+  const body = `
+    <h3 style="padding-right:56px;">${esc(f.opponent ? 'vs '+f.opponent : 'Result')}${venueBadge(f)}</h3>
+    <button class="icon-x" data-close-modal>&times;</button>
+    <div class="small" style="color:var(--ink-soft); margin-top:-6px; margin-bottom:4px;">${fmtDate(f.dateTime)}</div>
+    <div class="small" style="color:var(--ink-soft); margin-bottom:16px;">${esc(competitionDisplayLabel(f))} · <b>${f.finalScore.us} – ${f.finalScore.them}</b>${res ? ' · '+esc(res.charAt(0).toUpperCase()+res.slice(1)) : ''}</div>
+    <div style="display:flex; gap:8px;">
+      <button class="btn amber small" data-rq-edit style="flex:1; padding:16px 6px; font-size:12.5px;">Edit match</button>
+      <button class="btn danger small" data-rq-delete style="flex:1; padding:16px 6px; font-size:12.5px;">Delete</button>
+    </div>
+  `;
+  openModal(body, {floating:true});
+  attachModalHandlers();
+  const _rqView = VIEW.screen + '|' + VIEW.tab;
+  whenModalClosed(()=>{ if(VIEW.screen + '|' + VIEW.tab === _rqView && DATA.fixtures.some(x=>x.id===fixtureId)){ highlightFixtureId = fixtureId; render(); pulseFixtureCardNow(fixtureId); } });
+  document.querySelector('[data-rq-edit]').onclick = ()=>{
+    closeModal();
+    reviewSnapshot = JSON.stringify(f);
+    reviewMode = true;
+    reviewFixtureId = fixtureId;
+    liveViewingQuarter = 1;
+    liveTab = 'timeline';
+    go(VIEW.tab, 'live', {id:fixtureId});
+  };
+  document.querySelector('[data-rq-delete]').onclick = ()=> openDeleteFixtureConfirm(fixtureId, ()=> openResultQuickActionsModal(fixtureId));
+}
+function openDeleteFixtureConfirm(fixtureId, backFn){
   const fx = DATA.fixtures.find(x=>x.id===fixtureId);
   if(!fx) return;
   const isFinished = fx.status==='finished';
@@ -12263,10 +12305,12 @@ function openDeleteFixtureConfirm(fixtureId){
     <button class="icon-x" data-close-modal>&times;</button>
     <div class="card" style="margin-bottom:16px;"><div class="small" style="color:var(--ink-soft);">vs ${esc(fx.opponent||'TBC')} · ${shortDate(fx.dateTime)}<br>${msg}</div></div>
     <button class="btn danger" data-confirm-delete-fixture="${fixtureId}" style="width:100%; margin-bottom:10px;">Delete ${isFinished?'match':'fixture'}</button>
-    <button class="btn ghost" data-close-modal>Cancel</button>
+    <button class="btn ghost" data-close-modal ${backFn?'data-delete-cancel':''}>Cancel</button>
   `;
   openModal(body, {floating:true});
   attachModalHandlers();
+  const dCancel = document.querySelector('[data-delete-cancel]');
+  if(dCancel && backFn) dCancel.addEventListener('click', ()=> setTimeout(backFn, 0));
   const confirmBtn = document.querySelector('[data-confirm-delete-fixture]');
   if(confirmBtn) confirmBtn.onclick = ()=>{
     const fx2 = DATA.fixtures.find(x=>x.id===fixtureId);
@@ -13621,9 +13665,11 @@ function attachHandlers(){
 
   document.querySelectorAll('[data-open-fixture]').forEach(el=>{
     el.addEventListener('click', ()=> openFixtureQuickActionsModal(el.dataset.openFixture));
+    wireHoldMenu(el, ()=> openFixtureQuickActionsModal(el.dataset.openFixture));
   });
   document.querySelectorAll('[data-open-result]').forEach(el=>{
     el.addEventListener('click', ()=> go(VIEW.tab,'resultDetail',{id:el.dataset.openResult}));
+    wireHoldMenu(el, ()=> openResultQuickActionsModal(el.dataset.openResult));
   });
   document.querySelectorAll('[data-open-form-result]').forEach(el=>{
     el.addEventListener('click', ()=>{
