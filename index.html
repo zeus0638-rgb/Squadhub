@@ -878,6 +878,7 @@
     0%, 100%{ box-shadow:0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent); }
     15%, 85%{ box-shadow:0 0 0 4px color-mix(in srgb, var(--accent) 45%, transparent); }
   }
+  .hm-form-dot.is-selected{ box-shadow:0 0 0 3px var(--panel), 0 0 0 6px var(--accent); transform:scale(1.1); transition:transform .15s, box-shadow .15s; }
   .new-fixture-pulse{ animation:newFixturePulse 1.1s ease-in-out 2; border-radius:14px; }
   @keyframes markerQuickLogPulse{
     0%, 100%{ stroke:#fff; stroke-width:3; }
@@ -3218,9 +3219,29 @@ function go(tab, screen, params){
   if(pendingNewFixture && !(screen==='fixtureEditor' && params && params.id===pendingNewFixture.id)){
     pendingNewFixture = null;
   }
+  const returnedFrom = (!screen && VIEW.params && VIEW.params.id && ['resultDetail','matchSetup','fixtureEditor'].includes(VIEW.screen)) ? VIEW.params.id : null;
+  if(returnedFrom) highlightFixtureId = returnedFrom;
   VIEW = { tab: tab || VIEW.tab, screen: screen || null, params: params || {} };
   render();
   document.querySelector('.content') && document.querySelector('.content').scrollTo(0,0);
+  if(returnedFrom) pulseFixtureCardNow(returnedFrom);
+}
+// Brings the record you just left back into view and pulses it, using the same highlight a newly added fixture gets.
+function pulseFixtureCardNow(id){
+  highlightFixtureId = id;
+  setTimeout(()=>{
+    const el = document.querySelector(`[data-open-fixture="${id}"], [data-open-result="${id}"]`);
+    if(el) el.scrollIntoView({behavior:'smooth', block:'center'});
+  }, 60);
+  setTimeout(()=>{ if(highlightFixtureId===id){ highlightFixtureId = null; try{ render(); }catch(e){} } }, 2600);
+}
+// Runs fn once, as soon as the pop-up that is open now has gone (and no other pop-up has taken its place).
+function whenModalClosed(fn){
+  const mo = new MutationObserver(()=>{
+    if(document.getElementById('modal-root')) return;
+    mo.disconnect(); fn();
+  });
+  mo.observe(document.body, {childList:true});
 }
 function getEditingFixture(id){
   if(pendingNewFixture && pendingNewFixture.id === id) return pendingNewFixture;
@@ -5496,7 +5517,7 @@ function renderMatchdayTab(){
         <div class="small">${upcoming ? "Here's your next one:" : 'Add a fixture to get started.'}</div>
       </div>
       ${upcoming ? `
-      <div class="card tap fixture-card" data-open-fixture="${upcoming.id}">
+      <div class="card tap fixture-card ${highlightFixtureId===upcoming.id?'new-fixture-pulse':''}" data-open-fixture="${upcoming.id}">
         <div class="row">
           <div>
             <div class="opp">vs ${esc(upcoming.opponent||'TBC')}${venueBadge(upcoming)}</div>
@@ -5655,7 +5676,7 @@ function renderDashboardTab(){
   const badge = safeBadgeSrc(DATA.teamBadge);
   const first = myFirstName();
   const nextHtml = nextMatch ? `
-    <div class="card tap fixture-card" data-open-fixture="${nextMatch.id}">
+    <div class="card tap fixture-card ${highlightFixtureId===nextMatch.id?'new-fixture-pulse':''}" data-open-fixture="${nextMatch.id}">
       <div class="row">
         <div>
           <div class="opp">vs ${esc(nextMatch.opponent||'TBC')}${venueBadge(nextMatch)}</div>
@@ -5669,7 +5690,7 @@ function renderDashboardTab(){
   let lastHtml = `<div class="card"><div class="small" style="color:var(--ink-soft);">No results yet</div></div>`;
   if(last){
     const res = fixtureResultLabel(last);
-    lastHtml = `<div class="card tap fixture-card" data-open-result="${last.id}">
+    lastHtml = `<div class="card tap fixture-card ${highlightFixtureId===last.id?'new-fixture-pulse':''}" data-open-result="${last.id}">
       <div class="row">
         <div>
           <div class="opp">vs ${esc(last.opponent||'TBC')}${venueBadge(last)}</div>
@@ -10286,6 +10307,8 @@ function openFixtureQuickActionsModal(fixtureId){
   `;
   openModal(body, {floating:true});
   attachModalHandlers();
+  const _qaView = VIEW.screen + '|' + VIEW.tab;
+  whenModalClosed(()=>{ if(VIEW.screen + '|' + VIEW.tab === _qaView && DATA.fixtures.some(x=>x.id===fixtureId)){ highlightFixtureId = fixtureId; render(); pulseFixtureCardNow(fixtureId); } });
   const deleteBtn = document.querySelector('[data-quick-delete-fixture]');
   if(deleteBtn) deleteBtn.onclick = ()=> openDeleteFixtureConfirm(fixtureId);
   const setupBtn = document.querySelector('[data-open-match-setup]');
@@ -13603,7 +13626,11 @@ function attachHandlers(){
     el.addEventListener('click', ()=> go(VIEW.tab,'resultDetail',{id:el.dataset.openResult}));
   });
   document.querySelectorAll('[data-open-form-result]').forEach(el=>{
-    el.addEventListener('click', ()=> openFormResultModal(el.dataset.openFormResult));
+    el.addEventListener('click', ()=>{
+      const dot = el.querySelector('.hm-form-dot');
+      openFormResultModal(el.dataset.openFormResult);
+      if(dot){ dot.classList.add('is-selected'); whenModalClosed(()=> dot.classList.remove('is-selected')); }
+    });
   });
   document.querySelectorAll('[data-view-result]').forEach(el=>{
     el.addEventListener('click', ()=> go(VIEW.tab,'resultDetail',{id:el.dataset.viewResult}));
