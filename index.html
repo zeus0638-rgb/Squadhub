@@ -2920,7 +2920,10 @@ function followBuildSnapshot(f, ended){
     home: away ? (f.opponent||'TBC') : teamShort(), away: away ? teamShort() : (f.opponent||'TBC'),
     hs: away ? a.them : a.us, as: away ? a.us : a.them,
     period: ended ? '' : periodBadgeLabel(f, ls.quarter||1), status: ended ? 'ft' : 'live',
-    clock: {running: !!ls.running && !ended, secondsLeft}, events, accent
+    dt: (()=>{ try{ return new Date(f.dateTime).toISOString(); }catch(e){ return ''; } })(),
+    brk: !ended && !ls.running && ls.endedQ!=null && ls.endedQ===ls.quarter,
+    clock: {running: !!ls.running && !ended, secondsLeft}, events, accent,
+    badge: (()=>{ const b = safeBadgeSrc(DATA.teamBadge); return (b && b.length < 40000) ? b : ''; })()
   };
 }
 async function followPublish(f, ended){
@@ -2938,7 +2941,7 @@ function followPublishTick(){
   followCfg();
   if(_follow.teamId!==teamId || !_follow.cfg || !_follow.cfg.enabled || _follow.pub) return;
   const snap = followBuildSnapshot(f, false);
-  const sig = JSON.stringify([f.id, snap.hs, snap.as, snap.period, snap.clock.running, snap.clock.running ? 0 : snap.clock.secondsLeft, snap.events.map(e=>e.txt+e.clk)]);
+  const sig = JSON.stringify([f.id, snap.hs, snap.as, snap.period, snap.brk, snap.clock.running, snap.clock.running ? 0 : snap.clock.secondsLeft, snap.events.map(e=>e.txt+e.clk)]);
   if(sig===_follow.sig && Date.now()-_follow.at2 < 25000) return;      // changes go out at once; otherwise a refresh every ~25s keeps the clock honest
   _follow.pub = true;
   supabaseClient.rpc('follow_publish', {p_team_id:teamId, p_fixture_id:f.id, p_snapshot:snap, p_ended:false}).then(({error})=>{
@@ -12260,6 +12263,7 @@ function openReviewExitModal(fixtureId){
     reviewFixtureId = null;
     reviewSnapshot = null;
     saveData();
+    followPublish(current, true);      // quietly refreshes the parents' page - no notification
     closeModal();
     go(VIEW.tab, 'resultDetail', {id:fixtureId});
     showSavedToast();
@@ -14203,6 +14207,7 @@ function attachHandlers(){
       // changes happen AFTER this save, not the ones already saved.
       const f = DATA.fixtures.find(x=>x.id===el.dataset.reviewSaveNow);
       if(f && reviewMode && reviewFixtureId===f.id) reviewSnapshot = JSON.stringify(f);
+      if(f && f.status==='finished') followPublish(f, true);      // silent update for parents
       showSavedToast();
     });
   });
@@ -14514,6 +14519,7 @@ function attachHandlers(){
     f.finalScore.us = Math.max(0, parseInt(usVal.value)||0);
     f.finalScore.them = Math.max(0, parseInt(themVal.value)||0);
     saveData();
+    if(f.status==='finished') followPublish(f, true);      // silent update for parents
     go(VIEW.tab,'resultDetail',{id:f.id});
     showSavedToast();
   });

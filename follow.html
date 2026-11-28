@@ -11,7 +11,10 @@
   @media (prefers-color-scheme: dark){ :root{ --bg:#0d0f13; --card:#1a1d23; --ink:#f2f4f7; --soft:#9aa3b2; --line:#2a2e36; } }
   *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html,body{ margin:0; background:var(--bg); color:var(--ink); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; }
-  .wrap{ max-width:520px; margin:0 auto; padding:18px 16px calc(28px + env(safe-area-inset-bottom)); }
+  .bgbadge{ position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none; }
+  .bgbadge img{ width:100%; height:100%; display:block; object-fit:cover; object-position:center; opacity:.25; }
+  @media (prefers-color-scheme: dark){ .bgbadge img{ opacity:.18; } }
+  .wrap{ position:relative; z-index:1; max-width:520px; margin:0 auto; padding:18px 16px calc(28px + env(safe-area-inset-bottom)); }
   h1{ font-size:20px; margin:4px 0 2px; }
   .sub{ color:var(--soft); font-size:13.5px; margin-bottom:16px; }
   .card{ background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; margin-bottom:14px; }
@@ -31,6 +34,12 @@
   .ev .meta{ color:var(--soft); font-size:12.5px; margin-top:2px; }
   .ev.sub{ color:var(--soft); font-size:14px; }
   .empty{ color:var(--soft); font-size:14px; padding:6px 0; }
+  details.hist{ padding:12px 16px; }
+  details.hist summary{ cursor:pointer; list-style:none; display:flex; gap:12px; align-items:center; font-size:14.5px; }
+  details.hist summary::-webkit-details-marker{ display:none; }
+  .hd{ color:var(--soft); font-size:12.5px; font-weight:700; min-width:48px; }
+  .hm{ flex:1; min-width:0; overflow-wrap:anywhere; }
+  .hist .ev:first-of-type{ margin-top:8px; }
   .btn{ display:block; width:100%; border:none; border-radius:12px; padding:13px; font-size:15.5px; font-weight:700; background:var(--accent); color:#fff; cursor:pointer; }
   .btn.ghost{ background:transparent; border:1.5px solid var(--line); color:var(--ink); }
   .note{ color:var(--soft); font-size:13px; margin-top:10px; line-height:1.45; }
@@ -39,6 +48,7 @@
 </style>
 </head>
 <body>
+<div class="bgbadge" id="bgbadge"></div>
 <div class="wrap" id="app"><div class="empty">Loading...</div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
@@ -71,6 +81,11 @@ function remaining(m){
 }
 function mmss(s){ return Math.floor(s/60) + ':' + String(s%60).padStart(2,'0'); }
 
+function clockText(m){
+  const s = m.snapshot;
+  if(s.brk) return (s.period || 'Break') + ' - Break';
+  return (s.period || '') + ' · ' + mmss(remaining(m)) + ' left';
+}
 function matchHtml(m){
   const s = m.snapshot, ft = m.ended || s.status === 'ft';
   if(s.accent) document.documentElement.style.setProperty('--accent', s.accent);
@@ -78,7 +93,7 @@ function matchHtml(m){
   return `<div class="card" data-m="${esc(m.fixture_id)}">
     <div style="display:flex; justify-content:space-between; align-items:center;">
       <span class="chip ${ft?'ft':''}"><span class="dot"></span>${ft?'FULL TIME':'LIVE'}</span>
-      <span class="clock" data-clock="${esc(m.fixture_id)}">${ft ? '' : esc(s.period || '') + ' · ' + mmss(remaining(m)) + ' left'}</span>
+      <span class="clock" data-clock="${esc(m.fixture_id)}">${ft ? '' : esc(clockText(m))}</span>
     </div>
     <div class="board">
       <div class="tn">${esc(s.home)}</div>
@@ -91,6 +106,13 @@ function matchHtml(m){
   </div>`;
 }
 
+function histHtml(m){
+  const s = m.snapshot, evs = (s.events || []).slice().reverse();
+  let d = ''; try{ if(s.dt) d = new Date(s.dt).toLocaleDateString(undefined, {day:'numeric', month:'short'}); }catch(e){}
+  return `<details class="card hist"><summary><span class="hd">${esc(d)}</span><span class="hm"><span class="tn2">${esc(s.home)}</span> <b>${esc(s.hs)}&nbsp;-&nbsp;${esc(s.as)}</b> <span class="tn2">${esc(s.away)}</span></span></summary>
+    ${evs.length ? evs.map(e=>`<div class="ev ${e.k==='sub'?'sub':''}"><div class="ic">${ICON[e.k]||''}</div><div><div>${esc(e.txt)}</div><div class="meta">${esc(e.per||'')}${e.clk?' · '+esc(e.clk):''}</div></div></div>`).join('') : `<div class="empty">No goals or cards.</div>`}
+  </details>`;
+}
 function notifHtml(){
   const supported = ('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window);
   if(!supported) return `<div class="note">To get notifications on an iPhone, add this page to your Home Screen first (Share &rarr; Add to Home Screen), then open it from there.</div>`;
@@ -103,9 +125,12 @@ function paint(){
   const app = document.getElementById('app');
   const d = state.data;
   if(state.error && !d){ app.innerHTML = `<div class="card big"><div class="t">Live match</div><div class="empty">${esc(state.error)}</div></div>`; return; }
-  const matches = (d && d.matches) || [];
+  const matches = (d && d.matches) || [], hist = (d && d.history) || [];
+  const bg = document.getElementById('bgbadge'), bsrc = [d && d.badge].concat(matches.map(m=>m.snapshot && m.snapshot.badge)).find(b=>typeof b==='string' && /^data:image\/(?:png|jpe?g|webp|gif);base64,[A-Za-z0-9+\/=]+$/.test(b));
+  if(bg) bg.innerHTML = bsrc ? `<img src="${bsrc}" alt="">` : '';
   app.innerHTML = `<h1>${esc((d && d.team) || 'Live match')}</h1><div class="sub">Live match updates &middot; refreshes automatically</div>
     ${matches.length ? matches.map(matchHtml).join('') : `<div class="card big"><div class="t">No match is live right now</div><div class="empty">When a match kicks off, the score and timeline appear here.</div></div>`}
+    ${hist.length ? `<div class="tl-title">Season so far</div>${hist.map(histHtml).join('')}` : ''}
     <div class="card">${notifHtml()}</div>`;
   const on = app.querySelector('[data-on]'), off = app.querySelector('[data-off]');
   if(on) on.onclick = enableNotifs;
@@ -117,7 +142,7 @@ setInterval(()=>{
   (state.data.matches || []).forEach(m=>{
     if(m.ended || (m.snapshot && m.snapshot.status === 'ft')) return;
     const el = document.querySelector(`[data-clock="${CSS.escape(m.fixture_id)}"]`);
-    if(el) el.textContent = (m.snapshot.period || '') + ' · ' + mmss(remaining(m)) + ' left';
+    if(el) el.textContent = clockText(m);
   });
 }, 1000);
 setInterval(()=>{ if(!document.hidden) load(); }, 5000);
