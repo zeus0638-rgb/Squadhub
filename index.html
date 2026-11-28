@@ -2926,6 +2926,13 @@ function followBuildSnapshot(f, ended){
     badge: (()=>{ const b = safeBadgeSrc(DATA.teamBadge); return (b && b.length < 40000) ? b : ''; })()
   };
 }
+async function followRemove(fixtureId){
+  try{
+    const cfg = await followCfg(); if(!cfg || !cfg.enabled) return;
+    const teamId = activeCloudTeamId(); if(!teamId) return;
+    await supabaseClient.rpc('follow_remove', {p_team_id:teamId, p_fixture_id:fixtureId});
+  }catch(e){}
+}
 async function followPublish(f, ended){
   try{
     const cfg = await followCfg(); if(!cfg || !cfg.enabled) return;
@@ -10817,8 +10824,9 @@ function openEndGameConfirm(fixtureId){
 function commitMatchFinished(fixtureId){
   const f = DATA.fixtures.find(x=>x.id===fixtureId);
   if(!f) return;
+  const wasAlreadyFinished = f.status==='finished';      // finishing a review of an old match shouldn't alert anyone
   playGameSound('fulltime');   // three whistles
-  notifyMatchEnded(f);
+  if(!wasAlreadyFinished) notifyMatchEnded(f);
   followPublish(f, true);
   f.status = 'finished';
   delete f.liveLock;
@@ -12352,6 +12360,7 @@ function openDeleteFixtureConfirm(fixtureId, backFn){
     const fx2 = DATA.fixtures.find(x=>x.id===fixtureId);
     const wasFinished = fx2 && fx2.status==='finished';
     if(fx2) notifyFixtureDeleted(fx2);
+    followRemove(fixtureId);      // also takes it off the parents' page, silently
     DATA.fixtures = DATA.fixtures.filter(x=>x.id!==fixtureId);
     saveData();
     closeModal();
