@@ -2697,7 +2697,7 @@ const NOTIF_UI = [
   {t:'live_events', label:'Goals & Cards', desc:'Goals (ours, theirs, own goals), cards and penalties as they are logged.'},
   {t:'sub_reminders', label:'Planned subs reminders', desc:'During a live match: who comes off, who comes on and where.'},
   {t:'sub_made', label:'Live subs', desc:'When a substitution is made in a live match (planned or not).'},
-  {t:'period_end', label:'End of quarter / half', desc:'When the clock reaches zero, with the score at that point (not the final period - that is Match KO & End).'},
+  {t:'period_end', label:'Start & end of quarter / half', desc:'When each quarter / half after the first starts, and when it ends, with the score (the first start and the final end are Match KO & End).'},
   {t:'new_fixture', label:'Fixture added', desc:'When a fixture is added to the team.', teamOnly:true},
   {t:'fixture_deleted', label:'Fixture deleted', desc:'When a fixture is removed from the team.', teamOnly:true}
 ];
@@ -3043,6 +3043,10 @@ function liveEventNotifyTick(){
   if((f.liveLock.at||0) > since){
     const away = f.venue==='away', us = teamShort(), them = f.opponent||'TBC';
     items.push({...base, data:{...base.data, ov:matchOv(f,'match_kickoff')}, dedupe_key:'ko', topic:'match_kickoff', tag:'ko-'+f.id, title:'Kick-off!', body: away ? `${them} v ${us}` : `${us} v ${them}`});
+  }
+  const ls = f.liveState || {}, pst = Date.parse(ls.actualStartTime||'');
+  if(ls.quarter>=2 && ls.running && pst && pst>since){         // a quarter / half after the first has just been started
+    items.push({...base, data:{...base.data, ov:matchOv(f,'period_end')}, dedupe_key:'ps-'+ls.quarter, topic:'period_end', tag:'ps-'+f.id+'-'+ls.quarter, title:`${periodBadgeLabel(f, ls.quarter)} has started`, body:matchScoreLine(f)});
   }
   (f.events||[]).forEach(ev=>{
     const t = Date.parse(ev.loggedAt||''); if(!t || t<since) return;
